@@ -2,8 +2,10 @@
   "name": "gestao-de-ferramentas-v3",
   "version": "3.0.0",
   "description": "Sistema de Gestão de Ferramentas - COENG",
+  "engines": {
+    "node": "24.x"
+  },
   "type": "module",
-  "main": "main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -13,35 +15,17 @@
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
     "format": "prettier --write \"src/**/*.{js,css,html}\"",
-    "format:check": "prettier --check \"src/**/*.{js,css,html}\"",
-    "electron:dev": "electron .",
-    "electron:build": "vite build && electron-builder"
-  },
-  "build": {
-    "appId": "com.coeng.gestaoferramentas",
-    "productName": "Gestão de Ferramentas - COENG",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "main.cjs",
-      "package.json"
-    ],
-    "win": {
-      "target": "nsis"
-    }
+    "format:check": "prettier --check \"src/**/*.{js,css,html}\""
   },
   "dependencies": {
     "dotenv": "^17.4.1",
     "firebase": "^12.12.0",
+    "firebase-admin": "14.2.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@tailwindcss/vite": "^4.2.2",
-    "electron": "^29.4.6",
-    "electron-builder": "^26.8.1",
     "eslint": "^9.0.0",
     "globals": "^15.0.0",
     "prettier": "^3.2.5",
