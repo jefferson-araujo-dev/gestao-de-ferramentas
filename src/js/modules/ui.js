@@ -423,6 +423,13 @@ export const AppUI = {
     });
   },
   switchTab: function (tab) {
+    const adminOnlyTabs = ['users', 'history'];
+    if (adminOnlyTabs.includes(tab) && window.App?.Auth?.isAdm !== true) {
+      this.switchTab('dashboard');
+      this.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
+
     this.activeTab = tab;
     metrics.trackNavigation(tab);
 
