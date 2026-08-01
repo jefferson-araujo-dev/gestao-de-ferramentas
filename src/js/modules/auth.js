@@ -6,13 +6,9 @@ import {
   updatePassword
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 import {
-  collection,
-  getDocs,
   doc,
-  updateDoc,
-  query,
-  where,
-  limit
+  getDoc,
+  updateDoc
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { auth, db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
 import { cacheManager } from '../core/CacheManager.js';
@@ -67,19 +63,31 @@ export const AppAuth = {
     });
   },
   async _handleAuthenticatedUser(user) {
-    const userProfile = await this._fetchAndCacheUserProfile(user.email);
-    const { uName, isAdm, isRestricted } = userProfile;
+    try {
+      const userProfile = await this._fetchAndCacheUserProfile(user);
+      const { uName, isAdm, isRestricted } = userProfile;
 
-    this._updateUserSession(userProfile.id);
-    this._updateUIForUser(uName, isAdm, isRestricted);
+      await this._updateUserSession(userProfile.id);
+      this._updateUIForUser(uName, isAdm, isRestricted);
 
-    document.getElementById('login-screen')?.classList.add('hidden');
-    document.getElementById('main-app')?.classList.remove('hidden');
-    window.App.Data.init();
-    window.App.Session.init();
-    const loginPasswordField = document.getElementById('login-password');
-    if (loginPasswordField) {
-      loginPasswordField.value = '';
+      document.getElementById('login-screen')?.classList.add('hidden');
+      document.getElementById('main-app')?.classList.remove('hidden');
+      window.App.Data.init();
+      window.App.Session.init();
+
+      const loginPasswordField = document.getElementById('login-password');
+      if (loginPasswordField) {
+        loginPasswordField.value = '';
+      }
+    } catch (err) {
+      window.Logger.error('Acesso negado.', err);
+
+      await signOut(auth);
+
+      window.App.UI?.showToast?.(
+        err.message || 'Usuário sem permissão para acessar o sistema.',
+        'error'
+      );
     }
   },
   _handleUnauthenticatedUser() {
@@ -96,33 +104,45 @@ export const AppAuth = {
       loginText.textContent = 'Acessar Sistema';
     }
   },
-  async _fetchAndCacheUserProfile(email) {
-    const cacheKey = `user_profile_${email}`;
+  async _fetchAndCacheUserProfile(user) {
+    const cacheKey = `user_profile_${user.uid}`;
+
     const matchedDoc = await cacheManager.getOrSet(
       cacheKey,
       async () => {
-        const q = query(
-          collection(db, DB_BASE_PATH, COLLECTIONS.USERS),
-          where('email', '==', email),
-          limit(1)
-        );
-        const snap = await getDocs(q);
-        return snap.empty ? null : { id: snap.docs[0].id, data: snap.docs[0].data() };
+        const ref = doc(db, DB_BASE_PATH, COLLECTIONS.USERS, user.uid);
+        const snap = await getDoc(ref);
+
+        return snap.exists()
+          ? { id: snap.id, data: snap.data() }
+          : null;
       },
       { ttl: 900000 } // TTL de 15 minutos
     );
 
-    if (matchedDoc) {
-      const dbUser = matchedDoc.data;
-      return {
-        id: matchedDoc.id,
-        uName: dbUser.name ? dbUser.name.split(' ')[0] : 'Usuário',
-        isAdm: dbUser.accessLevel === 'Administrador',
-        isRestricted: dbUser.isRestricted === true
-      };
+    if (!matchedDoc) {
+      throw new Error('Seu acesso ainda não foi autorizado pelo administrador.');
     }
 
-    return { id: null, uName: 'Usuário', isAdm: false, isRestricted: false };
+    const dbUser = matchedDoc.data;
+
+    if (dbUser.status !== 'Ativo') {
+      throw new Error('Seu usuário está inativo.');
+    }
+
+    const profileEmail = String(dbUser.email || '').trim().toLowerCase();
+    const authenticatedEmail = String(user.email || '').trim().toLowerCase();
+
+    if (!profileEmail || profileEmail !== authenticatedEmail) {
+      throw new Error('O perfil não corresponde à conta autenticada.');
+    }
+
+    return {
+      id: matchedDoc.id,
+      uName: dbUser.name ? dbUser.name.split(' ')[0] : 'Usuário',
+      isAdm: dbUser.accessLevel === 'Administrador',
+      isRestricted: dbUser.isRestricted === true
+    };
   },
   async _updateUserSession(userId) {
     if (!userId) {
@@ -509,25 +529,89 @@ export const AppAuth = {
       m.close();
     }
   },
-  sendForgotEmail: async function () {
-    const em = document.getElementById('forgot-email-input').value;
-    if (!em) {
-      return window.App.UI.showToast('Digite o e-mail cadastrado.', 'warning');
+  sendPasswordAccessEmail: async function (email) {
+    const normalizedEmail = String(email || '')
+      .trim()
+      .toLowerCase();
+
+    if (!normalizedEmail) {
+      throw new Error('E-mail inválido.');
     }
-    const btn = document.getElementById('btn-send-forgot'),
-      orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML =
+
+    await sendPasswordResetEmail(
+      auth,
+      normalizedEmail
+    );
+  },
+  sendForgotEmail: async function () {
+    const emailInput = document.getElementById(
+      'forgot-email-input'
+    );
+
+    const email = String(emailInput?.value || '')
+      .trim()
+      .toLowerCase();
+
+    if (!email) {
+      return window.App.UI.showToast(
+        'Digite o e-mail cadastrado.',
+        'warning'
+      );
+    }
+
+    const button = document.getElementById(
+      'btn-send-forgot'
+    );
+
+    if (!button) {
+      return;
+    }
+
+    const originalContent = button.innerHTML;
+
+    button.disabled = true;
+    button.innerHTML =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Enviando...';
+
+    const genericMessage =
+      'Se existir uma conta para este e-mail, as instruções para criar ou redefinir a senha serão enviadas.';
+
     try {
-      await sendPasswordResetEmail(auth, em);
-      window.App.UI.showToast('Instrucoes enviadas para o e-mail.', 'success');
+      await this.sendPasswordAccessEmail(email);
+
+      window.App.UI.showToast(
+        genericMessage,
+        'success'
+      );
+
       this.closeForgotModal();
-    } catch {
-      window.App.UI.showToast('Erro ao enviar. O e-mail esta correto?', 'error');
+    } catch (error) {
+      window.Logger.error(
+        'Erro ao enviar instruções de acesso.',
+        error
+      );
+
+      if (error?.code === 'auth/user-not-found') {
+        window.App.UI.showToast(
+          genericMessage,
+          'success'
+        );
+
+        this.closeForgotModal();
+      } else if (error?.code === 'auth/invalid-email') {
+        window.App.UI.showToast(
+          'Informe um endereço de e-mail válido.',
+          'warning'
+        );
+      } else {
+        window.App.UI.showToast(
+          'Não foi possível enviar as instruções agora. Tente novamente mais tarde.',
+          'error'
+        );
+      }
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = orig;
+      button.disabled = false;
+      button.innerHTML = originalContent;
     }
   }
 };

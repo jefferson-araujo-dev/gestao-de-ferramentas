@@ -1,12 +1,40 @@
-import {
-  doc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  addDoc,
-  collection
-} from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-import { db, auth, DB_BASE_PATH, COLLECTIONS } from '../app.js';
+import { auth } from '../app.js';
+
+async function requestUsersApi(endpoint, method, body) {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error('Sua sessão expirou. Entre novamente.');
+  }
+
+  const token = await currentUser.getIdToken();
+
+  const response = await fetch(endpoint, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  let payload;
+
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('A API retornou uma resposta inválida.');
+  }
+
+  if (!response.ok || payload?.success !== true) {
+    throw new Error(
+      payload?.message ||
+        'Não foi possível concluir a operação com o usuário.'
+    );
+  }
+
+  return payload;
+}
 
 export const AppCRUDUsers = {
   currentAccessFilter: 'all',
@@ -52,39 +80,111 @@ export const AppCRUDUsers = {
       return;
     }
 
-    const users = window.App.Data.users.filter((u) => this.selectedUsers.has(u.firebaseId));
-    if (action === 'delete') {
-      if (!confirm(`Tem certeza que deseja excluir ${users.length} usuário(s)?`)) {
-        return;
+    const users = window.App.Data.users.filter(
+      (user) => this.selectedUsers.has(user.firebaseId)
+    );
+
+    if (users.length === 0) {
+      this.clearSelection();
+      return;
+    }
+
+    const allowedActions = new Set([
+      'activate',
+      'deactivate',
+      'delete'
+    ]);
+
+    if (!allowedActions.has(action)) {
+      window.App.UI.showToast(
+        'Ação em lote inválida.',
+        'error'
+      );
+      return;
+    }
+
+    if (
+      action === 'delete' &&
+      !confirm(
+        `Excluir definitivamente ${users.length} usuário(s)?`
+      )
+    ) {
+      return;
+    }
+
+    const successfulIds = [];
+    const failures = [];
+
+    for (const user of users) {
+      try {
+        if (action === 'delete') {
+          await requestUsersApi(
+            '/api/users/delete',
+            'POST',
+            {
+              uid: user.firebaseId
+            }
+          );
+        } else {
+          await requestUsersApi(
+            '/api/users/status',
+            'POST',
+            {
+              uid: user.firebaseId,
+              status:
+                action === 'activate'
+                  ? 'Ativo'
+                  : 'Inativo'
+            }
+          );
+        }
+
+        successfulIds.push(user.firebaseId);
+      } catch (error) {
+        failures.push({
+          user,
+          error
+        });
       }
     }
 
-    try {
-      const promises = users.map((u) => {
-        const ref = doc(db, DB_BASE_PATH, COLLECTIONS.USERS, u.firebaseId);
-        if (action === 'activate') {
-          return updateDoc(ref, { status: 'Ativo' });
-        }
-        if (action === 'deactivate') {
-          return updateDoc(ref, { status: 'Inativo' });
-        }
-        if (action === 'delete') {
-          return deleteDoc(ref);
-        }
-      });
-      await Promise.all(promises);
-      window.App.UI.showToast(`Ação concluída para ${users.length} usuário(s).`, 'success');
-      this.clearSelection();
-    } catch (err) {
-      window.Logger.error('Erro em ação em lote (usuários):', err);
-      window.App.UI.showToast('Erro ao processar ação em lote.', 'error');
+    successfulIds.forEach((id) => {
+      this.selectedUsers.delete(id);
+    });
+
+    if (successfulIds.length > 0) {
+      window.App.UI.showToast(
+        `Ação concluída para ${successfulIds.length} usuário(s).`,
+        'success'
+      );
     }
+
+    if (failures.length > 0) {
+      window.Logger.error(
+        'Falhas na ação em lote de usuários:',
+        failures
+      );
+
+      const firstMessage =
+        failures[0].error?.message ||
+        'Não foi possível processar todos os usuários.';
+
+      window.App.UI.showToast(
+        `${failures.length} usuário(s) não processado(s). ${firstMessage}`,
+        'error'
+      );
+    }
+
+    if (failures.length === 0) {
+      this.clearSelection();
+      return;
+    }
+
+    this.updateBulkBar();
+    this.render();
   },
 
   getAccessLevel: function (u) {
-    if (u.email && String(u.email).toLowerCase() === 'jefferson.araujo@camara.leg.br') {
-      return 'Administrador';
-    }
     return u.accessLevel || (u.role === 'Administrador' ? 'Administrador' : 'Usuário Padrão');
   },
   getStatus: function (u) {
@@ -244,7 +344,7 @@ export const AppCRUDUsers = {
     const currentEmail = String(auth.currentUser?.email || '')
       .trim()
       .toLowerCase();
-    return email === 'jefferson.araujo@camara.leg.br' || (email !== '' && email === currentEmail);
+    return email !== '' && email === currentEmail;
   },
   updateCounters: function () {
     const users = window.App.Data.users;
@@ -494,9 +594,14 @@ export const AppCRUDUsers = {
       e = document.getElementById('crud-user-email').value.trim().toLowerCase(),
       d = document.getElementById('crud-user-department').value.trim(),
       a = document.getElementById('crud-user-access').value;
+
     if (!n || !e) {
-      return window.App.UI.showToast('Os campos Nome e E-mail são obrigatórios.', 'warning');
+      return window.App.UI.showToast(
+        'Os campos Nome e E-mail são obrigatórios.',
+        'warning'
+      );
     }
+
     if (
       window.App.Data.users.some(
         (u) =>
@@ -505,97 +610,237 @@ export const AppCRUDUsers = {
           String(u.email).toLowerCase() === String(e).toLowerCase()
       )
     ) {
-      return window.App.UI.showToast('E-mail já cadastrado.', 'warning');
+      return window.App.UI.showToast(
+        'E-mail já cadastrado.',
+        'warning'
+      );
     }
+
     try {
+      const body = {
+        name: n,
+        email: e,
+        department: d,
+        accessLevel: a
+      };
+
       if (id) {
-        await updateDoc(doc(db, DB_BASE_PATH, COLLECTIONS.USERS, id), {
-          name: n,
-          email: e,
-          accessLevel: a,
-          department: d
-        });
-      } else {
-        await setDoc(doc(db, DB_BASE_PATH, COLLECTIONS.USERS, e), {
-          name: n,
-          email: e,
-          accessLevel: a,
-          department: d,
-          status: 'Ativo',
-          createdAt: new Date().toISOString(),
-          lastLogin: null
-        });
+        body.uid = id;
       }
-      window.App.UI.showToast('Salvo com sucesso.', 'success');
+
+      const result = await requestUsersApi(
+        id ? '/api/users/update' : '/api/users/create',
+        id ? 'PATCH' : 'POST',
+        body
+      );
+
+      let successMessage =
+        result.message ||
+        (id
+          ? 'Usuário atualizado com sucesso.'
+          : 'Usuário cadastrado com sucesso.');
+      let toastType = 'success';
+
+      if (!id) {
+        try {
+          await window.App.Auth.sendPasswordAccessEmail(e);
+
+          successMessage =
+            'Usuário cadastrado e instruções de acesso enviadas.';
+        } catch (accessError) {
+          successMessage =
+            'Usuário cadastrado, mas não foi possível enviar as instruções de acesso.';
+          toastType = 'warning';
+
+          window.Logger.warn(
+            'Usuário criado sem envio das instruções de acesso.',
+            accessError
+          );
+        }
+      }
+
+      window.App.UI.showToast(
+        successMessage,
+        toastType
+      );
+
       this.closeModal();
-    } catch (e) {
-      window.Logger.error('Erro ao salvar.', e);
+    } catch (error) {
+      window.Logger.error(
+        'Erro ao salvar usuário.',
+        error
+      );
+
+      window.App.UI.showToast(
+        error?.message ||
+          'Não foi possível salvar o usuário.',
+        'error'
+      );
     }
   },
   toggleRole: async function (id) {
-    const u = window.App.Data.users.find((x) => x.firebaseId === id);
-    if (!u) {
+    const user = window.App.Data.users.find(
+      (item) => item.firebaseId === id
+    );
+
+    if (!user) {
       return;
     }
-    const currentAccess =
-      u.accessLevel || (u.role === 'Administrador' ? 'Administrador' : 'Usuário Padrão');
-    const newAccess = currentAccess === 'Administrador' ? 'Usuário Padrão' : 'Administrador';
+
+    const currentAccess = this.getAccessLevel(user);
+    const newAccess =
+      currentAccess === 'Administrador'
+        ? 'Usuário Padrão'
+        : 'Administrador';
+
     try {
-      await updateDoc(doc(db, DB_BASE_PATH, COLLECTIONS.USERS, id), {
-        accessLevel: newAccess
-      });
-      window.App.UI.showToast(`Nível de acesso alterado para ${newAccess}.`, 'success');
-    } catch (e) {
-      window.Logger.error('Erro ao alterar permissão.', e);
+      const result = await requestUsersApi(
+        '/api/users/update',
+        'PATCH',
+        {
+          uid: id,
+          name: String(user.name || '').trim(),
+          email: String(user.email || '').trim().toLowerCase(),
+          department: String(user.department || '').trim(),
+          accessLevel: newAccess
+        }
+      );
+
+      window.App.UI.showToast(
+        result.message ||
+          `Nível de acesso alterado para ${newAccess}.`,
+        'success'
+      );
+    } catch (error) {
+      window.Logger.error(
+        'Erro ao alterar permissão.',
+        error
+      );
+
+      window.App.UI.showToast(
+        error?.message ||
+          'Não foi possível alterar o nível de acesso.',
+        'error'
+      );
     }
   },
   toggleStatus: async function (id) {
-    const u = window.App.Data.users.find((x) => x.firebaseId === id);
-    if (!u) {
+    const user = window.App.Data.users.find(
+      (item) => item.firebaseId === id
+    );
+
+    if (!user) {
       return;
     }
-    const newStatus = u.status === 'Inativo' ? 'Ativo' : 'Inativo';
-    const actionText = newStatus === 'Ativo' ? 'ativar' : 'desativar';
 
-    const btn = window.event?.target?.closest?.('button');
-    if (btn) {
-      btn.classList.add('animate-pulse');
-      btn.disabled = true;
+    const newStatus =
+      this.getStatus(user) === 'Inativo'
+        ? 'Ativo'
+        : 'Inativo';
+
+    const actionText =
+      newStatus === 'Ativo'
+        ? 'ativar'
+        : 'desativar';
+
+    const button = window.event?.target?.closest?.('button');
+
+    if (button) {
+      button.classList.add('animate-pulse');
+      button.disabled = true;
     }
 
     try {
-      await updateDoc(doc(db, DB_BASE_PATH, COLLECTIONS.USERS, id), {
-        status: newStatus
-      });
+      const result = await requestUsersApi(
+        '/api/users/status',
+        'POST',
+        {
+          uid: id,
+          status: newStatus
+        }
+      );
 
-      if (btn) {
-        btn.classList.remove('animate-pulse');
-        btn.disabled = false;
-      }
+      window.AudioSys.playBeep(
+        newStatus === 'Ativo'
+          ? 'success'
+          : 'error'
+      );
 
-      window.AudioSys.playBeep(newStatus === 'Ativo' ? 'success' : 'error');
       window.App.UI.showToast(
-        `Usuário ${newStatus === 'Ativo' ? 'ativado' : 'desativado'} com sucesso.`,
+        result.message ||
+          `Usuário ${
+            newStatus === 'Ativo'
+              ? 'ativado'
+              : 'desativado'
+          } com sucesso.`,
         'success'
       );
-    } catch (e) {
-      if (btn) {
-        btn.classList.remove('animate-pulse');
-        btn.disabled = false;
+    } catch (error) {
+      window.Logger.error(
+        `Erro ao ${actionText} usuário.`,
+        error
+      );
+
+      window.App.UI.showToast(
+        error?.message ||
+          `Não foi possível ${actionText} o usuário.`,
+        'error'
+      );
+    } finally {
+      if (button) {
+        button.classList.remove('animate-pulse');
+        button.disabled = false;
       }
-      window.Logger.error(`Erro ao ${actionText} usuário.`, e);
-      window.App.UI.showToast(`Erro ao ${actionText} usuário.`, 'error');
     }
   },
   deleteUser: async function (id) {
-    if (confirm('Excluir este colaborador?')) {
-      try {
-        this.selectedUsers.delete(id);
-        await deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.USERS, id));
-        window.App.UI.showToast('Removido com sucesso.', 'success');
-      } catch (e) {
-        window.Logger.error('Erro ao remover.', e);
-      }
+    const user = window.App.Data.users.find(
+      (item) => item.firebaseId === id
+    );
+
+    if (!user) {
+      return;
+    }
+
+    const identification = String(
+      user.name || user.email || id
+    ).trim();
+
+    const confirmed = confirm(
+      `Excluir definitivamente o usuário "${identification}"?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const result = await requestUsersApi(
+        '/api/users/delete',
+        'POST',
+        {
+          uid: id
+        }
+      );
+
+      this.selectedUsers.delete(id);
+
+      window.App.UI.showToast(
+        result.message ||
+          'Usuário excluído com sucesso.',
+        'success'
+      );
+    } catch (error) {
+      window.Logger.error(
+        'Erro ao excluir usuário.',
+        error
+      );
+
+      window.App.UI.showToast(
+        error?.message ||
+          'Não foi possível excluir o usuário.',
+        'error'
+      );
     }
   },
   importFile: async function (e) {
@@ -632,52 +877,69 @@ export const AppCRUDUsers = {
         }
         window.App.UI.showToast('Importando lista... Aguarde.', 'info');
         let c = 0,
-          dup = 0;
-        const eN = new Set(window.App.Data.users.map((u) => String(u.name || '').toLowerCase())),
+          ignored = 0,
+          failures = 0;
+        const eN = new Set(window.App.Data.users.map((u) => String(u.name || '').trim().toLowerCase())),
           eE = new Set(
-            window.App.Data.users.map((u) => String(u.email || '').toLowerCase()).filter((em) => em)
+            window.App.Data.users.map((u) => String(u.email || '').trim().toLowerCase()).filter((em) => em)
           );
         for (let i = 1; i < rows.length; i++) {
           const cols = rows[i];
           if (!cols || cols.length === 0) {
+            ignored++;
             continue;
           }
           const n = cols[0] !== null && cols[0] !== undefined ? String(cols[0]).trim() : '',
-            em = cols[1] !== null && cols[1] !== undefined ? String(cols[1]).trim() : '',
-            acc =
-              cols[2] !== null && cols[2] !== undefined ? String(cols[2]).trim() : 'Usuário Padrão';
-          if (n) {
-            const lN = n.toLowerCase();
-            if (eN.has(lN) || (em && eE.has(em.toLowerCase()))) {
-              dup++;
-              continue;
-            }
+            em = cols[1] !== null && cols[1] !== undefined ? String(cols[1]).trim().toLowerCase() : '';
+          if (!n || !em) {
+            ignored++;
+            continue;
+          }
+          const lN = n.toLowerCase();
+          if (eN.has(lN) || eE.has(em)) {
+            ignored++;
+            continue;
+          }
+          try {
+            await requestUsersApi('/api/users/create', 'POST', {
+              name: n,
+              email: em,
+              department: '',
+              accessLevel: 'Usuário Padrão'
+            });
             eN.add(lN);
-            if (em) {
-              eE.add(em.toLowerCase());
-            }
-            try {
-              await addDoc(collection(db, DB_BASE_PATH, COLLECTIONS.USERS), {
-                name: n,
-                email: em,
-                accessLevel: acc,
-                status: 'Ativo'
-              });
-              c++;
-            } catch (err) {
-              window.Logger.warn(`Erro ao importar usuário ${n}:`, err?.message);
-            }
+            eE.add(em);
+            c++;
+          } catch (err) {
+            failures++;
+            window.Logger.warn(`Erro ao importar usuário ${n}:`, err?.message);
           }
         }
+        const firstAccessGuidance =
+          c > 0
+            ? ' Oriente os usuários criados a usar "Primeiro acesso ou esqueceu a senha?" para definir a senha.'
+            : '';
+
+        const summary =
+          `${c} registro(s) criado(s). ` +
+          `${ignored} ignorado(s) ou inválido(s). ` +
+          `${failures} falha(s).` +
+          firstAccessGuidance;
+
         window.App.UI.showToast(
-          `${c} registros importados. ${dup > 0 ? `(${dup} ignorados)` : ''}`,
-          'success'
+          summary,
+          failures > 0 ? 'error' : c > 0 ? 'success' : 'warning'
         );
       } catch {
         window.App.UI.showToast('Falha ao ler Excel.', 'error');
       } finally {
         e.target.value = '';
       }
+    };
+    r.onerror = () => {
+      window.Logger.error('Erro ao ler o arquivo de importação.', r.error);
+      window.App.UI.showToast('Falha ao ler o arquivo.', 'error');
+      e.target.value = '';
     };
     r.readAsArrayBuffer(f);
   },
