@@ -423,9 +423,16 @@ export const AppUI = {
     });
   },
   switchTab: function (tab) {
-    const adminOnlyTabs = ['users', 'history'];
-    if (adminOnlyTabs.includes(tab) && window.App?.Auth?.isAdm !== true) {
-      this.switchTab('dashboard');
+    const adminTabPermissions = {
+      management: 'canAccessInventory',
+      users: 'canAccessUsers',
+      history: 'canAccessHistory'
+    };
+    const requiredPermission = adminTabPermissions[tab];
+    if (requiredPermission && window.App?.Auth?.permissions?.[requiredPermission] !== true) {
+      if (tab !== 'dashboard') {
+        this.switchTab('dashboard');
+      }
       this.showToast('Acesso restrito a administradores.', 'error');
       return;
     }
