@@ -259,6 +259,11 @@ export const AppData = {
     notifications.success('Todos os dados foram resetados com sucesso!');
   },
   exportJSON: async function () {
+    if (window.App?.Auth?.permissions?.canBackupData !== true) {
+      notifications.error('Acesso restrito a administradores.');
+      return;
+    }
+
     notifications.info('Gerando backup...');
 
     const collections = [
@@ -382,6 +387,11 @@ export const AppData = {
     }
   },
   exportExcel: async function () {
+    if (window.App?.Auth?.permissions?.canExportData !== true) {
+      notifications.error('Acesso restrito a administradores.');
+      return;
+    }
+
     if (!window.XLSX) {
       notifications.info('Carregando motor de planilhas...');
       try {

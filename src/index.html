@@ -871,6 +871,7 @@
               <div class="flex flex-wrap justify-end gap-2 md:gap-3 items-center">
                 <!-- Exportar -->
                 <button
+                  id="btn-export-dashboard"
                   type="button"
                   onclick="App.Data.exportExcel()"
                   class="btn px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap"
@@ -2462,6 +2463,7 @@
                 <div class="flex flex-nowrap justify-start lg:justify-end gap-2 items-center overflow-x-auto pb-1 w-full lg:w-auto">
                 <!-- Exportar lista -->
                 <button
+                  id="btn-collaborators-export"
                   type="button"
                   onclick="App.CRUDCollaborators.exportList()"
                   class="btn px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
@@ -2470,6 +2472,7 @@
                   Exportar
                 </button>
                 <button
+                  id="btn-collaborators-import"
                   type="button"
                   onclick="document.getElementById('crud-import-input-collab').click()"
                   class="btn px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
@@ -2478,6 +2481,7 @@
                   Importar
                 </button>
                 <button
+                  id="btn-collaborators-new"
                   type="button"
                   onclick="App.CRUDCollaborators.openModal()"
                   class="btn btn-primary px-4 py-2.5 font-bold active:scale-95 text-sm whitespace-nowrap shrink-0"

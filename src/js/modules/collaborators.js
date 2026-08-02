@@ -12,6 +12,13 @@ export const AppCRUDCollaborators = {
   selectedCollabs: new Set(),
   currentPendingFilter: 'all',
 
+  _hasPermission: function (permission) {
+    return window.App?.Auth?.permissions?.[permission] === true;
+  },
+  _denyAccess: function () {
+    window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+  },
+
   setPendingFilter: function (filter) {
     this.currentPendingFilter = filter;
     document.querySelectorAll('#collab-quick-filters .collab-filter-btn').forEach((btn) => {
@@ -258,6 +265,9 @@ export const AppCRUDCollaborators = {
     const statusText = (u.status || 'active') === 'active' ? 'Ativo' : 'Inativo';
     const statusBorder =
       (u.status || 'active') === 'active' ? 'border-l-emerald-500' : 'border-l-rose-500';
+    const canManageCollaborators = this._hasPermission(
+      'canManageCollaborators'
+    );
     const imgHtml = u.imageUrl
       ? `<img src="${window.Utils.escapeHTML(u.imageUrl)}" onclick="App.UI.showImagePreview(this.src, '${window.Utils.escapeHTML(u.name)}')" class="w-14 h-14 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 cursor-zoom-in shadow-sm" loading="lazy" decoding="async">`
       : '<div class="w-14 h-14 rounded-full border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>';
@@ -295,11 +305,11 @@ export const AppCRUDCollaborators = {
          ${u.phone ? `<div class="flex justify-between items-center"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contato</span><span class="text-[11px] font-bold text-slate-600 dark:text-slate-300">${window.Utils.escapeHTML(u.phone)}</span></div>` : ''}
       </div>
       <div class="flex gap-1.5 mt-2">
-         <button onclick="App.CRUDCollaborators.openModal('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Editar Colaborador"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg></button>
-         <button onclick="App.CRUDCollaborators.toggleStatus('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 ${u.status === 'inactive' ? 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400' : 'hover:bg-rose-50 dark:hover:bg-rose-900/30 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400'} rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="${u.status === 'inactive' ? 'Ativar' : 'Desativar / Bloquear'}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M18.36 6.64A9 9 0 0 1 20.77 15"/><path d="M6.16 6.16a9 9 0 1 0 12.68 12.68"/><path d="M12 2v10"/></svg></button>
+          ${canManageCollaborators ? `<button onclick="App.CRUDCollaborators.openModal('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Editar Colaborador"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg></button>` : ''}
+          ${canManageCollaborators ? `<button onclick="App.CRUDCollaborators.toggleStatus('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 ${u.status === 'inactive' ? 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400' : 'hover:bg-rose-50 dark:hover:bg-rose-900/30 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400'} rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="${u.status === 'inactive' ? 'Ativar' : 'Desativar / Bloquear'}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M18.36 6.64A9 9 0 0 1 20.77 15"/><path d="M6.16 6.16a9 9 0 1 0 12.68 12.68"/><path d="M12 2v10"/></svg></button>` : ''}
          <button onclick="App.CRUDCollaborators.showHistory('${window.Utils.escapeHTML(u.name)}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Ver Histórico"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button>
          ${whatsappBtn}
-         <button onclick="App.CRUDCollaborators.deleteCollaborator('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-800 transition-colors flex items-center justify-center shadow-sm" title="Excluir Colaborador"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+          ${canManageCollaborators ? `<button onclick="App.CRUDCollaborators.deleteCollaborator('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-800 transition-colors flex items-center justify-center shadow-sm" title="Excluir Colaborador"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M3 6h18"/><path d="M19 6v14c0-1 1-2 2-2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>` : ''}
       </div>
     </div>`;
   },
@@ -309,6 +319,11 @@ export const AppCRUDCollaborators = {
     this.render();
   },
   exportList: function () {
+    if (!this._hasPermission('canExportData')) {
+      this._denyAccess();
+      return;
+    }
+
     if (!window.XLSX) {
       window.App.UI.showToast('Carregando motor de planilhas...', 'info');
       window.Utils.loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js')
@@ -331,6 +346,16 @@ export const AppCRUDCollaborators = {
   },
 
   bulkAction: async function (action) {
+    if (action === 'export' && !this._hasPermission('canExportData')) {
+      this._denyAccess();
+      return;
+    }
+
+    if (action === 'delete' && !this._hasPermission('canManageCollaborators')) {
+      this._denyAccess();
+      return;
+    }
+
     if (this.selectedCollabs.size === 0) {
       return;
     }
@@ -379,6 +404,11 @@ export const AppCRUDCollaborators = {
   },
 
   toggleStatus: async function (id) {
+    if (!this._hasPermission('canManageCollaborators')) {
+      this._denyAccess();
+      return;
+    }
+
     const c = window.App.Data.collaborators.find((x) => x.firebaseId === id);
     if (!c) {
       return;
@@ -455,6 +485,11 @@ export const AppCRUDCollaborators = {
   },
 
   openModal: function (id = null) {
+    if (!this._hasPermission('canManageCollaborators')) {
+      this._denyAccess();
+      return;
+    }
+
     const m = document.getElementById('crud-collab-modal');
     const pre = document.getElementById('crud-collab-image-preview');
     const icon = document.getElementById('collab-image-icon');
@@ -498,6 +533,11 @@ export const AppCRUDCollaborators = {
     }
   },
   saveCollaborator: async function () {
+    if (!this._hasPermission('canManageCollaborators')) {
+      this._denyAccess();
+      return;
+    }
+
     const id = document.getElementById('crud-collab-id').value,
       b = document.getElementById('crud-collab-badge').value.trim(),
       n = document.getElementById('crud-collab-name').value.trim(),
@@ -576,6 +616,11 @@ export const AppCRUDCollaborators = {
     }
   },
   deleteCollaborator: async function (id) {
+    if (!this._hasPermission('canManageCollaborators')) {
+      this._denyAccess();
+      return;
+    }
+
     if (confirm('Excluir este colaborador?')) {
       try {
         await deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.COLLABORATORS, id));
@@ -586,6 +631,15 @@ export const AppCRUDCollaborators = {
     }
   },
   importFile: async function (e) {
+    if (!this._hasPermission('canManageCollaborators')) {
+      if (e?.target) {
+        e.target.value = '';
+      }
+
+      this._denyAccess();
+      return;
+    }
+
     if (!e || !e.target || !e.target.files) {
       return;
     }

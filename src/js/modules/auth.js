@@ -24,7 +24,10 @@ export const AppAuth = {
     canReadCollaborators: false,
     canAccessInventory: false,
     canAccessUsers: false,
-    canAccessHistory: false
+    canAccessHistory: false,
+    canExportData: false,
+    canBackupData: false,
+    canManageCollaborators: false
   },
   _setPermissions: function (isAdm, isAuthenticated = true) {
     const canAccessStandardModules = isAuthenticated === true;
@@ -36,6 +39,25 @@ export const AppAuth = {
     this.permissions.canAccessInventory = isAdm;
     this.permissions.canAccessUsers = isAdm;
     this.permissions.canAccessHistory = isAdm;
+    this.permissions.canExportData = isAdm;
+    this.permissions.canBackupData = isAdm;
+    this.permissions.canManageCollaborators = isAdm;
+  },
+  _updateAdministrativeActionVisibility: function () {
+    const visibilityById = {
+      'btn-export-dashboard': this.permissions.canExportData,
+      'btn-export-json': this.permissions.canBackupData,
+      'btn-collaborators-export': this.permissions.canExportData,
+      'btn-collaborators-import': this.permissions.canManageCollaborators,
+      'btn-collaborators-new': this.permissions.canManageCollaborators
+    };
+
+    Object.entries(visibilityById).forEach(([id, isVisible]) => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.style.display = isVisible ? '' : 'none';
+      }
+    });
   },
   init: function () {
     if (this._initialized) {
@@ -114,6 +136,7 @@ export const AppAuth = {
   _handleUnauthenticatedUser() {
     this.isAdm = false;
     this._setPermissions(false, false);
+    this._updateAdministrativeActionVisibility();
     document.getElementById('admin-section').style.display = 'none';
     document.getElementById('login-screen')?.classList.remove('hidden');
     document.getElementById('main-app')?.classList.add('hidden');
@@ -211,6 +234,7 @@ export const AppAuth = {
   _updateUIForUser(uName, isAdm, isRestricted) {
     this.isAdm = isAdm;
     this._setPermissions(isAdm);
+    this._updateAdministrativeActionVisibility();
     document.getElementById('user-name').textContent = uName;
     document.getElementById('user-role').textContent = isAdm ? 'Administrador' : 'Usuário';
     document.getElementById('user-avatar').innerHTML = isAdm
