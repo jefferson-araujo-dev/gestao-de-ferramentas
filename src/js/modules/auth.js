@@ -114,6 +114,7 @@ export const AppAuth = {
   _handleUnauthenticatedUser() {
     this.isAdm = false;
     this._setPermissions(false, false);
+    document.getElementById('admin-section').style.display = 'none';
     document.getElementById('login-screen')?.classList.remove('hidden');
     document.getElementById('main-app')?.classList.add('hidden');
     window.App.Session.cleanup();
@@ -217,9 +218,7 @@ export const AppAuth = {
       : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-brand-600"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
 
     document.getElementById('admin-tools').style.display = isAdm ? 'block' : 'none';
-    document.getElementById('nav-management').style.display = isAdm ? '' : 'none';
-    document.getElementById('nav-users').style.display = isAdm ? '' : 'none';
-    document.getElementById('nav-history').style.display = isAdm ? '' : 'none';
+    document.getElementById('admin-section').style.display = isAdm ? '' : 'none';
     document.getElementById('nav-collaborators').style.display =
       isRestricted && !isAdm ? 'none' : '';
 
