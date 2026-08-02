@@ -7,8 +7,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 import {
   doc,
-  getDoc,
-  updateDoc
+  getDoc
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { auth, db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
 import { cacheManager } from '../core/CacheManager.js';
@@ -110,7 +109,7 @@ export const AppAuth = {
       const userProfile = await this._fetchAndCacheUserProfile(user);
       const { uName, isAdm, isRestricted } = userProfile;
 
-      await this._updateUserSession(userProfile.id);
+      await this._updateUserSession();
       this._updateUIForUser(uName, isAdm, isRestricted);
 
       document.getElementById('login-screen')?.classList.add('hidden');
@@ -191,24 +190,8 @@ export const AppAuth = {
       isRestricted: dbUser.isRestricted === true
     };
   },
-  async _updateUserSession(userId) {
-    if (!userId) {
-      return;
-    }
-    const ipInfo = await cacheManager.getOrSet(
-      'current_device_ip',
-      async () => {
-        try {
-          const res = await fetch('https://api.ipify.org?format=json');
-          return (await res.json()).ip;
-        } catch {
-          return 'IP Desconhecido';
-        }
-      },
-      { ttl: 3600000 }
-    );
-
-    const ua = navigator.userAgent;
+  async _updateUserSession() {
+    const ua = String(navigator.userAgent || '');
     let os = 'OS Desconhecido',
       browser = 'Navegador Desconhecido';
     if (ua.includes('Win')) {
@@ -222,14 +205,53 @@ export const AppAuth = {
       browser = 'Chrome';
     }
 
-    window.App.Session.currentIp = ipInfo;
-    window.App.Session.currentDevice = `${browser} / ${os}`;
+    const device = `${browser} / ${os}`.trim().slice(0, 160);
 
-    updateDoc(doc(db, DB_BASE_PATH, COLLECTIONS.USERS, userId), {
-      lastLogin: new Date().toISOString(),
-      lastIp: ipInfo,
-      lastDevice: `${browser} / ${os}`
-    }).catch((e) => window.Logger.warn('Erro ao atualizar ultimo login', e));
+    try {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        window.Logger.warn('Não foi possível atualizar último login: usuário não autenticado.');
+        return;
+      }
+
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/session/last-login', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          device
+        }),
+        cache: 'no-store'
+      });
+
+      let result = null;
+
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
+
+      if (!response.ok) {
+        const message =
+          typeof result?.message === 'string' && result.message.trim()
+            ? result.message.trim()
+            : 'Não foi possível atualizar o último login.';
+
+        throw new Error(message);
+      }
+
+      if (window.App?.Session) {
+        window.App.Session.currentDevice = device;
+        window.App.Session.currentIp = 'Registrado no servidor';
+      }
+    } catch (error) {
+      window.Logger.warn('Erro ao atualizar último login pela API:', error);
+    }
   },
   _updateUIForUser(uName, isAdm, isRestricted) {
     this.isAdm = isAdm;
