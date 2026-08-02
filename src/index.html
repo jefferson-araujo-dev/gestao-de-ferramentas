@@ -2687,10 +2687,10 @@
     <!-- Tool Modal -->
     <dialog
       id="crud-modal"
-      class="p-0 bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden open:animate-fade-in backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm"
+      class="p-0 bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden open:animate-fade-in max-h-[calc(100vh-2rem)] open:flex open:flex-col backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm"
     >
         <div
-          class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between"
+          class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0"
         >
           <h3 id="modal-title" class="text-xl font-extrabold text-slate-900 dark:text-white">
             Nova Ferramenta
@@ -2703,7 +2703,7 @@
                 <svg class="w-5 h-5" aria-hidden="true"><use href="#icon-close"></use></svg>
           </button>
         </div>
-        <div class="p-6 space-y-4">
+        <div class="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
           <input type="hidden" id="crud-id" />
           <input type="hidden" id="crud-condition" value="Bom" />
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2734,15 +2734,14 @@
                 >
                   Selecionar PDF
                 </label>
-                <a
+                <button
                   id="btn-view-manual"
-                  href="#"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  type="button"
+                  onclick="App.CRUDTools.viewManual(event)"
                   class="hidden text-sm font-bold text-brand-600 dark:text-brand-400 hover:underline"
                 >
                   Visualizar manual
-                </a>
+                </button>
               </div>
               <input
                 type="file"
@@ -2750,6 +2749,7 @@
                 class="hidden"
                 accept="application/pdf"
                 aria-describedby="manual-file-name"
+                onchange="App.CRUDTools.handleManualSelection(event)"
               />
               <p id="manual-file-name" class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
                 Nenhum arquivo
@@ -2851,13 +2851,13 @@
                 <span class="text-xs font-bold text-slate-500 dark:text-slate-400"
                   >Alterar Imagem</span
                 >
-                <input type="file" id="crud-image" class="hidden" accept="image/*" />
+                <input type="file" id="crud-image" class="hidden" accept="image/*" onchange="App.CRUDTools.handleImageSelection(event)" />
               </label>
             </div>
           </div>
         </div>
         <div
-          class="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex gap-3"
+          class="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex gap-3 shrink-0"
         >
           <button
             type="button"

@@ -9,6 +9,148 @@ import { db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
 export const AppCRUDTools = {
   currentFilter: 'all',
   selectedTools: new Set(),
+  manualPreviewUrl: null,
+
+  clearManualPreview: function () {
+    if (this.manualPreviewUrl) {
+      URL.revokeObjectURL(this.manualPreviewUrl);
+      this.manualPreviewUrl = null;
+    }
+  },
+
+  restoreSavedManualState: function () {
+    const fileName = document.getElementById('manual-file-name');
+    const viewButton = document.getElementById('btn-view-manual');
+    const savedUrl = viewButton?.dataset.savedManualUrl || '';
+    const savedName = viewButton?.dataset.savedManualName || '';
+
+    if (viewButton) {
+      viewButton.dataset.manualUrl = savedUrl;
+      viewButton.classList.toggle('hidden', !savedUrl);
+    }
+
+    if (fileName) {
+      fileName.textContent = savedName || (savedUrl ? 'PDF anexado' : 'Nenhum arquivo');
+    }
+  },
+
+  handleImageSelection: function (event) {
+    const input = event?.target;
+    const preview = document.getElementById('crud-image-preview');
+    const placeholder = document.getElementById('image-placeholder-icon');
+    const file = input?.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      input.value = '';
+      window.App.UI.showToast('Selecione um arquivo de imagem válido.', 'warning');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (!preview) {
+        return;
+      }
+
+      preview.src = String(reader.result || '');
+      preview.classList.remove('hidden');
+      placeholder?.classList.add('hidden');
+    };
+    reader.onerror = (error) => {
+      input.value = '';
+      window.Logger.error('Erro ao preparar a prévia da imagem.', error);
+      window.App.UI.showToast('Não foi possível visualizar a imagem selecionada.', 'error');
+    };
+    reader.readAsDataURL(file);
+  },
+
+  handleManualSelection: function (event) {
+    const input = event?.target;
+    const fileName = document.getElementById('manual-file-name');
+    const viewButton = document.getElementById('btn-view-manual');
+    const file = input?.files?.[0];
+
+    this.clearManualPreview();
+
+    if (!file) {
+      this.restoreSavedManualState();
+      return;
+    }
+
+    const isPdf =
+      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+    if (!isPdf) {
+      input.value = '';
+      this.restoreSavedManualState();
+      window.App.UI.showToast('Selecione um arquivo PDF válido.', 'warning');
+      return;
+    }
+
+    this.manualPreviewUrl = URL.createObjectURL(file);
+
+    if (viewButton) {
+      viewButton.dataset.manualUrl = this.manualPreviewUrl;
+      viewButton.classList.remove('hidden');
+    }
+
+    if (fileName) {
+      fileName.textContent = file.name;
+    }
+  },
+
+  viewManual: function (event) {
+    event?.preventDefault();
+
+    const viewButton = document.getElementById('btn-view-manual');
+    const manualUrl = viewButton?.dataset.manualUrl;
+
+    if (!manualUrl) {
+      window.App.UI.showToast('Nenhum manual disponível.', 'warning');
+      return;
+    }
+
+    let viewUrl = manualUrl;
+    let shouldRevoke = false;
+
+    if (manualUrl.startsWith('data:application/pdf;base64,')) {
+      try {
+        const encodedData = manualUrl.slice(manualUrl.indexOf(',') + 1);
+        const binary = atob(encodedData);
+        const bytes = new Uint8Array(binary.length);
+
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+
+        viewUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        shouldRevoke = true;
+      } catch (error) {
+        window.Logger.error('Erro ao preparar o manual para visualização.', error);
+        window.App.UI.showToast('Não foi possível abrir o manual.', 'error');
+        return;
+      }
+    } else if (!/^(https?:|blob:)/i.test(manualUrl)) {
+      window.App.UI.showToast('O endereço do manual é inválido.', 'error');
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = viewUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    if (shouldRevoke) {
+      window.setTimeout(() => URL.revokeObjectURL(viewUrl), 60000);
+    }
+  },
 
   setQuickFilter: function (filter) {
     this.currentFilter = filter;
@@ -569,12 +711,15 @@ export const AppCRUDTools = {
   },
 
   openModal: function (id = null) {
+    this.clearManualPreview();
+
     const m = document.getElementById('crud-modal');
     if (m) {
       m.showModal();
     }
     const pre = document.getElementById('crud-image-preview'),
-      icon = document.getElementById('image-placeholder-icon');
+      icon = document.getElementById('image-placeholder-icon'),
+      manualButton = document.getElementById('btn-view-manual');
     document.getElementById('crud-image').value = '';
     if (pre) {
       pre.classList.add('hidden');
@@ -586,7 +731,10 @@ export const AppCRUDTools = {
     document.getElementById('crud-notes').value = '';
     document.getElementById('crud-manual').value = '';
     document.getElementById('manual-file-name').textContent = 'Nenhum arquivo';
-    document.getElementById('btn-view-manual').classList.add('hidden');
+    manualButton.dataset.manualUrl = '';
+    manualButton.dataset.savedManualUrl = '';
+    manualButton.dataset.savedManualName = '';
+    manualButton.classList.add('hidden');
 
     if (icon) {
       icon.classList.remove('hidden');
@@ -617,9 +765,12 @@ export const AppCRUDTools = {
         document.getElementById('crud-notes').value = t.notes;
       }
       if (t.manualUrl) {
-        document.getElementById('btn-view-manual').href = t.manualUrl;
-        document.getElementById('btn-view-manual').classList.remove('hidden');
-        document.getElementById('manual-file-name').textContent = 'PDF Anexado';
+        manualButton.dataset.manualUrl = t.manualUrl;
+        manualButton.dataset.savedManualUrl = t.manualUrl;
+        manualButton.dataset.savedManualName = t.manualName || '';
+        manualButton.classList.remove('hidden');
+        document.getElementById('manual-file-name').textContent =
+          t.manualName || 'PDF anexado';
       }
     } else {
       document.getElementById('modal-title').textContent = 'Nova Ferramenta';
@@ -630,7 +781,9 @@ export const AppCRUDTools = {
       document.getElementById('crud-status-container').classList.add('hidden');
     }
   },
-  closeModal: () => {
+  closeModal: function () {
+    this.clearManualPreview();
+
     const m = document.getElementById('crud-modal');
     if (m) {
       m.close();
@@ -669,6 +822,7 @@ export const AppCRUDTools = {
       let imgUrl = null;
       const tool = id ? window.App.Data.tools.find((t) => t.firebaseId === id) : null;
       let manualUrl = tool?.manualUrl || null;
+      let manualName = tool?.manualName || null;
 
       if (tool && tool.imageUrl) {
         imgUrl = tool.imageUrl;
@@ -678,6 +832,7 @@ export const AppCRUDTools = {
       }
 
       if (manualFile) {
+        manualName = manualFile.name;
         manualUrl = await new Promise((res, rej) => {
           const reader = new FileReader();
           reader.onload = () => res(reader.result);
@@ -693,7 +848,8 @@ export const AppCRUDTools = {
           condition: cond,
           nextMaintenance: nextMaint || null,
           notes: notes,
-          manualUrl: manualUrl
+          manualUrl: manualUrl,
+          manualName: manualName
         };
         if (tool && tool.status !== 'borrowed') {
           u.status = document.getElementById('crud-status').value;
@@ -716,7 +872,8 @@ export const AppCRUDTools = {
             condition: cond,
             nextMaintenance: nextMaint || null,
             notes: notes,
-            manualUrl: manualUrl
+            manualUrl: manualUrl,
+            manualName: manualName
           })
         );
         window.App.UI.showToast('Registrada com sucesso.', 'success');
