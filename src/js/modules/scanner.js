@@ -1,5 +1,45 @@
 import { metrics } from '../core/MetricsManager.js';
+import { auth } from '../app.js';
 
+async function requestToolMovement(body) {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error('Sua sessão expirou. Entre novamente.');
+  }
+
+  if (!body?.toolId || (body.action === 'loan' && !body.collaboratorId)) {
+    throw new Error('Dados da movimentação incompletos.');
+  }
+
+  const token = await currentUser.getIdToken();
+
+  const response = await fetch('/api/tools/movement', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store'
+  });
+
+  let payload;
+
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('A API retornou uma resposta inválida.');
+  }
+
+  if (!response.ok || payload?.success !== true) {
+    throw new Error(
+      payload?.message || 'Não foi possível registrar a movimentação.'
+    );
+  }
+
+  return payload.data?.tool || null;
+}
 export const AppScanner = {
   currentTool: null,
   buffer: '',
@@ -512,16 +552,14 @@ export const AppScanner = {
     document.getElementById('scanner-processing')?.classList.remove('hidden');
     setTimeout(async () => {
       try {
-        await window.App.Data.updateTool(
-          this.currentTool.code,
-          {
-            status: 'available',
-            currentUser: null,
-            lastAction: new Date().toISOString()
-          },
-          'in',
-          this.currentTool.currentUser
-        );
+        await requestToolMovement({
+          action: 'return',
+          toolId: this.currentTool.firebaseId,
+          device:
+            window.App.Session.currentDevice ||
+            window.navigator.userAgent ||
+            'Navegador'
+        });
         window.AudioSys.playBeep('success');
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate(100);
@@ -580,16 +618,15 @@ export const AppScanner = {
     document.getElementById('scanner-processing')?.classList.remove('hidden');
     setTimeout(async () => {
       try {
-        await window.App.Data.updateTool(
-          this.currentTool.code,
-          {
-            status: 'borrowed',
-            currentUser: u.name,
-            lastAction: new Date().toISOString()
-          },
-          'out',
-          u.name
-        );
+        await requestToolMovement({
+          action: 'loan',
+          toolId: this.currentTool.firebaseId,
+          collaboratorId: u.firebaseId,
+          device:
+            window.App.Session.currentDevice ||
+            window.navigator.userAgent ||
+            'Navegador'
+        });
         window.AudioSys.playBeep('success');
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate(100);

@@ -33,24 +33,38 @@ self.addEventListener('activate', (event) => {
 // (O precacheAndRoute acima já responde pelos arquivos principais em cache.
 // O que não estiver lá cai nesse fetch dinâmico)
 self.addEventListener('fetch', (event) => {
-  if (!event.request.url.startsWith(self.location.origin)) {
-    return;
-  }
   if (event.request.method !== 'GET') {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          return networkResponse;
-        })
-        .catch(() => cachedResponse); // Se a rede cair, fallback direto pro cache
+  const requestUrl = new URL(event.request.url);
 
-      return cachedResponse || fetchPromise;
-    })
+  if (
+    requestUrl.pathname === '/manifest.json' ||
+    (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') ||
+    requestUrl.origin !== self.location.origin
+  ) {
+    return;
+  }
+
+  event.respondWith(
+    caches
+      .match(event.request)
+      .then((cachedResponse) => {
+        const fetchPromise = fetch(event.request)
+          .then((networkResponse) => {
+            const responseClone = networkResponse.clone();
+
+            return caches
+              .open(CACHE_NAME)
+              .then((cache) => cache.put(event.request, responseClone))
+              .catch(() => undefined)
+              .then(() => networkResponse);
+          })
+          .catch(() => cachedResponse || Response.error());
+
+        return cachedResponse || fetchPromise;
+      })
+      .catch(() => Response.error())
   );
 });

@@ -27,7 +27,7 @@ function getBearerToken(req) {
   return token;
 }
 
-export async function requireActiveAdmin(req) {
+export async function requireActiveUser(req) {
   let decodedToken;
 
   try {
@@ -53,10 +53,6 @@ export async function requireActiveAdmin(req) {
     throw createHttpError(403, 'Usuário inativo.');
   }
 
-  if (profile.accessLevel !== 'Administrador') {
-    throw createHttpError(403, 'Acesso permitido somente para administradores.');
-  }
-
   const profileEmail = String(profile.email || '').trim().toLowerCase();
   const tokenEmail = String(decodedToken.email || '').trim().toLowerCase();
 
@@ -70,6 +66,16 @@ export async function requireActiveAdmin(req) {
     profile,
     profileRef
   };
+}
+
+export async function requireActiveAdmin(req) {
+  const authorization = await requireActiveUser(req);
+
+  if (authorization.profile.accessLevel !== 'Administrador') {
+    throw createHttpError(403, 'Acesso permitido somente para administradores.');
+  }
+
+  return authorization;
 }
 
 export function getHttpStatus(error) {

@@ -365,40 +365,52 @@
             <span class="hidden md:block font-bold text-sm">Colaboradores</span>
           </button>
 
-          <div class="my-4 border-t border-slate-800"></div>
-          <p
-            class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 hidden md:block"
-          >
-            Administração
-          </p>
-
           <button
-            id="nav-management"
+            id="nav-tools"
             type="button"
             class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
             data-tab="management"
           >
             <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-inventory"></use></svg>
-            <span class="hidden md:block font-bold text-sm">Inventário</span>
+            <span class="hidden md:block font-bold text-sm">Ferramentas</span>
           </button>
-          <button
-            id="nav-users"
-            type="button"
-            class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
-            data-tab="users"
-          >
-            <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-users"></use></svg>
-            <span class="hidden md:block font-bold text-sm">Controle de Acesso</span>
-          </button>
-          <button
-            id="nav-history"
-            type="button"
-            class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
-            data-tab="history"
-          >
-            <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-history"></use></svg>
-            <span class="hidden md:block font-bold text-sm">Auditoria</span>
-          </button>
+
+          <div id="admin-section">
+            <div class="my-4 border-t border-slate-800"></div>
+            <p
+              class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 hidden md:block"
+            >
+              Administração
+            </p>
+
+            <button
+              id="nav-management"
+              type="button"
+              class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
+              data-tab="management"
+            >
+              <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-inventory"></use></svg>
+              <span class="hidden md:block font-bold text-sm">Inventário</span>
+            </button>
+            <button
+              id="nav-users"
+              type="button"
+              class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
+              data-tab="users"
+            >
+              <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-users"></use></svg>
+              <span class="hidden md:block font-bold text-sm">Controle de Acesso</span>
+            </button>
+            <button
+              id="nav-history"
+              type="button"
+              class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
+              data-tab="history"
+            >
+              <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-history"></use></svg>
+              <span class="hidden md:block font-bold text-sm">Auditoria</span>
+            </button>
+          </div>
         </nav>
 
         <div class="px-3 pb-4 mt-auto">
@@ -869,6 +881,7 @@
               <div class="flex flex-wrap justify-end gap-2 md:gap-3 items-center">
                 <!-- Exportar -->
                 <button
+                  id="btn-export-dashboard"
                   type="button"
                   onclick="App.Data.exportExcel()"
                   class="btn px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap"
@@ -2016,6 +2029,7 @@
               <div class="space-y-3">
                 <div class="flex flex-nowrap justify-start lg:justify-end gap-2 items-center overflow-x-auto pb-1 w-full lg:w-auto shrink-0 max-w-full">
                   <button
+                    id="tools-action-export"
                     type="button"
                     onclick="App.CRUDTools.quickExport()"
                     class="btn px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
@@ -2025,6 +2039,7 @@
                     Exportar
                   </button>
                   <button
+                    id="tools-action-import"
                     type="button"
                     onclick="document.getElementById('crud-import-input-tool').click()"
                     class="btn px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
@@ -2033,6 +2048,7 @@
                     Importar
                   </button>
                   <button
+                    id="tools-action-new"
                     type="button"
                     onclick="App.CRUDTools.openModal()"
                     class="btn px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold shadow-md shadow-brand-600/20 transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
@@ -2460,6 +2476,7 @@
                 <div class="flex flex-nowrap justify-start lg:justify-end gap-2 items-center overflow-x-auto pb-1 w-full lg:w-auto">
                 <!-- Exportar lista -->
                 <button
+                  id="btn-collaborators-export"
                   type="button"
                   onclick="App.CRUDCollaborators.exportList()"
                   class="btn px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
@@ -2468,6 +2485,7 @@
                   Exportar
                 </button>
                 <button
+                  id="btn-collaborators-import"
                   type="button"
                   onclick="document.getElementById('crud-import-input-collab').click()"
                   class="btn px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
@@ -2476,6 +2494,7 @@
                   Importar
                 </button>
                 <button
+                  id="btn-collaborators-new"
                   type="button"
                   onclick="App.CRUDCollaborators.openModal()"
                   class="btn btn-primary px-4 py-2.5 font-bold active:scale-95 text-sm whitespace-nowrap shrink-0"
@@ -2681,10 +2700,10 @@
     <!-- Tool Modal -->
     <dialog
       id="crud-modal"
-      class="p-0 bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden open:animate-fade-in backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm"
+      class="p-0 bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden open:animate-fade-in max-h-[calc(100vh-2rem)] open:flex open:flex-col backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm"
     >
         <div
-          class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between"
+          class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0"
         >
           <h3 id="modal-title" class="text-xl font-extrabold text-slate-900 dark:text-white">
             Nova Ferramenta
@@ -2697,8 +2716,72 @@
                 <svg class="w-5 h-5" aria-hidden="true"><use href="#icon-close"></use></svg>
           </button>
         </div>
-        <div class="p-6 space-y-4">
+        <div class="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
           <input type="hidden" id="crud-id" />
+          <input type="hidden" id="crud-condition" value="Bom" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label
+                for="crud-next-maintenance"
+                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
+              >
+                Próxima Manutenção
+              </label>
+              <input
+                type="date"
+                id="crud-next-maintenance"
+                class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-brand-500/20"
+              />
+            </div>
+            <div>
+              <label
+                for="crud-manual"
+                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
+              >
+                Manual da Ferramenta
+              </label>
+              <div class="flex items-center gap-2">
+                <label
+                  for="crud-manual"
+                  class="inline-flex items-center justify-center px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-bold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Selecionar PDF
+                </label>
+                <button
+                  id="btn-view-manual"
+                  type="button"
+                  onclick="App.CRUDTools.viewManual(event)"
+                  class="hidden text-sm font-bold text-brand-600 dark:text-brand-400 hover:underline"
+                >
+                  Visualizar manual
+                </button>
+              </div>
+              <input
+                type="file"
+                id="crud-manual"
+                class="hidden"
+                accept="application/pdf"
+                aria-describedby="manual-file-name"
+                onchange="App.CRUDTools.handleManualSelection(event)"
+              />
+              <p id="manual-file-name" class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                Nenhum arquivo
+              </p>
+            </div>
+          </div>
+          <div>
+            <label
+              for="crud-notes"
+              class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
+            >
+              Observações
+            </label>
+            <textarea
+              id="crud-notes"
+              rows="3"
+              class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-brand-500/20 resize-y"
+            ></textarea>
+          </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
@@ -2781,13 +2864,13 @@
                 <span class="text-xs font-bold text-slate-500 dark:text-slate-400"
                   >Alterar Imagem</span
                 >
-                <input type="file" id="crud-image" class="hidden" accept="image/*" />
+                <input type="file" id="crud-image" class="hidden" accept="image/*" onchange="App.CRUDTools.handleImageSelection(event)" />
               </label>
             </div>
           </div>
         </div>
         <div
-          class="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex gap-3"
+          class="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex gap-3 shrink-0"
         >
           <button
             type="button"

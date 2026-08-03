@@ -34,81 +34,90 @@ export const AppData = {
       }
     });
     this.listeners = [];
+    this.historyUnsub = null;
   },
-  init: function () {
+  init: function (permissions) {
     this.destroyListeners();
     this.toolsLoaded = false;
     this.usersLoaded = false;
     this.collaboratorsLoaded = false;
     window.App.UI.renderAll();
 
-    this.listeners.push(
-      onSnapshot(
-        collection(db, DB_BASE_PATH, COLLECTIONS.TOOLS),
-        (s) => {
-          this.tools = s.docs.map((d) => ({
-            firebaseId: d.id,
-            ...d.data()
-          }));
-          this.toolsLoaded = true;
-          window.App.UI.renderAll();
-        },
-        (err) => {
-          this.tools = [];
-          this.toolsLoaded = true;
-          window.Logger.warn('Erro ao carregar ferramentas', err);
-          window.App.UI.renderAll();
-        }
-      )
-    );
+    if (permissions?.canReadTools === true) {
+      this.listeners.push(
+        onSnapshot(
+          collection(db, DB_BASE_PATH, COLLECTIONS.TOOLS),
+          (s) => {
+            this.tools = s.docs.map((d) => ({
+              firebaseId: d.id,
+              ...d.data()
+            }));
+            this.toolsLoaded = true;
+            window.App.UI.renderAll();
+          },
+          (err) => {
+            this.tools = [];
+            this.toolsLoaded = true;
+            window.Logger.warn('Erro ao carregar ferramentas', err);
+            window.App.UI.renderAll();
+          }
+        )
+      );
+    }
 
-    this.listeners.push(
-      onSnapshot(
-        collection(db, DB_BASE_PATH, COLLECTIONS.USERS),
-        (s) => {
-          this.users = s.docs
-            .map((d) => ({ firebaseId: d.id, ...d.data() }))
-            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-          this.usersLoaded = true;
-          if (window.App.UI.activeTab === 'users') {
-            window.App.CRUDUsers.render();
+    if (permissions?.canAccessUsers === true) {
+      this.listeners.push(
+        onSnapshot(
+          collection(db, DB_BASE_PATH, COLLECTIONS.USERS),
+          (s) => {
+            this.users = s.docs
+              .map((d) => ({ firebaseId: d.id, ...d.data() }))
+              .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+            this.usersLoaded = true;
+            if (window.App.UI.activeTab === 'users') {
+              window.App.CRUDUsers.render();
+            }
+          },
+          (err) => {
+            this.users = [];
+            this.usersLoaded = true;
+            window.Logger.warn('Erro ao carregar usuarios', err);
+            if (window.App.UI.activeTab === 'users') {
+              window.App.CRUDUsers.render();
+            }
           }
-        },
-        (err) => {
-          this.users = [];
-          this.usersLoaded = true;
-          window.Logger.warn('Erro ao carregar usuarios', err);
-          if (window.App.UI.activeTab === 'users') {
-            window.App.CRUDUsers.render();
-          }
-        }
-      )
-    );
+        )
+      );
+    }
 
-    this.listeners.push(
-      onSnapshot(
-        collection(db, DB_BASE_PATH, COLLECTIONS.COLLABORATORS),
-        (s) => {
-          this.collaborators = s.docs
-            .map((d) => ({ firebaseId: d.id, ...d.data() }))
-            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-          this.collaboratorsLoaded = true;
-          if (window.App.UI.activeTab === 'collaborators') {
-            window.App.CRUDCollaborators.render();
+    if (permissions?.canReadCollaborators === true) {
+      this.listeners.push(
+        onSnapshot(
+          collection(db, DB_BASE_PATH, COLLECTIONS.COLLABORATORS),
+          (s) => {
+            this.collaborators = s.docs
+              .map((d) => ({ firebaseId: d.id, ...d.data() }))
+              .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+            this.collaboratorsLoaded = true;
+            if (window.App.UI.activeTab === 'collaborators') {
+              window.App.CRUDCollaborators.render();
+            }
+          },
+          (err) => {
+            this.collaborators = [];
+            this.collaboratorsLoaded = true;
+            window.Logger.warn('Erro ao carregar colaboradores', err);
+            if (window.App.UI.activeTab === 'collaborators') {
+              window.App.CRUDCollaborators.render();
+            }
           }
-        },
-        (err) => {
-          this.collaborators = [];
-          this.collaboratorsLoaded = true;
-          window.Logger.warn('Erro ao carregar colaboradores', err);
-          if (window.App.UI.activeTab === 'collaborators') {
-            window.App.CRUDCollaborators.render();
-          }
-        }
-      )
-    );
+        )
+      );
+    }
 
-    this.loadHistoryQuery();
+    if (permissions?.canAccessHistory === true) {
+      this.loadHistoryQuery();
+    }
   },
   loadHistoryQuery: function () {
     if (this.historyUnsub) {
@@ -250,6 +259,11 @@ export const AppData = {
     notifications.success('Todos os dados foram resetados com sucesso!');
   },
   exportJSON: async function () {
+    if (window.App?.Auth?.permissions?.canBackupData !== true) {
+      notifications.error('Acesso restrito a administradores.');
+      return;
+    }
+
     notifications.info('Gerando backup...');
 
     const collections = [
@@ -373,6 +387,11 @@ export const AppData = {
     }
   },
   exportExcel: async function () {
+    if (window.App?.Auth?.permissions?.canExportData !== true) {
+      notifications.error('Acesso restrito a administradores.');
+      return;
+    }
+
     if (!window.XLSX) {
       notifications.info('Carregando motor de planilhas...');
       try {

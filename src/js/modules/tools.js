@@ -2,13 +2,158 @@ import {
   doc,
   setDoc,
   updateDoc,
-  deleteDoc
+  deleteDoc,
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
 
 export const AppCRUDTools = {
   currentFilter: 'all',
   selectedTools: new Set(),
+  manualPreviewUrl: null,
+
+  clearManualPreview: function () {
+    if (this.manualPreviewUrl) {
+      URL.revokeObjectURL(this.manualPreviewUrl);
+      this.manualPreviewUrl = null;
+    }
+  },
+
+  canManageTools: function () {
+    return window.App?.Auth?.permissions?.canManageTools === true;
+  },
+
+  restoreSavedManualState: function () {
+    const fileName = document.getElementById('manual-file-name');
+    const viewButton = document.getElementById('btn-view-manual');
+    const savedUrl = viewButton?.dataset.savedManualUrl || '';
+    const savedName = viewButton?.dataset.savedManualName || '';
+
+    if (viewButton) {
+      viewButton.dataset.manualUrl = savedUrl;
+      viewButton.classList.toggle('hidden', !savedUrl);
+    }
+
+    if (fileName) {
+      fileName.textContent = savedName || (savedUrl ? 'PDF anexado' : 'Nenhum arquivo');
+    }
+  },
+
+  handleImageSelection: function (event) {
+    const input = event?.target;
+    const preview = document.getElementById('crud-image-preview');
+    const placeholder = document.getElementById('image-placeholder-icon');
+    const file = input?.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      input.value = '';
+      window.App.UI.showToast('Selecione um arquivo de imagem válido.', 'warning');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (!preview) {
+        return;
+      }
+
+      preview.src = String(reader.result || '');
+      preview.classList.remove('hidden');
+      placeholder?.classList.add('hidden');
+    };
+    reader.onerror = (error) => {
+      input.value = '';
+      window.Logger.error('Erro ao preparar a prévia da imagem.', error);
+      window.App.UI.showToast('Não foi possível visualizar a imagem selecionada.', 'error');
+    };
+    reader.readAsDataURL(file);
+  },
+
+  handleManualSelection: function (event) {
+    const input = event?.target;
+    const fileName = document.getElementById('manual-file-name');
+    const viewButton = document.getElementById('btn-view-manual');
+    const file = input?.files?.[0];
+
+    this.clearManualPreview();
+
+    if (!file) {
+      this.restoreSavedManualState();
+      return;
+    }
+
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+    if (!isPdf) {
+      input.value = '';
+      this.restoreSavedManualState();
+      window.App.UI.showToast('Selecione um arquivo PDF válido.', 'warning');
+      return;
+    }
+
+    this.manualPreviewUrl = URL.createObjectURL(file);
+
+    if (viewButton) {
+      viewButton.dataset.manualUrl = this.manualPreviewUrl;
+      viewButton.classList.remove('hidden');
+    }
+
+    if (fileName) {
+      fileName.textContent = file.name;
+    }
+  },
+
+  viewManual: function (event) {
+    event?.preventDefault();
+
+    const viewButton = document.getElementById('btn-view-manual');
+    const manualUrl = viewButton?.dataset.manualUrl;
+
+    if (!manualUrl) {
+      window.App.UI.showToast('Nenhum manual disponível.', 'warning');
+      return;
+    }
+
+    let viewUrl = manualUrl;
+    let shouldRevoke = false;
+
+    if (manualUrl.startsWith('data:application/pdf;base64,')) {
+      try {
+        const encodedData = manualUrl.slice(manualUrl.indexOf(',') + 1);
+        const binary = atob(encodedData);
+        const bytes = new Uint8Array(binary.length);
+
+        for (let index = 0; index < binary.length; index += 1) {
+          bytes[index] = binary.charCodeAt(index);
+        }
+
+        viewUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        shouldRevoke = true;
+      } catch (error) {
+        window.Logger.error('Erro ao preparar o manual para visualização.', error);
+        window.App.UI.showToast('Não foi possível abrir o manual.', 'error');
+        return;
+      }
+    } else if (!/^(https?:|blob:)/i.test(manualUrl)) {
+      window.App.UI.showToast('O endereço do manual é inválido.', 'error');
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = viewUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    if (shouldRevoke) {
+      window.setTimeout(() => URL.revokeObjectURL(viewUrl), 60000);
+    }
+  },
 
   setQuickFilter: function (filter) {
     this.currentFilter = filter;
@@ -92,6 +237,10 @@ export const AppCRUDTools = {
   },
 
   quickExport: function () {
+    if (!this.canManageTools()) {
+      window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
     if (!window.XLSX) {
       window.App.UI.showToast('Carregando motor de planilhas...', 'info');
       window.Utils.loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js')
@@ -110,7 +259,7 @@ export const AppCRUDTools = {
             ? 'Emprestada'
             : 'Manutenção',
       Responsável: t.currentUser || '',
-      'Última Ação': t.lastAction ? new Date(t.lastAction).toLocaleString('pt-BR') : ''
+      'Última Ação': t.lastAction ? new Date(t.lastAction).toLocaleString('pt-BR') : '',
     }));
     const ws = window.XLSX.utils.json_to_sheet(data);
     const wb = window.XLSX.utils.book_new();
@@ -126,7 +275,11 @@ export const AppCRUDTools = {
     const bar = document.getElementById('bulk-actions-bar');
     const count = document.getElementById('bulk-selected-count');
     if (bar && count) {
-      if (this.selectedTools.size > 0) {
+      if (!this.canManageTools()) {
+        bar.classList.add('hidden');
+        bar.classList.remove('flex');
+        count.textContent = '0';
+      } else if (this.selectedTools.size > 0) {
         bar.classList.remove('hidden');
         bar.classList.add('flex');
         count.textContent = this.selectedTools.size;
@@ -138,6 +291,10 @@ export const AppCRUDTools = {
   },
 
   bulkAction: function (action, payload = null) {
+    if (!this.canManageTools()) {
+      window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
     if (this.selectedTools.size === 0) {
       window.App.UI.showToast('Nenhuma ferramenta selecionada.', 'warning');
       return;
@@ -199,7 +356,7 @@ export const AppCRUDTools = {
               : t.status === 'borrowed'
                 ? 'Emprestada'
                 : 'Manutenção',
-          Responsável: t.currentUser || ''
+          Responsável: t.currentUser || '',
         }));
         const ws = window.XLSX.utils.json_to_sheet(data);
         const wb = window.XLSX.utils.book_new();
@@ -233,6 +390,10 @@ export const AppCRUDTools = {
   },
 
   quickStatusUpdate: function (id, newStatus) {
+    if (!this.canManageTools()) {
+      window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
     const tool = window.App.Data.tools.find((t) => t.firebaseId === id);
     if (!tool) {
       return;
@@ -244,7 +405,7 @@ export const AppCRUDTools = {
     }
 
     updateDoc(doc(db, DB_BASE_PATH, COLLECTIONS.TOOLS, id), {
-      status: newStatus
+      status: newStatus,
     })
       .then(() => {
         window.App.UI.showToast('Status atualizado.', 'success');
@@ -267,7 +428,7 @@ export const AppCRUDTools = {
     const datalabelsConfig = {
       color: '#fff',
       font: { weight: 'bold', size: 12 },
-      formatter: (value) => (value > 0 ? value : '')
+      formatter: (value) => (value > 0 ? value : ''),
     };
 
     const statusCtx = document.getElementById('statusChart');
@@ -291,15 +452,15 @@ export const AppCRUDTools = {
           data: {
             labels: ['Disponível', 'Emprestada', 'Manutenção'],
             datasets: [
-              { data: sData, backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'], borderWidth: 0 }
-            ]
+              { data: sData, backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'], borderWidth: 0 },
+            ],
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
             cutout: '75%',
-            plugins: { legend: { display: false }, datalabels: datalabelsConfig }
-          }
+            plugins: { legend: { display: false }, datalabels: datalabelsConfig },
+          },
         });
       }
     }
@@ -325,15 +486,15 @@ export const AppCRUDTools = {
           data: {
             labels: ['Elétrica', 'Manual', 'Medição'],
             datasets: [
-              { data: cData, backgroundColor: ['#3b82f6', '#10b981', '#f59e0b'], borderWidth: 0 }
-            ]
+              { data: cData, backgroundColor: ['#3b82f6', '#10b981', '#f59e0b'], borderWidth: 0 },
+            ],
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
             cutout: '75%',
-            plugins: { legend: { display: false }, datalabels: datalabelsConfig }
-          }
+            plugins: { legend: { display: false }, datalabels: datalabelsConfig },
+          },
         });
       }
     }
@@ -356,7 +517,8 @@ export const AppCRUDTools = {
     logs.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 
     if (logs.length === 0) {
-      list.innerHTML = '<div class="text-center py-8 text-slate-500 font-medium">Nenhum histórico de movimentação para este ativo.</div>';
+      list.innerHTML =
+        '<div class="text-center py-8 text-slate-500 font-medium">Nenhum histórico de movimentação para este ativo.</div>';
     } else {
       list.innerHTML = logs
         .map((log) => {
@@ -503,7 +665,7 @@ export const AppCRUDTools = {
         </div>
         <h3 class="text-xl font-bold text-slate-700 dark:text-slate-300">${hasFilters ? 'Nenhuma ferramenta encontrada' : 'Nenhuma ferramenta cadastrada'}</h3>
         <p class="text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto">${hasFilters ? 'Tente ajustar os filtros de busca ou selecione outra categoria.' : 'Comece adicionando ferramentas ao inventário para gerenciar seu patrimônio.'}</p>
-        ${!hasFilters ? '<button onclick="App.CRUDTools.openModal()" class="mt-6 px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-lg shadow-brand-600/30 transition-all active:scale-95 flex items-center gap-2 mx-auto"><svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Nova Ferramenta</button>' : ''}
+        ${!hasFilters && this.canManageTools() ? '<button onclick="App.CRUDTools.openModal()" class="mt-6 px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-lg shadow-brand-600/30 transition-all active:scale-95 flex items-center gap-2 mx-auto"><svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Nova Ferramenta</button>' : ''}
       </div>`;
       document.getElementById('crud-load-more')?.classList.add('hidden');
       return;
@@ -517,6 +679,7 @@ export const AppCRUDTools = {
   },
 
   renderGridView: function (tools) {
+    const canManage = this.canManageTools();
     return tools
       .map((t) => {
         const safeName = window.Utils.escapeHTML(t.name);
@@ -543,9 +706,11 @@ export const AppCRUDTools = {
           customBadges += `<span class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded animate-pulse border border-rose-200 shadow-sm whitespace-nowrap">⚠️ Atrasada (${this.getDaysLate(t)}d)</span>`;
         }
         if (isMaintDue) {
-          customBadges += '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded animate-pulse border border-orange-200 shadow-sm whitespace-nowrap">⚠️ Rev. Vencida</span>';
+          customBadges +=
+            '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded animate-pulse border border-orange-200 shadow-sm whitespace-nowrap">⚠️ Rev. Vencida</span>';
         } else if (isMaintWarn) {
-          customBadges += '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-[10px] font-bold rounded border border-yellow-200 shadow-sm whitespace-nowrap">⏳ Rev. Próxima</span>';
+          customBadges +=
+            '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-[10px] font-bold rounded border border-yellow-200 shadow-sm whitespace-nowrap">⏳ Rev. Próxima</span>';
         }
 
         const overrideBorder = isLate
@@ -557,24 +722,35 @@ export const AppCRUDTools = {
           overrideBorder ||
           `border border-slate-200 dark:border-slate-800 border-l-4 ${statusBorder}`;
 
-        const quickActionBtn =
-          t.status === 'available'
+        const quickActionBtn = canManage
+          ? t.status === 'available'
             ? '<button aria-label="Emprestar" onclick="App.UI.switchTab(\'scanner\'); setTimeout(() => App.Scanner.setMode(\'cam\'), 100);" class="flex-1 py-2 bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-400 rounded-xl border border-brand-200 dark:border-brand-800 transition-colors flex items-center justify-center shadow-sm" title="Emprestar"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10h14l-4-4"/><path d="M17 14H3l4 4"/></svg></button>'
             : t.status === 'borrowed'
               ? '<button aria-label="Devolver" onclick="App.UI.switchTab(\'scanner\'); setTimeout(() => App.Scanner.setMode(\'cam\'), 100);" class="flex-1 py-2 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-xl border border-emerald-200 dark:border-emerald-800 transition-colors flex items-center justify-center shadow-sm" title="Devolver"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg></button>'
-              : '';
-        return `<div class="tool-card bg-white dark:bg-slate-900 rounded-2xl shadow-sm ${finalBorderClass} p-5 flex flex-col gap-4 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"><div class="flex items-start gap-4 pl-2"><div class="relative">${imgHtml}<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full ${dotColor} border-2 border-white dark:border-slate-900 shadow-sm"></span></div><div class="flex-1 min-w-0"><h3 class="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${safeName}">${safeName}</h3><div class="flex items-center gap-1.5 mt-1.5 flex-wrap"><span class="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-[10px] font-bold rounded">${window.Utils.escapeHTML(t.category)}</span><p class="text-[10px] font-bold text-slate-500 truncate">Pat: ${window.Utils.escapeHTML(t.code)}</p>${customBadges}</div></div></div><div class="border-t border-slate-100 dark:border-slate-800 ml-2"></div><div class="flex flex-col gap-2 pl-2"><div class="flex justify-between items-center"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status Atual</span><select onchange="App.CRUDTools.quickStatusUpdate('${t.firebaseId}', this.value)" class="text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer ${t.status === 'borrowed' ? 'text-amber-600' : t.status === 'maintenance' ? 'text-rose-600' : 'text-emerald-600'}"><option value="available" ${t.status === 'available' ? 'selected' : ''}>Disponível</option><option value="borrowed" ${t.status === 'borrowed' ? 'selected' : ''}>Emprestada</option><option value="maintenance" ${t.status === 'maintenance' ? 'selected' : ''}>Manutenção</option></select></div><div class="flex justify-between items-center mt-0.5"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest" title="Última atualização do status"><svg class="w-3 h-3 inline-block mr-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Última Ação</span><span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">${t.lastAction ? window.Utils.formatDate(t.lastAction) : '-'}</span></div>${t.currentUser ? `<div class="flex justify-between items-center"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Responsável</span><span class="text-[10px] font-bold text-brand-600 dark:text-brand-400 truncate max-w-[120px]">${window.Utils.escapeHTML(t.currentUser)}</span></div>` : ''}</div><div class="flex gap-1.5 mt-2">${quickActionBtn}<button aria-label="Editar" onclick="App.CRUDTools.openModal('${t.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Editar Ferramenta"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button><button aria-label="Histórico" onclick="App.CRUDTools.showHistory('${t.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Ver Histórico"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button></div></div>`;
+              : ''
+          : '';
+        const statusControl = canManage
+          ? `<select onchange="App.CRUDTools.quickStatusUpdate('${t.firebaseId}', this.value)" class="text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer ${t.status === 'borrowed' ? 'text-amber-600' : t.status === 'maintenance' ? 'text-rose-600' : 'text-emerald-600'}"><option value="available" ${t.status === 'available' ? 'selected' : ''}>Disponível</option><option value="borrowed" ${t.status === 'borrowed' ? 'selected' : ''}>Emprestada</option><option value="maintenance" ${t.status === 'maintenance' ? 'selected' : ''}>Manutenção</option></select>`
+          : `<span class="text-[11px] font-bold ${t.status === 'borrowed' ? 'text-amber-600' : t.status === 'maintenance' ? 'text-rose-600' : 'text-emerald-600'}">${t.status === 'borrowed' ? 'Emprestada' : t.status === 'maintenance' ? 'Manutenção' : 'Disponível'}</span>`;
+        return `<div class="tool-card bg-white dark:bg-slate-900 rounded-2xl shadow-sm ${finalBorderClass} p-5 flex flex-col gap-4 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"><div class="flex items-start gap-4 pl-2"><div class="relative">${imgHtml}<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full ${dotColor} border-2 border-white dark:border-slate-900 shadow-sm"></span></div><div class="flex-1 min-w-0"><h3 class="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${safeName}">${safeName}</h3><div class="flex items-center gap-1.5 mt-1.5 flex-wrap"><span class="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-[10px] font-bold rounded">${window.Utils.escapeHTML(t.category)}</span><p class="text-[10px] font-bold text-slate-500 truncate">Pat: ${window.Utils.escapeHTML(t.code)}</p>${customBadges}</div></div></div><div class="border-t border-slate-100 dark:border-slate-800 ml-2"></div><div class="flex flex-col gap-2 pl-2"><div class="flex justify-between items-center"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status Atual</span>${statusControl}</div><div class="flex justify-between items-center mt-0.5"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest" title="Última atualização do status"><svg class="w-3 h-3 inline-block mr-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Última Ação</span><span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">${t.lastAction ? window.Utils.formatDate(t.lastAction) : '-'}</span></div>${t.currentUser ? `<div class="flex justify-between items-center"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Responsável</span><span class="text-[10px] font-bold text-brand-600 dark:text-brand-400 truncate max-w-[120px]">${window.Utils.escapeHTML(t.currentUser)}</span></div>` : ''}</div><div class="flex gap-1.5 mt-2">${quickActionBtn}<button aria-label="Editar" onclick="App.CRUDTools.openModal('${t.firebaseId}')" class="${canManage ? '' : 'hidden'} flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Editar Ferramenta"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button><button aria-label="Histórico" onclick="App.CRUDTools.showHistory('${t.firebaseId}')" class="${canManage ? '' : 'hidden'} flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Ver Histórico"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button></div></div>`;
       })
       .join(' ');
   },
 
   openModal: function (id = null) {
+    if (!this.canManageTools()) {
+      window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
+    this.clearManualPreview();
+
     const m = document.getElementById('crud-modal');
     if (m) {
       m.showModal();
     }
     const pre = document.getElementById('crud-image-preview'),
-      icon = document.getElementById('image-placeholder-icon');
+      icon = document.getElementById('image-placeholder-icon'),
+      manualButton = document.getElementById('btn-view-manual');
     document.getElementById('crud-image').value = '';
     if (pre) {
       pre.classList.add('hidden');
@@ -586,7 +762,10 @@ export const AppCRUDTools = {
     document.getElementById('crud-notes').value = '';
     document.getElementById('crud-manual').value = '';
     document.getElementById('manual-file-name').textContent = 'Nenhum arquivo';
-    document.getElementById('btn-view-manual').classList.add('hidden');
+    manualButton.dataset.manualUrl = '';
+    manualButton.dataset.savedManualUrl = '';
+    manualButton.dataset.savedManualName = '';
+    manualButton.classList.add('hidden');
 
     if (icon) {
       icon.classList.remove('hidden');
@@ -617,9 +796,11 @@ export const AppCRUDTools = {
         document.getElementById('crud-notes').value = t.notes;
       }
       if (t.manualUrl) {
-        document.getElementById('btn-view-manual').href = t.manualUrl;
-        document.getElementById('btn-view-manual').classList.remove('hidden');
-        document.getElementById('manual-file-name').textContent = 'PDF Anexado';
+        manualButton.dataset.manualUrl = t.manualUrl;
+        manualButton.dataset.savedManualUrl = t.manualUrl;
+        manualButton.dataset.savedManualName = t.manualName || '';
+        manualButton.classList.remove('hidden');
+        document.getElementById('manual-file-name').textContent = t.manualName || 'PDF anexado';
       }
     } else {
       document.getElementById('modal-title').textContent = 'Nova Ferramenta';
@@ -630,13 +811,19 @@ export const AppCRUDTools = {
       document.getElementById('crud-status-container').classList.add('hidden');
     }
   },
-  closeModal: () => {
+  closeModal: function () {
+    this.clearManualPreview();
+
     const m = document.getElementById('crud-modal');
     if (m) {
       m.close();
     }
   },
   saveTool: async function () {
+    if (!this.canManageTools()) {
+      window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
     const id = document.getElementById('crud-id').value,
       code = document.getElementById('crud-code').value.trim(),
       name = document.getElementById('crud-name').value.trim(),
@@ -669,6 +856,7 @@ export const AppCRUDTools = {
       let imgUrl = null;
       const tool = id ? window.App.Data.tools.find((t) => t.firebaseId === id) : null;
       let manualUrl = tool?.manualUrl || null;
+      let manualName = tool?.manualName || null;
 
       if (tool && tool.imageUrl) {
         imgUrl = tool.imageUrl;
@@ -678,6 +866,7 @@ export const AppCRUDTools = {
       }
 
       if (manualFile) {
+        manualName = manualFile.name;
         manualUrl = await new Promise((res, rej) => {
           const reader = new FileReader();
           reader.onload = () => res(reader.result);
@@ -693,7 +882,8 @@ export const AppCRUDTools = {
           condition: cond,
           nextMaintenance: nextMaint || null,
           notes: notes,
-          manualUrl: manualUrl
+          manualUrl: manualUrl,
+          manualName: manualName,
         };
         if (tool && tool.status !== 'borrowed') {
           u.status = document.getElementById('crud-status').value;
@@ -716,7 +906,8 @@ export const AppCRUDTools = {
             condition: cond,
             nextMaintenance: nextMaint || null,
             notes: notes,
-            manualUrl: manualUrl
+            manualUrl: manualUrl,
+            manualName: manualName,
           })
         );
         window.App.UI.showToast('Registrada com sucesso.', 'success');
@@ -730,6 +921,10 @@ export const AppCRUDTools = {
     }
   },
   deleteTool: async function (id) {
+    if (!this.canManageTools()) {
+      window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
     if (confirm('Excluir definitivamente esta ferramenta?')) {
       try {
         await deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.TOOLS, id));
@@ -740,6 +935,10 @@ export const AppCRUDTools = {
     }
   },
   importFile: async function (e) {
+    if (!this.canManageTools()) {
+      window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
     if (!e || !e.target || !e.target.files) {
       return;
     }
@@ -763,10 +962,10 @@ export const AppCRUDTools = {
     r.onload = async (ev) => {
       try {
         const wb = window.XLSX.read(new Uint8Array(ev.target.result), {
-          type: 'array'
+          type: 'array',
         });
         const rows = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {
-          header: 1
+          header: 1,
         });
         if (rows.length < 2) {
           return window.App.UI.showToast('Arquivo vazio ou inválido.', 'error');
@@ -783,7 +982,8 @@ export const AppCRUDTools = {
           const code = cols[0] !== null && cols[0] !== undefined ? String(cols[0]).trim() : '';
           let name = cols[1] !== null && cols[1] !== undefined ? String(cols[1]).trim() : '';
           const cat = cols[2] !== null && cols[2] !== undefined ? String(cols[2]).trim() : 'Outros';
-          let status = cols[3] !== null && cols[3] !== undefined ? String(cols[3]).trim() : 'available';
+          let status =
+            cols[3] !== null && cols[3] !== undefined ? String(cols[3]).trim() : 'available';
           const currentUser =
             cols[4] !== null && cols[4] !== undefined ? String(cols[4]).trim() : null;
           if (name.startsWith('"') && name.endsWith('"')) {
@@ -813,7 +1013,7 @@ export const AppCRUDTools = {
                 status,
                 currentUser: status === 'borrowed' ? currentUser : null,
                 lastAction: new Date().toISOString(),
-                imageUrl: null
+                imageUrl: null,
               });
               c++;
             } catch (err) {
@@ -832,5 +1032,5 @@ export const AppCRUDTools = {
       }
     };
     r.readAsArrayBuffer(f);
-  }
+  },
 };

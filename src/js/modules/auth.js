@@ -3,19 +3,60 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
   signOut,
-  updatePassword
+  updatePassword,
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-import {
-  doc,
-  getDoc,
-  updateDoc
-} from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { auth, db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
 import { cacheManager } from '../core/CacheManager.js';
 import { metrics } from '../core/MetricsManager.js';
 
 export const AppAuth = {
   _initialized: false,
+  isAdm: false,
+  permissions: {
+    canAccessDashboard: false,
+    canAccessScanner: false,
+    canReadTools: false,
+    canReadCollaborators: false,
+    canAccessInventory: false,
+    canAccessUsers: false,
+    canAccessHistory: false,
+    canExportData: false,
+    canBackupData: false,
+    canManageCollaborators: false,
+    canManageTools: false,
+  },
+  _setPermissions: function (isAdm, isAuthenticated = true) {
+    const canAccessStandardModules = isAuthenticated === true;
+
+    this.permissions.canAccessDashboard = canAccessStandardModules;
+    this.permissions.canAccessScanner = canAccessStandardModules;
+    this.permissions.canReadTools = canAccessStandardModules;
+    this.permissions.canReadCollaborators = canAccessStandardModules;
+    this.permissions.canAccessInventory = isAdm;
+    this.permissions.canAccessUsers = isAdm;
+    this.permissions.canAccessHistory = isAdm;
+    this.permissions.canExportData = isAdm;
+    this.permissions.canBackupData = isAdm;
+    this.permissions.canManageCollaborators = isAdm;
+    this.permissions.canManageTools = isAdm;
+  },
+  _updateAdministrativeActionVisibility: function () {
+    const visibilityById = {
+      'btn-export-dashboard': this.permissions.canExportData,
+      'btn-export-json': this.permissions.canBackupData,
+      'btn-collaborators-export': this.permissions.canExportData,
+      'btn-collaborators-import': this.permissions.canManageCollaborators,
+      'btn-collaborators-new': this.permissions.canManageCollaborators,
+    };
+
+    Object.entries(visibilityById).forEach(([id, isVisible]) => {
+      const element = document.getElementById(id);
+      if (element) {
+        element.style.display = isVisible ? '' : 'none';
+      }
+    });
+  },
   init: function () {
     if (this._initialized) {
       return;
@@ -67,12 +108,12 @@ export const AppAuth = {
       const userProfile = await this._fetchAndCacheUserProfile(user);
       const { uName, isAdm, isRestricted } = userProfile;
 
-      await this._updateUserSession(userProfile.id);
+      await this._updateUserSession();
       this._updateUIForUser(uName, isAdm, isRestricted);
 
       document.getElementById('login-screen')?.classList.add('hidden');
       document.getElementById('main-app')?.classList.remove('hidden');
-      window.App.Data.init();
+      window.App.Data.init(this.permissions);
       window.App.Session.init();
 
       const loginPasswordField = document.getElementById('login-password');
@@ -91,6 +132,10 @@ export const AppAuth = {
     }
   },
   _handleUnauthenticatedUser() {
+    this.isAdm = false;
+    this._setPermissions(false, false);
+    this._updateAdministrativeActionVisibility();
+    document.getElementById('admin-section').style.display = 'none';
     document.getElementById('login-screen')?.classList.remove('hidden');
     document.getElementById('main-app')?.classList.add('hidden');
     window.App.Session.cleanup();
@@ -113,9 +158,7 @@ export const AppAuth = {
         const ref = doc(db, DB_BASE_PATH, COLLECTIONS.USERS, user.uid);
         const snap = await getDoc(ref);
 
-        return snap.exists()
-          ? { id: snap.id, data: snap.data() }
-          : null;
+        return snap.exists() ? { id: snap.id, data: snap.data() } : null;
       },
       { ttl: 900000 } // TTL de 15 minutos
     );
@@ -130,8 +173,12 @@ export const AppAuth = {
       throw new Error('Seu usuário está inativo.');
     }
 
-    const profileEmail = String(dbUser.email || '').trim().toLowerCase();
-    const authenticatedEmail = String(user.email || '').trim().toLowerCase();
+    const profileEmail = String(dbUser.email || '')
+      .trim()
+      .toLowerCase();
+    const authenticatedEmail = String(user.email || '')
+      .trim()
+      .toLowerCase();
 
     if (!profileEmail || profileEmail !== authenticatedEmail) {
       throw new Error('O perfil não corresponde à conta autenticada.');
@@ -141,27 +188,11 @@ export const AppAuth = {
       id: matchedDoc.id,
       uName: dbUser.name ? dbUser.name.split(' ')[0] : 'Usuário',
       isAdm: dbUser.accessLevel === 'Administrador',
-      isRestricted: dbUser.isRestricted === true
+      isRestricted: dbUser.isRestricted === true,
     };
   },
-  async _updateUserSession(userId) {
-    if (!userId) {
-      return;
-    }
-    const ipInfo = await cacheManager.getOrSet(
-      'current_device_ip',
-      async () => {
-        try {
-          const res = await fetch('https://api.ipify.org?format=json');
-          return (await res.json()).ip;
-        } catch {
-          return 'IP Desconhecido';
-        }
-      },
-      { ttl: 3600000 }
-    );
-
-    const ua = navigator.userAgent;
+  async _updateUserSession() {
+    const ua = String(navigator.userAgent || '');
     let os = 'OS Desconhecido',
       browser = 'Navegador Desconhecido';
     if (ua.includes('Win')) {
@@ -175,16 +206,58 @@ export const AppAuth = {
       browser = 'Chrome';
     }
 
-    window.App.Session.currentIp = ipInfo;
-    window.App.Session.currentDevice = `${browser} / ${os}`;
+    const device = `${browser} / ${os}`.trim().slice(0, 160);
 
-    updateDoc(doc(db, DB_BASE_PATH, COLLECTIONS.USERS, userId), {
-      lastLogin: new Date().toISOString(),
-      lastIp: ipInfo,
-      lastDevice: `${browser} / ${os}`
-    }).catch((e) => window.Logger.warn('Erro ao atualizar ultimo login', e));
+    try {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        window.Logger.warn('Não foi possível atualizar último login: usuário não autenticado.');
+        return;
+      }
+
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/session/last-login', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          device,
+        }),
+        cache: 'no-store',
+      });
+
+      let result = null;
+
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
+
+      if (!response.ok) {
+        const message =
+          typeof result?.message === 'string' && result.message.trim()
+            ? result.message.trim()
+            : 'Não foi possível atualizar o último login.';
+
+        throw new Error(message);
+      }
+
+      if (window.App?.Session) {
+        window.App.Session.currentDevice = device;
+        window.App.Session.currentIp = 'Registrado no servidor';
+      }
+    } catch (error) {
+      window.Logger.warn('Erro ao atualizar último login pela API:', error);
+    }
   },
   _updateUIForUser(uName, isAdm, isRestricted) {
+    this.isAdm = isAdm;
+    this._setPermissions(isAdm);
+    this._updateAdministrativeActionVisibility();
     document.getElementById('user-name').textContent = uName;
     document.getElementById('user-role').textContent = isAdm ? 'Administrador' : 'Usuário';
     document.getElementById('user-avatar').innerHTML = isAdm
@@ -192,10 +265,16 @@ export const AppAuth = {
       : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-brand-600"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
 
     document.getElementById('admin-tools').style.display = isAdm ? 'block' : 'none';
+    document.getElementById('admin-section').style.display = isAdm ? '' : 'none';
+    document.getElementById('nav-tools').style.display = this.permissions.canReadTools && !isAdm ? '' : 'none';
     document.getElementById('nav-collaborators').style.display =
       isRestricted && !isAdm ? 'none' : '';
+    document.getElementById('tools-action-export').style.display = isAdm ? '' : 'none';
+    document.getElementById('tools-action-import').style.display = isAdm ? '' : 'none';
+    document.getElementById('tools-action-new').style.display = isAdm ? '' : 'none';
+    document.getElementById('crud-import-input-tool').style.display = isAdm ? '' : 'none';
 
-    const restrictedTabs = ['management', 'users', 'history'];
+    const restrictedTabs = ['users', 'history'];
     if (isRestricted && !isAdm) {
       restrictedTabs.push('collaborators');
     }
@@ -538,30 +617,20 @@ export const AppAuth = {
       throw new Error('E-mail inválido.');
     }
 
-    await sendPasswordResetEmail(
-      auth,
-      normalizedEmail
-    );
+    await sendPasswordResetEmail(auth, normalizedEmail);
   },
   sendForgotEmail: async function () {
-    const emailInput = document.getElementById(
-      'forgot-email-input'
-    );
+    const emailInput = document.getElementById('forgot-email-input');
 
     const email = String(emailInput?.value || '')
       .trim()
       .toLowerCase();
 
     if (!email) {
-      return window.App.UI.showToast(
-        'Digite o e-mail cadastrado.',
-        'warning'
-      );
+      return window.App.UI.showToast('Digite o e-mail cadastrado.', 'warning');
     }
 
-    const button = document.getElementById(
-      'btn-send-forgot'
-    );
+    const button = document.getElementById('btn-send-forgot');
 
     if (!button) {
       return;
@@ -579,30 +648,18 @@ export const AppAuth = {
     try {
       await this.sendPasswordAccessEmail(email);
 
-      window.App.UI.showToast(
-        genericMessage,
-        'success'
-      );
+      window.App.UI.showToast(genericMessage, 'success');
 
       this.closeForgotModal();
     } catch (error) {
-      window.Logger.error(
-        'Erro ao enviar instruções de acesso.',
-        error
-      );
+      window.Logger.error('Erro ao enviar instruções de acesso.', error);
 
       if (error?.code === 'auth/user-not-found') {
-        window.App.UI.showToast(
-          genericMessage,
-          'success'
-        );
+        window.App.UI.showToast(genericMessage, 'success');
 
         this.closeForgotModal();
       } else if (error?.code === 'auth/invalid-email') {
-        window.App.UI.showToast(
-          'Informe um endereço de e-mail válido.',
-          'warning'
-        );
+        window.App.UI.showToast('Informe um endereço de e-mail válido.', 'warning');
       } else {
         window.App.UI.showToast(
           'Não foi possível enviar as instruções agora. Tente novamente mais tarde.',
@@ -613,5 +670,5 @@ export const AppAuth = {
       button.disabled = false;
       button.innerHTML = originalContent;
     }
-  }
+  },
 };
