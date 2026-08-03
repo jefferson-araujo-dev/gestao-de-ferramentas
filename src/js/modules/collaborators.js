@@ -3,7 +3,7 @@ import {
   updateDoc,
   deleteDoc,
   addDoc,
-  collection
+  collection,
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { db, auth, DB_BASE_PATH, COLLECTIONS, CONFIG } from '../app.js';
 
@@ -11,6 +11,7 @@ export const AppCRUDCollaborators = {
   collabLimit: 30,
   selectedCollabs: new Set(),
   currentPendingFilter: 'all',
+  imagePreviewInitialized: false,
 
   _hasPermission: function (permission) {
     return window.App?.Auth?.permissions?.[permission] === true;
@@ -265,9 +266,7 @@ export const AppCRUDCollaborators = {
     const statusText = (u.status || 'active') === 'active' ? 'Ativo' : 'Inativo';
     const statusBorder =
       (u.status || 'active') === 'active' ? 'border-l-emerald-500' : 'border-l-rose-500';
-    const canManageCollaborators = this._hasPermission(
-      'canManageCollaborators'
-    );
+    const canManageCollaborators = this._hasPermission('canManageCollaborators');
     const imgHtml = u.imageUrl
       ? `<img src="${window.Utils.escapeHTML(u.imageUrl)}" onclick="App.UI.showImagePreview(this.src, '${window.Utils.escapeHTML(u.name)}')" class="w-14 h-14 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 cursor-zoom-in shadow-sm" loading="lazy" decoding="async">`
       : '<div class="w-14 h-14 rounded-full border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>';
@@ -335,7 +334,7 @@ export const AppCRUDCollaborators = {
     const data = window.App.Data.collaborators.map((c) => ({
       Nome: c.name,
       Crachá: c.badge,
-      Cargo: c.role
+      Cargo: c.role,
     }));
 
     const ws = window.XLSX.utils.json_to_sheet(data);
@@ -390,7 +389,7 @@ export const AppCRUDCollaborators = {
         Crachá: c.badge,
         Cargo: c.role,
         Telefone: c.phone || '',
-        Status: c.status === 'inactive' ? 'Inativo' : 'Ativo'
+        Status: c.status === 'inactive' ? 'Inativo' : 'Ativo',
       }));
       const ws = window.XLSX.utils.json_to_sheet(data);
       const wb = window.XLSX.utils.book_new();
@@ -439,7 +438,8 @@ export const AppCRUDCollaborators = {
     logs.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 
     if (logs.length === 0) {
-      list.innerHTML = '<div class="text-center py-8 text-slate-500 font-medium">Nenhum histórico de movimentação para este colaborador.</div>';
+      list.innerHTML =
+        '<div class="text-center py-8 text-slate-500 font-medium">Nenhum histórico de movimentação para este colaborador.</div>';
     } else {
       list.innerHTML = logs
         .map((log) => {
@@ -484,6 +484,66 @@ export const AppCRUDCollaborators = {
     }
   },
 
+  initImagePreview: function () {
+    if (this.imagePreviewInitialized) {
+      return;
+    }
+
+    const imageInput = document.getElementById('crud-collab-image');
+    if (!imageInput) {
+      return;
+    }
+
+    imageInput.addEventListener('change', (event) => this.previewSelectedImage(event));
+    this.imagePreviewInitialized = true;
+  },
+
+  ensureImagePreviewInitialized: function () {
+    if (this.imagePreviewInitialized) {
+      return;
+    }
+
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => this.initImagePreview(), { once: true });
+      return;
+    }
+
+    this.initImagePreview();
+  },
+
+  previewSelectedImage: function (event) {
+    const input = event?.target || document.getElementById('crud-collab-image');
+    const file = input?.files?.[0];
+    const preview = document.getElementById('crud-collab-image-preview');
+    const icon = document.getElementById('collab-image-icon');
+
+    if (!file || !preview || !icon) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      input.value = '';
+      window.App.UI.showToast('Selecione um arquivo de imagem válido.', 'warning');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      preview.src = String(reader.result || '');
+      preview.classList.remove('hidden');
+      icon.classList.add('hidden');
+    };
+    reader.onerror = () => {
+      input.value = '';
+      window.App.UI.showToast('Não foi possível carregar a prévia da foto.', 'error');
+    };
+    reader.readAsDataURL(file);
+  },
+
   openModal: function (id = null) {
     if (!this._hasPermission('canManageCollaborators')) {
       this._denyAccess();
@@ -496,7 +556,9 @@ export const AppCRUDCollaborators = {
     if (m) {
       m.showModal();
     }
-    document.getElementById('crud-collab-image').value = '';
+    const imageInput = document.getElementById('crud-collab-image');
+    this.ensureImagePreviewInitialized();
+    imageInput.value = '';
     if (pre) {
       pre.classList.add('hidden');
       pre.src = '';
@@ -587,7 +649,7 @@ export const AppCRUDCollaborators = {
             name: n,
             role: r,
             phone: p,
-            imageUrl: imgUrl
+            imageUrl: imgUrl,
           }),
           CONFIG.TIMEOUT_MS,
           'Tempo excedido ao atualizar colaborador.'
@@ -600,7 +662,7 @@ export const AppCRUDCollaborators = {
             role: r,
             phone: p,
             status: 'active',
-            imageUrl: imgUrl
+            imageUrl: imgUrl,
           }),
           CONFIG.TIMEOUT_MS,
           'Tempo excedido ao salvar colaborador.'
@@ -662,10 +724,10 @@ export const AppCRUDCollaborators = {
     r.onload = async (ev) => {
       try {
         const wb = window.XLSX.read(new Uint8Array(ev.target.result), {
-          type: 'array'
+          type: 'array',
         });
         const rows = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {
-          header: 1
+          header: 1,
         });
         if (rows.length < 2) {
           return window.App.UI.showToast('Arquivo vazio ou inválido.', 'error');
@@ -701,7 +763,7 @@ export const AppCRUDCollaborators = {
               await addDoc(collection(db, DB_BASE_PATH, COLLECTIONS.COLLABORATORS), {
                 badge: b,
                 name: n,
-                role: rl
+                role: rl,
               });
               c++;
             } catch (err) {
@@ -720,5 +782,9 @@ export const AppCRUDCollaborators = {
       }
     };
     r.readAsArrayBuffer(f);
-  }
+  },
 };
+
+if (typeof document !== 'undefined') {
+  AppCRUDCollaborators.ensureImagePreviewInitialized();
+}
