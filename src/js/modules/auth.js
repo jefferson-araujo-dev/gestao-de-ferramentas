@@ -184,9 +184,19 @@ export const AppAuth = {
       throw new Error('O perfil não corresponde à conta autenticada.');
     }
 
+    const nameParts = String(dbUser.name || '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    const uName =
+      nameParts.length > 1
+        ? `${nameParts[0]} ${nameParts[nameParts.length - 1]}`
+        : nameParts[0] || 'Usuário';
+
     return {
       id: matchedDoc.id,
-      uName: dbUser.name ? dbUser.name.split(' ')[0] : 'Usuário',
+      uName,
       isAdm: dbUser.accessLevel === 'Administrador',
       isRestricted: dbUser.isRestricted === true,
     };
