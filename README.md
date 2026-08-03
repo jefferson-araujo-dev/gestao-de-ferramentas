@@ -1,243 +1,262 @@
-# ⚙️ Gestão de Ferramentas COENG v3
+# Gestão de Ferramentas — COENG
 
-Sistema completo de gestão de ferramentas com painel de controle responsivo, scanner de QR Code, geração de recibos PDF e auditoria completa.
+Sistema web para controle de ferramentas, colaboradores, empréstimos, devoluções, usuários e auditoria da COENG.
 
-## 🚀 Tecnologias
+**Versão atual:** `v3.0.0`
 
-- **Vite** - Build tool ultra-rápido
-- **Tailwind CSS v4** - Framework CSS utilitário
-- **Firebase v11** - Auth + Firestore (real-time)
-- **Chart.js** - Gráficos interativos
-- **HTML5 QR Code** - Leitor de QR Code (USB + câmera)
-- **SheetJS (XLSX)** - Importação/Exportação Excel
-- **jsPDF** - Geração de recibos e etiquetas PDF
-- **Vitest** - Framework de testes unitários
+## Produção
 
-## 📦 Instalação
+A aplicação é publicada na Vercel e utiliza Firebase Authentication, Cloud Firestore e APIs serverless protegidas.
+
+## Funcionalidades
+
+- painel com indicadores operacionais;
+- cadastro e consulta de ferramentas;
+- cadastro e consulta de colaboradores;
+- leitura de códigos pelo Scanner;
+- empréstimos e devoluções;
+- histórico e auditoria das movimentações;
+- administração de usuários;
+- importação e exportação de dados;
+- funcionamento como PWA;
+- interface responsiva para computadores e dispositivos móveis.
+
+## Perfis e permissões
+
+### Administrador
+
+Possui acesso completo ao sistema:
+
+- inventário;
+- criação, edição e exclusão de ferramentas;
+- criação e administração de usuários;
+- cadastro e edição de colaboradores;
+- auditoria;
+- importação e exportação;
+- ajustes administrativos.
+
+### Usuário Padrão
+
+Possui acesso operacional limitado:
+
+- painel;
+- leitor e Scanner;
+- consulta de ferramentas;
+- consulta de colaboradores;
+- empréstimos;
+- devoluções.
+
+O Usuário Padrão não pode editar o inventário, administrar usuários, acessar a auditoria ou executar operações administrativas.
+
+## Segurança
+
+As operações sensíveis são executadas por APIs autenticadas:
+
+```text
+api/session/last-login.js
+api/tools/movement.js
+api/users/create.js
+api/users/delete.js
+api/users/status.js
+api/users/update.js
+```
+
+As APIs validam o Firebase ID token e o perfil do usuário no servidor.
+
+Empréstimos e devoluções usam uma transação do Firestore para atualizar a ferramenta e registrar o histórico de forma conjunta.
+
+As regras de acesso ao Firestore estão versionadas em:
+
+```text
+firestore.rules
+```
+
+## Tecnologias
+
+- JavaScript com módulos ES;
+- Vite;
+- Tailwind CSS;
+- Firebase Authentication;
+- Cloud Firestore;
+- Firebase Admin SDK;
+- Vercel Functions;
+- Workbox e Vite PWA;
+- SheetJS.
+
+## Requisitos
+
+- Node.js `24.x`;
+- npm;
+- projeto Firebase configurado;
+- projeto Vercel para publicação das APIs.
+
+## Instalação
+
+Clone o repositório e instale as dependências:
 
 ```bash
-# Instalar dependências
+git clone https://github.com/smithnaguxi90/gestao-de-ferramentas-v3.git
+cd gestao-de-ferramentas-v3
 npm install
+```
 
-# Iniciar servidor de desenvolvimento
+## Desenvolvimento local
+
+Inicie o Vite:
+
+```bash
 npm run dev
+```
 
-# Build para produção
+O Vite serve apenas o frontend. As rotas em `/api` são Vercel Functions e não ficam disponíveis no servidor Vite comum.
+
+Por isso, no ambiente local, chamadas como estas podem retornar `404`:
+
+```text
+/api/session/last-login
+/api/tools/movement
+/api/users/*
+```
+
+Para homologar fluxos que dependem das APIs, utilize um deployment Preview da Vercel ou um ambiente local compatível com Vercel Functions.
+
+## Build
+
+```bash
 npm run build
+```
 
-# Preview do build
+Para visualizar o build localmente:
+
+```bash
 npm run preview
-
-# Rodar testes
-npm test
-
-# Rodar testes com coverage
-npm run test:coverage
 ```
 
-## 📁 Estrutura do Projeto
-
-```
-gestao-de-ferramentas-v3/
-├── src/                    # Código fonte
-│   ├── index.html         # Página principal
-│   ├── css/
-│   │   └── main.css       # Estilos Tailwind
-│   └── js/
-│       ├── app.js         # Aplicação principal
-│       ├── firebase-config.js  # Configuração centralizada
-│       └── modules/       # Módulos refatorados
-│           ├── utils.js   # Funções utilitárias
-│           ├── logger.js  # Sistema de logging
-│           ├── auth.js    # Autenticação
-│           ├── data.js    # Operações de dados
-│           └── README.md  # Guia de migração
-├── tests/                  # Testes unitários
-│   ├── setup.js           # Configuração dos testes
-│   ├── utils.test.js      # Testes de utils
-│   └── logger.test.js     # Testes de logger
-├── dist/                   # Build de produção
-├── img/                    # Imagens de ferramentas
-├── backup-database.mjs    # Script de backup
-├── export-firebase-data.mjs # Script de exportação
-├── populate.html          # Popular banco de dados
-├── vite.config.js         # Configuração do Vite
-├── vitest.config.js       # Configuração do Vitest
-├── package.json           # Dependências e scripts
-└── README.md              # Este arquivo
-```
-
-## 🔒 Segurança e Melhorias
-
-### Correções Implementadas (v3.1)
-
-✅ **Configuração centralizada**: Firebase config em único arquivo  
-✅ **Catch blocks corrigidos**: Todos os errors agora são logados  
-✅ **Bug async/await**: Operações Firestore agora são aguardadas  
-✅ **URLs consistentes**: Mesma CDN para bibliotecas externas  
-✅ **Proteção de dados**: Arquivos de backup protegidos no .gitignore  
-✅ **Logging consistente**: Sistema de logging centralizado  
-✅ **Estrutura de testes**: Vitest configurado com testes iniciais
-
-### Melhorias Implementadas
-
-#### ✅ Fase 1 (Crítica) - COMPLETA
-
-- ✅ **Contadores no header**: Cards com totais de usuários (Total, Ativos, Admins, Usuários)
-- ✅ **Filtros por nível de acesso**: Botões de filtro (Todos, Administradores, Usuários Padrão, Ativos, Inativos)
-- ✅ **Avatares com iniciais**: Exibição de iniciais do nome do usuário nos avatares
-- ✅ **Toggle rápido de status**: Botão de toggle de status com feedback visual e sonoro
-
-#### ✅ Fase 2 (Importante) - COMPLETA
-
-- ✅ **Detalhes do último login expandidos**: Informações completas de data, hora, IP e dispositivo com ícones
-- ✅ **Ordenação de usuários**: Botões de ordenação (nome, email, último login, status) com indicadores visuais
-- ✅ **Hover effects**: Melhorias visuais nos cards (shadow-xl, translate-y, scale, transições 300ms)
-- ✅ **Ícones com tooltips**: Tooltips emoji + title em todos os ícones, badges e botões
-
-#### ✅ Fase 3 (Refinamento) - COMPLETA
-
-- ✅ **Empty state melhorado**: Ilustração SVG, mensagens contextuais (com/sem filtros), botão de ação
-- ✅ **Paginação**: Navegação por páginas (9 usuários/página), botões Anterior/Próximo, seletor de páginas
-- ✅ **Log de atividades**: Detalhes expandidos do último login com IP, dispositivo e data/hora
-
-### Correções Ortográficas Implementadas
-
-✅ **Fase de Correção Ortográfica - COMPLETA**
-
-- ✅ **68+ correções aplicadas** em todo o código JavaScript
-- ✅ **PDF de Termo de Responsabilidade**: Todos os acentos corrigidos (GESTÃO, conservação, condições, etc.)
-- ✅ **Mensagens de validação**: "são obrigatórios", "já cadastrado", "não informado"
-- ✅ **Títulos de navegação**: "Visão Geral", "Catálogo de Inventário", "Gestão de Ferramentas"
-- ✅ **Labels de campos**: "Responsável", "Movimentação", "Patrimônio", "Descrição"
-- ✅ **Mensagens de erro**: "Sessão expirada", "Faça login novamente", "Nível de acesso"
-- ✅ **Terminologia consistente**: "Usuário Padrão" padronizado em todo o sistema
-
-### Correções de Bugs Implementadas
-
-✅ **Remoção da Funcionalidade de Upload de Avatar**
-
-- ✅ **Upload de avatar removido**: Funcionalidade de upload de foto de perfil removida do sistema
-- ✅ **Modal removido**: Modal de upload removido do HTML
-- ✅ **Funções removidas**: Funções `openAvatarUploadModal`, `closeAvatarUploadModal`, `handleAvatarUpload`, `saveAvatar`, `removeAvatar` removidas do JavaScript
-- ✅ **Avatares estáticos**: Avatares agora exibem apenas as iniciais do nome do usuário
-
-### Próximas Melhorias Recomendadas
-
-⚠️ **Rotacionar senha do Firebase** (senha exposta no .env)  
-🔧 **Completar refatoração** de módulos restantes  
-📝 **Adicionar testes E2E** (Playwright/Cypress)  
-🚀 **Configurar CI/CD** (GitHub Actions)
-
-## 🎨 Personalização
-
-### Cores do Tema
-
-Edite as variáveis em `src/css/main.css`:
-
-```css
-@theme {
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-500: #2563eb;
-  --color-brand-600: #1d4ed8;
-  /* ... */
-}
-```
-
-### Configuração do Firebase
-
-Todas as configurações em `src/js/firebase-config.js`:
-
-```javascript
-export const firebaseConfig = { ... };
-export const CONFIG = { ... };
-export const COLLECTIONS = { ... };
-```
-
-## 🌐 Acesso
-
-Após iniciar o servidor, acesse:
-
-- **Desenvolvimento**: http://localhost:3000
-- **Preview**: http://localhost:4173 (após build)
-
-## 📱 Responsividade
-
-O sistema é otimizado para:
-
-- 📱 **Mobile**: < 768px
-- 📟 **Tablet**: 768px - 1024px
-- 🖥️ **Desktop**: > 1024px
-
-## 🧪 Testes
+## Scripts disponíveis
 
 ```bash
-# Rodar todos os testes
-npm test
-
-# Modo watch (desenvolvimento)
-npm run test:ui
-
-# Rodar testes uma vez
-npm run test:run
-
-# Ver coverage
-npm run test:coverage
-```
-
-Cobertura atual: **Utils** e **Logger** completos.
-
-## 🔧 Comandos Úteis
-
-```bash
-# Backup do Firestore
+npm run dev
+npm run build
+npm run preview
+npm run lint
+npm run lint:fix
+npm run format
+npm run format:check
 npm run backup
-
-# Exportar dados do Firebase
 npm run export
-
-# Instalar nova dependência
-npm install nome-do-pacote
-
-# Atualizar dependências
-npm update
-
-# Verificar vulnerabilidades
-npm audit
 ```
 
-## 📊 Funcionalidades
+## Variáveis de ambiente
 
-- ✅ CRUD completo de ferramentas, usuários e colaboradores
-- ✅ Scanner de QR Code (USB + câmera)
-- ✅ Empréstimo e devolução de ferramentas
-- ✅ Geração de recibos de responsabilidade (PDF)
-- ✅ Etiquetas de QR Code para patrimônio
-- ✅ Dashboard com gráficos em tempo real
-- ✅ Auditoria completa de operações
-- ✅ Controle de acesso por nível de permissão
-- ✅ Exportação/importação em massa (Excel)
-- ✅ Dark mode completo
-- ✅ PWA-ready
+As APIs protegidas exigem estas variáveis no ambiente da Vercel:
 
-## 📝 Licença
+```text
+FIREBASE_PROJECT_ID
+FIREBASE_CLIENT_EMAIL
+FIREBASE_PRIVATE_KEY
+```
 
-ISC
+Elas devem estar configuradas nos ambientes em que as APIs serão executadas, especialmente:
 
-## 👥 Contribuindo
+```text
+Production
+Preview
+```
 
-1. Fork o projeto
-2. Crie sua feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
+A chave privada deve ser mantida como segredo e nunca deve ser adicionada ao Git.
 
-### Guia de Desenvolvimento
+## Estrutura principal
 
-- Seguir estrutura modular em `src/js/modules/`
-- Usar Logger para todos os errors
-- Nunca usar catch blocks vazios
-- Aguardar todas as operações do Firestore
-- Usar `Utils.escapeHTML()` para dados do usuário
-- Adicionar testes para novas funcionalidades
+```text
+api/
+  session/
+    last-login.js
+  tools/
+    movement.js
+  users/
+    create.js
+    delete.js
+    status.js
+    update.js
+
+server/
+  admin-authorization.js
+  firebase-admin.js
+
+src/
+  index.html
+  js/
+    app.js
+    config/
+    core/
+    modules/
+    utils/
+
+firestore.rules
+firebase.json
+vite.config.js
+```
+
+## Banco de dados
+
+Os dados são armazenados no Cloud Firestore.
+
+Coleções principais:
+
+```text
+tools
+collaborators
+users
+history
+```
+
+## Backup e exportação
+
+O repositório contém scripts para backup e exportação:
+
+```bash
+npm run backup
+npm run export
+```
+
+Arquivos de backup podem conter dados operacionais e não devem ser adicionados ao repositório sem revisão.
+
+## Homologação da versão 3.0.0
+
+A versão `v3.0.0` foi validada em produção com:
+
+- login de Administrador;
+- login de Usuário Padrão;
+- restrição das áreas administrativas;
+- leitura de ferramentas e colaboradores;
+- empréstimo;
+- devolução;
+- registro das duas movimentações na Auditoria;
+- execução das APIs protegidas em produção.
+
+## Release
+
+- **Tag:** `v3.0.0`
+- **Commit homologado:** `677e5a7`
+- **Plataforma de produção:** Vercel
+- **Banco e autenticação:** Firebase
+
+## Documentação adicional
+
+O repositório também contém:
+
+```text
+ARCHITECTURE.md
+AUDIT-REPORT.md
+CHANGELOG.md
+CHANGELOG-ADVANCED.md
+OVERVIEW.md
+README-IMPROVEMENTS.md
+RESPONSIVIDADE.md
+```
+
+Esses documentos podem registrar decisões técnicas, auditorias e melhorias históricas do projeto.
+
+## Licença e uso
+
+Projeto destinado à gestão interna de ferramentas da COENG. Defina formalmente a licença antes de distribuir ou reutilizar o código fora do contexto autorizado.
