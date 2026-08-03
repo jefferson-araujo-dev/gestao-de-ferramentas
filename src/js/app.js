@@ -1,8 +1,9 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 import {
-  getFirestore,
-  enableIndexedDbPersistence,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentSingleTabManager,
   clearIndexedDbPersistence
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
@@ -52,15 +53,10 @@ const Utils = Object.freeze({
 const firebaseApp = initializeApp(FIREBASE_CONFIG);
 export const auth = getAuth(firebaseApp);
 auth.languageCode = 'pt-BR';
-export const db = getFirestore(firebaseApp);
-
-// Habilita a persistência offline do Firestore
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code === 'failed-precondition') {
-    Logger.warn('PWA: Persistência do Firestore falhou (múltiplas abas abertas).');
-  } else if (err.code === 'unimplemented') {
-    Logger.warn('PWA: Persistência do Firestore não é suportada neste navegador.');
-  }
+export const db = initializeFirestore(firebaseApp, {
+  localCache: persistentLocalCache({
+    tabManager: persistentSingleTabManager()
+  })
 });
 
 window.addEventListener('unhandledrejection', async (event) => {
