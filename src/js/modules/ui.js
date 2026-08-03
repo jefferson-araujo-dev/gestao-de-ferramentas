@@ -256,7 +256,7 @@ export const AppUI = {
       historyList: document.getElementById('history-list'),
       crudList: document.getElementById('crud-list'),
       usersList: document.getElementById('user-management-body'),
-      collabList: document.getElementById('collab-list')
+      collabList: document.getElementById('collab-list'),
     };
     const cdf = document.getElementById('current-date-full');
     const cdfShort = document.getElementById('current-date-full-short');
@@ -264,12 +264,12 @@ export const AppUI = {
     const fullDate = now.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: 'long',
-      year: 'numeric'
+      year: 'numeric',
     });
     const shortDate = now.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
+      year: 'numeric',
     });
     if (cdf) {
       cdf.textContent = fullDate;
@@ -309,7 +309,7 @@ export const AppUI = {
         btn.addEventListener('click', (e) => {
           const tab = e.currentTarget.getAttribute('data-tab');
           if (tab) {
-            this.switchTab(tab);
+            this.switchTab(tab, e.currentTarget.id);
           }
         });
       });
@@ -368,7 +368,7 @@ export const AppUI = {
     const categoryFilterEl = document.getElementById('inventory-category-filter');
     if (categoryFilterEl && categoryFilterEl.options.length <= 1) {
       const categories = [
-        ...new Set(window.App.Data.tools.map((t) => t.category).filter(Boolean))
+        ...new Set(window.App.Data.tools.map((t) => t.category).filter(Boolean)),
       ].sort();
       categories.forEach((cat) => {
         const option = document.createElement('option');
@@ -422,11 +422,10 @@ export const AppUI = {
       });
     });
   },
-  switchTab: function (tab) {
+  switchTab: function (tab, sourceNavId = null) {
     const adminTabPermissions = {
-      management: 'canAccessInventory',
       users: 'canAccessUsers',
-      history: 'canAccessHistory'
+      history: 'canAccessHistory',
     };
     const requiredPermission = adminTabPermissions[tab];
     if (requiredPermission && window.App?.Auth?.permissions?.[requiredPermission] !== true) {
@@ -444,7 +443,7 @@ export const AppUI = {
       b.classList.remove('bg-brand-600', 'text-white', 'shadow-md', 'shadow-brand-600/20');
       b.classList.add('text-slate-400', 'hover:bg-slate-800', 'hover:text-white');
     });
-    const a = document.getElementById(`nav-${tab}`);
+    const a = document.getElementById(sourceNavId || `nav-${tab}`);
     if (a) {
       a.classList.remove('text-slate-400', 'hover:bg-slate-800', 'hover:text-white');
       a.classList.add('bg-brand-600', 'text-white', 'shadow-md', 'shadow-brand-600/20');
@@ -452,10 +451,10 @@ export const AppUI = {
     const titleMap = {
       dashboard: 'Visão Geral',
       scanner: 'Leitor / Scanner',
-      management: 'Catálogo de Inventário',
+      management: 'Ferramentas',
       users: 'Controle de Acesso',
       collaborators: 'Colaboradores',
-      history: 'Auditoria de Sistema'
+      history: 'Auditoria de Sistema',
     };
     const tt = document.getElementById('topbar-title');
     if (tt) {
@@ -550,9 +549,9 @@ export const AppUI = {
                 data: [cA, cB, cM],
                 backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'],
                 borderWidth: 0,
-                hoverOffset: 6
-              }
-            ]
+                hoverOffset: 6,
+              },
+            ],
           },
           options: {
             responsive: true,
@@ -567,22 +566,22 @@ export const AppUI = {
                     const total = tools.length;
                     const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                     return `${context.label}: ${value} (${percentage}%)`;
-                  }
-                }
+                  },
+                },
               },
               datalabels: {
                 color: '#ffffff',
                 font: {
                   weight: 'bold',
-                  size: 14
+                  size: 14,
                 },
                 formatter: (value) => (value > 0 ? value : ''),
                 anchor: 'center',
-                align: 'center'
-              }
+                align: 'center',
+              },
             },
-            animation: { animateRotate: true, animateScale: true }
-          }
+            animation: { animateRotate: true, animateScale: true },
+          },
         });
       }
 
@@ -621,9 +620,9 @@ export const AppUI = {
                   data: catData,
                   backgroundColor: catColors,
                   borderWidth: 0,
-                  hoverOffset: 6
-                }
-              ]
+                  hoverOffset: 6,
+                },
+              ],
             },
             options: {
               responsive: true,
@@ -638,19 +637,19 @@ export const AppUI = {
                       const percentage =
                         tools.length > 0 ? ((value / tools.length) * 100).toFixed(1) : 0;
                       return `${context.label}: ${value} (${percentage}%)`;
-                    }
-                  }
+                    },
+                  },
                 },
                 datalabels: {
                   color: '#ffffff',
                   font: { weight: 'bold', size: 14 },
                   formatter: (value) => (value > 0 ? value : ''),
                   anchor: 'center',
-                  align: 'center'
-                }
+                  align: 'center',
+                },
               },
-              animation: { animateRotate: true, animateScale: true }
-            }
+              animation: { animateRotate: true, animateScale: true },
+            },
           });
         }
       }
@@ -767,9 +766,11 @@ export const AppUI = {
           customBadges += `<span class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded animate-pulse border border-rose-200 shadow-sm whitespace-nowrap">⚠️ Atrasada (${window.App.CRUDTools.getDaysLate(t)}d)</span>`;
         }
         if (isMaintDue) {
-          customBadges += '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded animate-pulse border border-orange-200 shadow-sm whitespace-nowrap">⚠️ Rev. Vencida</span>';
+          customBadges +=
+            '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded animate-pulse border border-orange-200 shadow-sm whitespace-nowrap">⚠️ Rev. Vencida</span>';
         } else if (isMaintWarn) {
-          customBadges += '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-[10px] font-bold rounded border border-yellow-200 shadow-sm whitespace-nowrap">⏳ Rev. Próxima</span>';
+          customBadges +=
+            '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-[10px] font-bold rounded border border-yellow-200 shadow-sm whitespace-nowrap">⏳ Rev. Próxima</span>';
         }
 
         const overrideBorder = isLate
@@ -903,20 +904,20 @@ export const AppUI = {
         label: 'Devolução',
         status: 'Concluída',
         color: 'emerald',
-        icon: '<path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />'
+        icon: '<path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />',
       },
       out: {
         label: 'Empréstimo',
         status: 'Registrado',
         color: 'amber',
-        icon: '<path d="M17 14H3l4 4" /><path d="M7 10h14l-4-4" />'
+        icon: '<path d="M17 14H3l4 4" /><path d="M7 10h14l-4-4" />',
       },
       maintenance: {
         label: 'Manutenção',
         status: 'Registrada',
         color: 'rose',
-        icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />'
-      }
+        icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />',
+      },
     };
 
     list.innerHTML = logs
@@ -975,5 +976,5 @@ export const AppUI = {
     if (m) {
       m.close();
     }
-  }
+  },
 };
