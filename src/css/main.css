@@ -1068,3 +1068,7 @@ input[type='checkbox'] {
 input[type='checkbox']:checked {
   transform: scale(1.1);
 }
+/* Centraliza os diálogos nativos na viewport. */
+dialog {
+  margin: auto;
+}
