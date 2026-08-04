@@ -513,7 +513,11 @@ export const AppCRUDTools = {
     }
 
     title.textContent = `${t.name} (${t.code})`;
-    const logs = (window.App.Data.allHistoryLogs || []).filter((l) => l.toolCode === t.code);
+    const logs = (window.App.Data.allHistoryLogs || []).filter((log) => {
+      const historyToolId = String(log.toolId || '').trim();
+
+      return historyToolId ? historyToolId === t.firebaseId : log.toolCode === t.code;
+    });
     logs.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 
     if (logs.length === 0) {
