@@ -3,3 +3,7 @@ dist
 .env
 .env.*
 release/
+
+# Playwright
+playwright-report/
+test-results/
