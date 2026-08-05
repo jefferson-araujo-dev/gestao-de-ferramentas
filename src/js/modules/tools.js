@@ -4,7 +4,53 @@ import {
   updateDoc,
   deleteDoc,
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-import { db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
+import { auth, db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
+
+async function requestToolMaintenance(body) {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error('Sua sessão expirou. Entre novamente.');
+  }
+
+  if (
+    !body?.toolId ||
+    !body?.performedAt ||
+    !body?.device ||
+    !Object.hasOwn(body, 'nextMaintenance') ||
+    !Object.hasOwn(body, 'notes')
+  ) {
+    throw new Error('Dados da manutenção incompletos.');
+  }
+
+  const token = await currentUser.getIdToken();
+
+  const response = await fetch('/api/tools/maintenance', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store'
+  });
+
+  let payload;
+
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('A API retornou uma resposta inválida.');
+  }
+
+  if (!response.ok || payload?.success !== true) {
+    throw new Error(
+      payload?.message || 'Não foi possível registrar a manutenção.'
+    );
+  }
+
+  return payload.data?.tool || null;
+}
 
 export const AppCRUDTools = {
   currentFilter: 'all',
@@ -500,6 +546,217 @@ export const AppCRUDTools = {
     }
   },
 
+  openMaintenanceModal: function (toolId) {
+    if (!this.canManageTools()) {
+      window.App.UI.showToast(
+        'Acesso restrito a administradores.',
+        'error'
+      );
+      return;
+    }
+
+    const tool = window.App.Data.tools.find(
+      (item) => item.firebaseId === toolId
+    );
+
+    if (!tool) {
+      window.App.UI.showToast(
+        'Ferramenta não encontrada.',
+        'error'
+      );
+      return;
+    }
+
+    if (tool.status === 'borrowed') {
+      window.App.UI.showToast(
+        'Não é possível registrar manutenção de uma ferramenta emprestada.',
+        'warning'
+      );
+      return;
+    }
+
+    const modal = document.getElementById(
+      'tool-maintenance-modal'
+    );
+    const form = document.getElementById(
+      'tool-maintenance-form'
+    );
+    const idInput = document.getElementById(
+      'tool-maintenance-id'
+    );
+    const nameElement = document.getElementById(
+      'tool-maintenance-name'
+    );
+    const performedInput = document.getElementById(
+      'tool-maintenance-performed-at'
+    );
+    const nextInput = document.getElementById(
+      'tool-maintenance-next'
+    );
+
+    if (
+      !modal ||
+      !form ||
+      !idInput ||
+      !nameElement ||
+      !performedInput ||
+      !nextInput
+    ) {
+      window.App.UI.showToast(
+        'Não foi possível abrir o formulário de manutenção.',
+        'error'
+      );
+      return;
+    }
+
+    const now = new Date();
+    const localToday = new Date(
+      now.getTime() - now.getTimezoneOffset() * 60000
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    form.reset();
+    idInput.value = tool.firebaseId;
+    nameElement.textContent = `${tool.name} (${tool.code})`;
+    performedInput.value = localToday;
+    performedInput.max = localToday;
+    nextInput.min = localToday;
+
+    modal.showModal();
+  },
+
+  closeMaintenanceModal: function () {
+    const modal = document.getElementById(
+      'tool-maintenance-modal'
+    );
+    const form = document.getElementById(
+      'tool-maintenance-form'
+    );
+
+    if (modal?.open) {
+      modal.close();
+    }
+
+    form?.reset();
+  },
+
+  saveMaintenance: async function () {
+    if (!this.canManageTools()) {
+      window.App.UI.showToast(
+        'Acesso restrito a administradores.',
+        'error'
+      );
+      return;
+    }
+
+    const toolId = document
+      .getElementById('tool-maintenance-id')
+      ?.value.trim();
+    const performedAt = document
+      .getElementById('tool-maintenance-performed-at')
+      ?.value.trim();
+    const nextMaintenance = document
+      .getElementById('tool-maintenance-next')
+      ?.value.trim() || null;
+    const notes = document
+      .getElementById('tool-maintenance-notes')
+      ?.value.trim() || '';
+    const submitButton = document.getElementById(
+      'tool-maintenance-submit'
+    );
+
+    if (!toolId || !performedAt || !submitButton) {
+      window.App.UI.showToast(
+        'Preencha os dados obrigatórios da manutenção.',
+        'warning'
+      );
+      return;
+    }
+
+    const tool = window.App.Data.tools.find(
+      (item) => item.firebaseId === toolId
+    );
+
+    if (!tool) {
+      window.App.UI.showToast(
+        'Ferramenta não encontrada.',
+        'error'
+      );
+      return;
+    }
+
+    if (tool.status === 'borrowed') {
+      window.App.UI.showToast(
+        'Não é possível registrar manutenção de uma ferramenta emprestada.',
+        'warning'
+      );
+      return;
+    }
+
+    const now = new Date();
+    const localToday = new Date(
+      now.getTime() - now.getTimezoneOffset() * 60000
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    if (performedAt > localToday) {
+      window.App.UI.showToast(
+        'A data da manutenção não pode estar no futuro.',
+        'warning'
+      );
+      return;
+    }
+
+    if (nextMaintenance && nextMaintenance < performedAt) {
+      window.App.UI.showToast(
+        'A próxima manutenção não pode ser anterior à manutenção realizada.',
+        'warning'
+      );
+      return;
+    }
+
+    const originalText = submitButton.textContent;
+
+    submitButton.disabled = true;
+    submitButton.textContent = 'Registrando...';
+
+    try {
+      await requestToolMaintenance({
+        toolId,
+        performedAt,
+        nextMaintenance,
+        notes,
+        device:
+          window.App.Session?.currentDevice ||
+          window.navigator.userAgent ||
+          'Navegador'
+      });
+
+      window.App.UI.showToast(
+        'Manutenção registrada com sucesso.',
+        'success'
+      );
+
+      this.closeMaintenanceModal();
+    } catch (error) {
+      window.Logger.error(
+        'Erro ao registrar manutenção:',
+        error
+      );
+
+      window.App.UI.showToast(
+        error?.message ||
+          'Não foi possível registrar a manutenção.',
+        'error'
+      );
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = originalText;
+    }
+  },
+
   showHistory: function (toolId) {
     const t = window.App.Data.tools.find((x) => x.firebaseId === toolId);
     if (!t) {
@@ -527,21 +784,89 @@ export const AppCRUDTools = {
       list.innerHTML = logs
         .map((log) => {
           const logType = String(log.type || '').toLowerCase();
-          const accentClass =
-            logType === 'in'
-              ? 'bg-emerald-500'
-              : logType === 'out'
-                ? 'bg-amber-500'
+          const isReturn = logType === 'in';
+          const isLoan = logType === 'out';
+          const isMaintenance = logType === 'maintenance';
+
+          const accentClass = isReturn
+            ? 'bg-emerald-500'
+            : isLoan
+              ? 'bg-amber-500'
+              : isMaintenance
+                ? 'bg-rose-500'
                 : 'bg-slate-400';
-          const safeUser = window.Utils.escapeHTML(log.user || 'Sistema');
+
+          const typeClass = isReturn
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : isLoan
+              ? 'text-amber-600 dark:text-amber-400'
+              : isMaintenance
+                ? 'text-rose-600 dark:text-rose-400'
+                : 'text-slate-600 dark:text-slate-300';
+
+          const typeText = isReturn
+            ? 'Devolvido por'
+            : isLoan
+              ? 'Retirado por'
+              : isMaintenance
+                ? 'Manutenção registrada por'
+                : 'Evento registrado por';
+
+          const safeUser = window.Utils.escapeHTML(
+            log.user || 'Sistema'
+          );
           const date = window.Utils.formatDate(log.date);
-          const typeText = logType === 'in' ? 'Devolvido por' : 'Retirado por';
+
+          const formatDateOnly = (value) => {
+            const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+              String(value || '').trim()
+            );
+
+            return match
+              ? `${match[3]}/${match[2]}/${match[1]}`
+              : '';
+          };
+
+          const performedAt = formatDateOnly(log.performedAt);
+          const nextMaintenance = formatDateOnly(
+            log.nextMaintenance
+          );
+          const safeNotes = window.Utils.escapeHTML(
+            log.notes || ''
+          );
+
+          const maintenanceDetails = isMaintenance
+            ? `
+              <div class="mt-3 space-y-1.5 rounded-xl border border-rose-100 bg-rose-50/70 p-3 text-xs dark:border-rose-900/50 dark:bg-rose-950/20">
+                ${
+                  performedAt
+                    ? `<p class="font-semibold text-slate-600 dark:text-slate-300"><span class="text-slate-400">Realizada em:</span> ${performedAt}</p>`
+                    : ''
+                }
+                ${
+                  nextMaintenance
+                    ? `<p class="font-semibold text-slate-600 dark:text-slate-300"><span class="text-slate-400">Próxima manutenção:</span> ${nextMaintenance}</p>`
+                    : ''
+                }
+                ${
+                  safeNotes
+                    ? `<p class="whitespace-pre-wrap text-slate-600 dark:text-slate-300"><span class="font-semibold text-slate-400">Observações:</span> ${safeNotes}</p>`
+                    : ''
+                }
+              </div>
+            `
+            : '';
+
           return `
           <div class="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 flex items-start gap-4 shadow-sm relative overflow-hidden">
             <div class="absolute left-0 top-0 w-1 h-full ${accentClass}"></div>
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-bold text-slate-900 dark:text-white"><span class="${logType === 'in' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}">${typeText}</span> ${safeUser}</p>
+              <p class="text-sm font-bold text-slate-900 dark:text-white">
+                <span class="${typeClass}">${typeText}</span>
+                ${safeUser}
+              </p>
               <p class="text-[10px] font-bold text-slate-400 mt-1">${date}</p>
+              ${maintenanceDetails}
             </div>
           </div>
         `;
@@ -733,10 +1058,15 @@ export const AppCRUDTools = {
               ? '<button aria-label="Devolver" onclick="App.UI.switchTab(\'scanner\'); setTimeout(() => App.Scanner.setMode(\'cam\'), 100);" class="flex-1 py-2 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-xl border border-emerald-200 dark:border-emerald-800 transition-colors flex items-center justify-center shadow-sm" title="Devolver"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg></button>'
               : ''
           : '';
+        const maintenanceActionBtn =
+          canManage && t.status !== 'borrowed'
+            ? `<button aria-label="Registrar manutenção" onclick="App.CRUDTools.openMaintenanceModal('${t.firebaseId}')" class="flex-1 py-2 bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-400 rounded-xl border border-rose-200 dark:border-rose-800 transition-colors flex items-center justify-center shadow-sm" title="Registrar Manutenção"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></button>`
+            : '';
+
         const statusControl = canManage
           ? `<select onchange="App.CRUDTools.quickStatusUpdate('${t.firebaseId}', this.value)" class="text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer ${t.status === 'borrowed' ? 'text-amber-600' : t.status === 'maintenance' ? 'text-rose-600' : 'text-emerald-600'}"><option value="available" ${t.status === 'available' ? 'selected' : ''}>Disponível</option><option value="borrowed" ${t.status === 'borrowed' ? 'selected' : ''}>Emprestada</option><option value="maintenance" ${t.status === 'maintenance' ? 'selected' : ''}>Manutenção</option></select>`
           : `<span class="text-[11px] font-bold ${t.status === 'borrowed' ? 'text-amber-600' : t.status === 'maintenance' ? 'text-rose-600' : 'text-emerald-600'}">${t.status === 'borrowed' ? 'Emprestada' : t.status === 'maintenance' ? 'Manutenção' : 'Disponível'}</span>`;
-        return `<div class="tool-card bg-white dark:bg-slate-900 rounded-2xl shadow-sm ${finalBorderClass} p-5 flex flex-col gap-4 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"><div class="flex items-start gap-4 pl-2"><div class="relative">${imgHtml}<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full ${dotColor} border-2 border-white dark:border-slate-900 shadow-sm"></span></div><div class="flex-1 min-w-0"><h3 class="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${safeName}">${safeName}</h3><div class="flex items-center gap-1.5 mt-1.5 flex-wrap"><span class="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-[10px] font-bold rounded">${window.Utils.escapeHTML(t.category)}</span><p class="text-[10px] font-bold text-slate-500 truncate">Pat: ${window.Utils.escapeHTML(t.code)}</p>${customBadges}</div></div></div><div class="border-t border-slate-100 dark:border-slate-800 ml-2"></div><div class="flex flex-col gap-2 pl-2"><div class="flex justify-between items-center"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status Atual</span>${statusControl}</div><div class="flex justify-between items-center mt-0.5"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest" title="Última atualização do status"><svg class="w-3 h-3 inline-block mr-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Última Ação</span><span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">${t.lastAction ? window.Utils.formatDate(t.lastAction) : '-'}</span></div>${t.currentUser ? `<div class="flex justify-between items-center"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Responsável</span><span class="text-[10px] font-bold text-brand-600 dark:text-brand-400 truncate max-w-[120px]">${window.Utils.escapeHTML(t.currentUser)}</span></div>` : ''}</div><div class="flex gap-1.5 mt-2">${quickActionBtn}<button aria-label="Editar" onclick="App.CRUDTools.openModal('${t.firebaseId}')" class="${canManage ? '' : 'hidden'} flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Editar Ferramenta"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button><button aria-label="Histórico" onclick="App.CRUDTools.showHistory('${t.firebaseId}')" class="${canManage ? '' : 'hidden'} flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Ver Histórico"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button></div></div>`;
+        return `<div class="tool-card bg-white dark:bg-slate-900 rounded-2xl shadow-sm ${finalBorderClass} p-5 flex flex-col gap-4 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"><div class="flex items-start gap-4 pl-2"><div class="relative">${imgHtml}<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full ${dotColor} border-2 border-white dark:border-slate-900 shadow-sm"></span></div><div class="flex-1 min-w-0"><h3 class="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${safeName}">${safeName}</h3><div class="flex items-center gap-1.5 mt-1.5 flex-wrap"><span class="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-[10px] font-bold rounded">${window.Utils.escapeHTML(t.category)}</span><p class="text-[10px] font-bold text-slate-500 truncate">Pat: ${window.Utils.escapeHTML(t.code)}</p>${customBadges}</div></div></div><div class="border-t border-slate-100 dark:border-slate-800 ml-2"></div><div class="flex flex-col gap-2 pl-2"><div class="flex justify-between items-center"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status Atual</span>${statusControl}</div><div class="flex justify-between items-center mt-0.5"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest" title="Última atualização do status"><svg class="w-3 h-3 inline-block mr-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Última Ação</span><span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">${t.lastAction ? window.Utils.formatDate(t.lastAction) : '-'}</span></div>${t.currentUser ? `<div class="flex justify-between items-center"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Responsável</span><span class="text-[10px] font-bold text-brand-600 dark:text-brand-400 truncate max-w-[120px]">${window.Utils.escapeHTML(t.currentUser)}</span></div>` : ''}</div><div class="flex gap-1.5 mt-2">${quickActionBtn}${maintenanceActionBtn}<button aria-label="Editar" onclick="App.CRUDTools.openModal('${t.firebaseId}')" class="${canManage ? '' : 'hidden'} flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Editar Ferramenta"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button><button aria-label="Histórico" onclick="App.CRUDTools.showHistory('${t.firebaseId}')" class="${canManage ? '' : 'hidden'} flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Ver Histórico"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button></div></div>`;
       })
       .join(' ');
   },
