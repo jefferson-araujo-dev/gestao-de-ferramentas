@@ -2,7 +2,7 @@
 
 Sistema web para controle de ferramentas, colaboradores, empréstimos, devoluções, usuários e auditoria da COENG.
 
-**Versão atual:** `v3.0.1`
+**Versão atual:** `v3.1.0`
 
 ## Produção
 
@@ -256,6 +256,26 @@ A versão `v3.0.1` foi validada em produção com:
 
 - **Tag:** `v3.0.1`
 - **Commit homologado:** `cb07c9c`
+- **Plataforma de produção:** Vercel
+- **Banco e autenticação:** Firebase
+
+## Homologação da versão 3.1.0
+
+A versão `v3.1.0` foi validada com:
+
+- registro administrativo de manutenção das ferramentas;
+- endpoint protegido para registrar manutenções e atualizar o histórico;
+- exibição dos dados de manutenção no histórico individual;
+- ação de manutenção disponível nos cartões de ferramentas elegíveis;
+- melhorias responsivas nas barras de ações, filtros e modais;
+- auditoria automatizada de responsividade em 30 resoluções;
+- 210 testes Playwright aprovados;
+- build de produção, PWA e Service Worker validados.
+
+## Release 3.1.0
+
+- **Tag:** `v3.1.0`
+- **Commit funcional homologado:** `ed8b416`
 - **Plataforma de produção:** Vercel
 - **Banco e autenticação:** Firebase
 
