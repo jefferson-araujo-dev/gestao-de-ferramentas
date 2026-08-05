@@ -64,12 +64,15 @@ body,
 
 /* Main app container - ocupa toda a tela */
 #main-app {
-  display: flex;
   width: 100vw;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
   position: relative;
+}
+
+#main-app:not(.hidden) {
+  display: flex;
 }
 
 #main-app > aside {
