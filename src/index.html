@@ -2702,50 +2702,7 @@
 
     <!-- @include partials/modals/collaborator-modal.html -->
 
-    <!-- History Collab Modal -->
-    <dialog
-      id="collab-history-modal"
-      class="p-0 bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden open:animate-fade-in max-h-[calc(100vh-2rem)] open:flex open:flex-col backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm"
-    >
-        <div
-          class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0"
-        >
-          <div>
-            <h3 class="text-xl font-extrabold text-slate-900 dark:text-white">
-              Histórico Individual
-            </h3>
-            <p
-              id="collab-history-name"
-              class="text-sm font-bold text-brand-600 dark:text-brand-400 mt-0.5"
-            >
-              Nome do Colaborador
-            </p>
-          </div>
-          <button
-            type="button"
-            onclick="App.CRUDCollaborators.closeHistoryModal()"
-            class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-          >
-                <svg class="w-6 h-6" aria-hidden="true"><use href="#icon-close"></use></svg>
-          </button>
-        </div>
-        <div class="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-50 dark:bg-slate-950">
-          <div id="collab-history-list" class="flex flex-col gap-3">
-            <!-- Logs renderizados aqui -->
-          </div>
-        </div>
-        <div
-          class="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 text-right"
-        >
-          <button
-            type="button"
-            onclick="App.CRUDCollaborators.closeHistoryModal()"
-            class="px-6 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
-          >
-            Fechar
-          </button>
-        </div>
-    </dialog>
+    <!-- @include partials/modals/collab-history-modal.html -->
 
     <!-- Logout Modal -->
     <dialog
