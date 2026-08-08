@@ -7,3 +7,6 @@ release/
 # Playwright
 playwright-report/
 test-results/
+
+# Capturas de tela para produção de vídeo (contêm dados pessoais)
+.reels-capturas/
