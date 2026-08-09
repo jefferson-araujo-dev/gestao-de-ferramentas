@@ -92,7 +92,7 @@ export const ResponsiveManager = {
   },
 
   /**
-   * Setup para detecção de swipe (para abrir/fechar sidebar)
+   * Setup para detecção de swipe (apenas para fechar a sidebar)
    */
   setupSwipeHandling: function () {
     let touchStartX = 0;
@@ -123,12 +123,11 @@ export const ResponsiveManager = {
     const diffX = startX - endX;
     const threshold = 50; // Pixel threshold for swipe
 
-    // Swipe da esquerda para direita (abrir sidebar)
-    if (diffX < -threshold && window.innerWidth < this.breakpoints.lg) {
-      if (window.App?.UI) {
-        window.App.UI.setMobileSidebarState(true);
-      }
-    } else if (diffX > threshold && window.innerWidth < this.breakpoints.lg) {
+    // A abertura da sidebar acontece exclusivamente pelo botão hambúrguer.
+    // O swipe da esquerda para a direita foi removido porque o scroll vertical
+    // no iPhone deriva horizontalmente e satisfazia o limite, abrindo a sidebar
+    // sem o usuário pedir.
+    if (diffX > threshold && window.innerWidth < this.breakpoints.lg) {
       // Swipe da direita para esquerda (fechar sidebar)
       if (window.App?.UI) {
         window.App.UI.setMobileSidebarState(false);
