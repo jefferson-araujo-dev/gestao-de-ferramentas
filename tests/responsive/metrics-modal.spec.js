@@ -1,21 +1,44 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('Responsividade do modal de perfil', () => {
-  test('@profile-modal mantém cabeçalho e ações acessíveis', async ({ page }, testInfo) => {
+test.describe('Responsividade do modal de métricas', () => {
+  test('@metrics-modal mantém cabeçalho e ações acessíveis', async ({ page }, testInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(500);
 
     const result = await page.evaluate(async () => {
       const login = document.getElementById('login-screen');
       const app = document.getElementById('main-app');
-      const modal = document.getElementById('profile-modal');
+      const modal = document.getElementById('metrics-modal');
+      const content = document.getElementById('metrics-modal-content');
 
       if (!login || !app || !(modal instanceof HTMLDialogElement)) {
-        throw new Error('Estrutura do modal de perfil não encontrada.');
+        throw new Error('Estrutura do modal de métricas não encontrada.');
+      }
+
+      if (!(content instanceof HTMLElement)) {
+        throw new Error('Container #metrics-modal-content não encontrado.');
       }
 
       login.classList.add('hidden');
       app.classList.remove('hidden');
+
+      // Conteúdo temporário apenas em memória, para exercitar altura realista.
+      // Nada é gravado, nem enviado ao Firebase.
+      const originalContent = content.innerHTML;
+
+      const stub = document.createElement('div');
+      stub.dataset.testStub = 'metrics';
+      stub.className = 'flex flex-col gap-3';
+
+      for (let index = 0; index < 12; index += 1) {
+        const card = document.createElement('div');
+        card.className =
+          'p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800';
+        card.textContent = 'Métrica simulada ' + (index + 1);
+        stub.appendChild(card);
+      }
+
+      content.replaceChildren(stub);
 
       if (modal.open) {
         modal.close();
@@ -35,12 +58,21 @@ test.describe('Responsividade do modal de perfil', () => {
       );
 
       if (parts.length !== 3) {
+        content.innerHTML = originalContent;
         throw new Error(
           'Estrutura inesperada do modal: ' + parts.length + ' blocos.',
         );
       }
 
       const [header, body, footer] = parts;
+
+      if (body !== content) {
+        content.innerHTML = originalContent;
+        throw new Error(
+          'O corpo do modal de métricas não é #metrics-modal-content.',
+        );
+      }
+
       const buttons = [...footer.querySelectorAll('button')];
 
       const rect = (element) => {
@@ -66,36 +98,30 @@ test.describe('Responsividade do modal de perfil', () => {
       const closeButton = header.querySelector('button');
 
       if (!(closeButton instanceof HTMLElement)) {
-        throw new Error('Botão de fechar do perfil não encontrado.');
+        content.innerHTML = originalContent;
+        throw new Error('Botão de fechar das métricas não encontrado.');
       }
 
-      const bodyChildren = [...body.children].filter(
+      const cards = [...stub.children].filter(
         (element) => element instanceof HTMLElement,
       );
-      const firstContent = bodyChildren.find(
-        (element) => element.getBoundingClientRect().height > 0,
-      );
-      const lastContent = [...bodyChildren]
-        .reverse()
-        .find((element) => element.getBoundingClientRect().height > 0);
-
-      if (!firstContent || !lastContent) {
-        throw new Error('Conteúdo do corpo do modal de perfil não encontrado.');
-      }
+      const firstCard = cards[0];
+      const lastCard = cards[cards.length - 1];
 
       const footerBefore = rect(footer);
 
       body.scrollTop = 0;
       await nextFrame();
 
-      const firstReachable = rect(firstContent);
+      const firstReachable = rect(firstCard);
 
       body.scrollTop = body.scrollHeight;
       await nextFrame();
 
-      const lastReachable = rect(lastContent);
+      const lastReachable = rect(lastCard);
+      const scrolled = body.scrollTop;
 
-      return {
+      const payload = {
         viewport: {
           width: document.documentElement.clientWidth,
           height: window.innerHeight,
@@ -109,15 +135,6 @@ test.describe('Responsividade do modal de perfil', () => {
         },
         header: {
           ...rect(header),
-          avatarExists:
-            document.getElementById('profile-modal-avatar') instanceof
-            HTMLElement,
-          nameExists:
-            document.getElementById('profile-modal-name') instanceof
-            HTMLElement,
-          roleExists:
-            document.getElementById('profile-modal-role') instanceof
-            HTMLElement,
           closeInteractive: hitTest(closeButton),
         },
         body: {
@@ -126,30 +143,13 @@ test.describe('Responsividade do modal de perfil', () => {
           minHeight: getComputedStyle(body).minHeight,
           clientHeight: body.clientHeight,
           scrollHeight: body.scrollHeight,
+          scrolled,
         },
         content: {
           first: firstReachable,
           last: lastReachable,
+          cards: cards.length,
         },
-        infoRows: [
-          'profile-modal-email',
-          'profile-modal-device',
-          'profile-modal-last-login',
-          'profile-modal-account-created',
-        ].map((id) => {
-          const element = document.getElementById(id);
-
-          if (!(element instanceof HTMLElement)) {
-            throw new Error(
-              'Informação obrigatória do perfil não encontrada: ' + id,
-            );
-          }
-
-          return {
-            id,
-            ...rect(element),
-          };
-        }),
         footer: {
           before: footerBefore,
           after: rect(footer),
@@ -160,6 +160,11 @@ test.describe('Responsividade do modal de perfil', () => {
           interactive: hitTest(button),
         })),
       };
+
+      modal.close();
+      content.innerHTML = originalContent;
+
+      return payload;
     });
 
     const context =
@@ -175,23 +180,16 @@ test.describe('Responsividade do modal de perfil', () => {
     expect(result.dialog.overflowY, context).toBe('hidden');
     expect(result.body.overflowY, context).toBe('auto');
     expect(result.body.minHeight, context).toBe('0px');
-    expect(result.body.bottom - result.body.top, context).toBeGreaterThan(100);
+    expect(result.body.bottom - result.body.top, context).toBeGreaterThan(120);
     expect(result.body.scrollHeight, context).toBeGreaterThanOrEqual(
       result.body.clientHeight,
     );
-    expect(result.header.avatarExists, context).toBe(true);
-    expect(result.header.nameExists, context).toBe(true);
-    expect(result.header.roleExists, context).toBe(true);
     expect(result.header.closeInteractive, context).toBe(true);
-    expect(result.buttons, context).toHaveLength(2);
+    expect(result.content.cards, context).toBe(12);
+    expect(result.buttons, context).toHaveLength(1);
 
-    for (const row of result.infoRows) {
-      expect(row.bottom - row.top, context + '\nCampo: ' + row.id).toBeGreaterThan(
-        0,
-      );
-      expect(row.right, context + '\nCampo: ' + row.id).toBeLessThanOrEqual(
-        result.viewport.width + 1,
-      );
+    if (result.body.scrollHeight > result.body.clientHeight) {
+      expect(result.body.scrolled, context).toBeGreaterThan(0);
     }
 
     expect(result.dialog.left, context).toBeGreaterThanOrEqual(-1);

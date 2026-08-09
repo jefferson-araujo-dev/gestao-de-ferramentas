@@ -1,17 +1,17 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('Responsividade do modal de perfil', () => {
-  test('@profile-modal mantém cabeçalho e ações acessíveis', async ({ page }, testInfo) => {
+test.describe('Responsividade do modal de ferramenta', () => {
+  test('@tool-modal mantém cabeçalho e ações acessíveis', async ({ page }, testInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(500);
 
     const result = await page.evaluate(async () => {
       const login = document.getElementById('login-screen');
       const app = document.getElementById('main-app');
-      const modal = document.getElementById('profile-modal');
+      const modal = document.getElementById('crud-modal');
 
       if (!login || !app || !(modal instanceof HTMLDialogElement)) {
-        throw new Error('Estrutura do modal de perfil não encontrada.');
+        throw new Error('Estrutura do modal de ferramenta não encontrada.');
       }
 
       login.classList.add('hidden');
@@ -66,21 +66,19 @@ test.describe('Responsividade do modal de perfil', () => {
       const closeButton = header.querySelector('button');
 
       if (!(closeButton instanceof HTMLElement)) {
-        throw new Error('Botão de fechar do perfil não encontrado.');
+        throw new Error('Botão de fechar da ferramenta não encontrado.');
       }
 
       const bodyChildren = [...body.children].filter(
-        (element) => element instanceof HTMLElement,
+        (element) =>
+          element instanceof HTMLElement &&
+          element.getBoundingClientRect().height > 0,
       );
-      const firstContent = bodyChildren.find(
-        (element) => element.getBoundingClientRect().height > 0,
-      );
-      const lastContent = [...bodyChildren]
-        .reverse()
-        .find((element) => element.getBoundingClientRect().height > 0);
+      const firstContent = bodyChildren[0];
+      const lastContent = bodyChildren[bodyChildren.length - 1];
 
       if (!firstContent || !lastContent) {
-        throw new Error('Conteúdo do corpo do modal de perfil não encontrado.');
+        throw new Error('Conteúdo do corpo do modal de ferramenta não encontrado.');
       }
 
       const footerBefore = rect(footer);
@@ -94,6 +92,7 @@ test.describe('Responsividade do modal de perfil', () => {
       await nextFrame();
 
       const lastReachable = rect(lastContent);
+      const scrolled = body.scrollTop;
 
       return {
         viewport: {
@@ -109,15 +108,6 @@ test.describe('Responsividade do modal de perfil', () => {
         },
         header: {
           ...rect(header),
-          avatarExists:
-            document.getElementById('profile-modal-avatar') instanceof
-            HTMLElement,
-          nameExists:
-            document.getElementById('profile-modal-name') instanceof
-            HTMLElement,
-          roleExists:
-            document.getElementById('profile-modal-role') instanceof
-            HTMLElement,
           closeInteractive: hitTest(closeButton),
         },
         body: {
@@ -126,22 +116,24 @@ test.describe('Responsividade do modal de perfil', () => {
           minHeight: getComputedStyle(body).minHeight,
           clientHeight: body.clientHeight,
           scrollHeight: body.scrollHeight,
+          scrolled,
         },
         content: {
           first: firstReachable,
           last: lastReachable,
         },
-        infoRows: [
-          'profile-modal-email',
-          'profile-modal-device',
-          'profile-modal-last-login',
-          'profile-modal-account-created',
+        fields: [
+          'crud-next-maintenance',
+          'crud-notes',
+          'crud-code',
+          'crud-category',
+          'crud-name',
         ].map((id) => {
           const element = document.getElementById(id);
 
           if (!(element instanceof HTMLElement)) {
             throw new Error(
-              'Informação obrigatória do perfil não encontrada: ' + id,
+              'Campo obrigatório da ferramenta não encontrado: ' + id,
             );
           }
 
@@ -150,6 +142,15 @@ test.describe('Responsividade do modal de perfil', () => {
             ...rect(element),
           };
         }),
+        previewExists:
+          document.getElementById('crud-image-preview') instanceof
+          HTMLImageElement,
+        manualInputExists:
+          document.getElementById('crud-manual') instanceof HTMLInputElement,
+        imageInputExists:
+          document.getElementById('crud-image') instanceof HTMLInputElement,
+        saveButtonExists:
+          document.getElementById('btn-save-tool') instanceof HTMLElement,
         footer: {
           before: footerBefore,
           after: rect(footer),
@@ -175,23 +176,30 @@ test.describe('Responsividade do modal de perfil', () => {
     expect(result.dialog.overflowY, context).toBe('hidden');
     expect(result.body.overflowY, context).toBe('auto');
     expect(result.body.minHeight, context).toBe('0px');
-    expect(result.body.bottom - result.body.top, context).toBeGreaterThan(100);
+    expect(result.body.bottom - result.body.top, context).toBeGreaterThan(150);
     expect(result.body.scrollHeight, context).toBeGreaterThanOrEqual(
       result.body.clientHeight,
     );
-    expect(result.header.avatarExists, context).toBe(true);
-    expect(result.header.nameExists, context).toBe(true);
-    expect(result.header.roleExists, context).toBe(true);
     expect(result.header.closeInteractive, context).toBe(true);
+    expect(result.previewExists, context).toBe(true);
+    expect(result.manualInputExists, context).toBe(true);
+    expect(result.imageInputExists, context).toBe(true);
+    expect(result.saveButtonExists, context).toBe(true);
     expect(result.buttons, context).toHaveLength(2);
 
-    for (const row of result.infoRows) {
-      expect(row.bottom - row.top, context + '\nCampo: ' + row.id).toBeGreaterThan(
-        0,
-      );
-      expect(row.right, context + '\nCampo: ' + row.id).toBeLessThanOrEqual(
-        result.viewport.width + 1,
-      );
+    if (result.body.scrollHeight > result.body.clientHeight) {
+      expect(result.body.scrolled, context).toBeGreaterThan(0);
+    }
+
+    for (const field of result.fields) {
+      expect(
+        field.bottom - field.top,
+        context + '\nCampo: ' + field.id,
+      ).toBeGreaterThanOrEqual(38);
+      expect(
+        field.right,
+        context + '\nCampo: ' + field.id,
+      ).toBeLessThanOrEqual(result.viewport.width + 1);
     }
 
     expect(result.dialog.left, context).toBeGreaterThanOrEqual(-1);
