@@ -13,6 +13,9 @@ test-results/
 # Configuração local de ferramentas de IA/editor (não usada pelo projeto)
 .qwen/
 
+# Configuração local do editor Cursor
+.cursor/
+
 # Vínculo local com o projeto Vercel (não deve ser compartilhado)
 .vercel/
 
