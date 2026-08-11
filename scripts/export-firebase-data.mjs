@@ -5,7 +5,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import fs from "fs";
-import { FIREBASE_CONFIG, DB_BASE_PATH, COLLECTIONS } from "./src/js/config/constants.js";
+import { FIREBASE_CONFIG, DB_BASE_PATH, COLLECTIONS } from "../src/js/config/constants.js";
 
 async function exportFirebaseData() {
   console.log("📊 Lendo dados do Firebase...\n");

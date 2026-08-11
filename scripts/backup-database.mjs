@@ -1,5 +1,5 @@
 // Script para backup completo do Firebase Firestore para JSON
-// Executar: node backup-database.mjs
+// Executar: npm run backup
 
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs } from "firebase/firestore";
@@ -11,7 +11,7 @@ import {
   FIREBASE_CONFIG,
   DB_BASE_PATH,
   COLLECTIONS,
-} from "./src/js/config/constants.js";
+} from "../src/js/config/constants.js";
 
 dotenv.config();
 
