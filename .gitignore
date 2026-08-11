@@ -2,7 +2,6 @@ node_modules
 dist
 .env
 .env.*
-release/
 
 # Playwright
 playwright-report/
@@ -10,3 +9,12 @@ test-results/
 
 # Capturas de tela para produção de vídeo (contêm dados pessoais)
 .reels-capturas/
+
+# Configuração local de ferramentas de IA/editor (não usada pelo projeto)
+.qwen/
+
+# Vínculo local com o projeto Vercel (não deve ser compartilhado)
+.vercel/
+
+# Pacote de extensão do VS Code adicionado acidentalmente ao repositório
+Microsoft.VisualStudio.Services.VSIXPackage
