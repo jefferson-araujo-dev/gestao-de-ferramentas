@@ -111,7 +111,7 @@ gestao-de-ferramentas-v3/
 
 ### **ARCHITECTURE.md**
 
-Leia o arquivo [`ARCHITECTURE.md`](ARCHITECTURE.md) para:
+Leia o arquivo [`ARCHITECTURE.md`](../architecture/ARCHITECTURE.md) para:
 - Documentação completa de cada módulo
 - Exemplos de uso detalhados
 - Patterns de design aplicados
@@ -120,7 +120,7 @@ Leia o arquivo [`ARCHITECTURE.md`](ARCHITECTURE.md) para:
 
 ### **MIGRATION_GUIDE.js**
 
-Leia o arquivo [`MIGRATION_GUIDE.js`](MIGRATION_GUIDE.js) para:
+Leia o arquivo [`MIGRATION_GUIDE.js`](../migrations/MIGRATION_GUIDE.js) para:
 - Exemplos práticos de integração
 - Como migrar código existente gradualmente
 - Uso de cada novo módulo
@@ -375,8 +375,8 @@ notifications.success('Mensagem');
 
 ### Documentação
 
-- 📘 [ARCHITECTURE.md](ARCHITECTURE.md) - Documentação completa da arquitetura
-- 📗 [MIGRATION_GUIDE.js](MIGRATION_GUIDE.js) - Guia de migração com exemplos
+- 📘 [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) - Documentação completa da arquitetura
+- 📗 [MIGRATION_GUIDE.js](../migrations/MIGRATION_GUIDE.js) - Guia de migração com exemplos
 - 📕 README.md (este arquivo) - Visão geral
 
 ### Patterns de Design

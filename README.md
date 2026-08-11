@@ -284,13 +284,13 @@ A versão `v3.1.0` foi validada com:
 O repositório também contém:
 
 ```text
-ARCHITECTURE.md
-AUDIT-REPORT.md
-CHANGELOG.md
-CHANGELOG-ADVANCED.md
-OVERVIEW.md
-README-IMPROVEMENTS.md
-RESPONSIVIDADE.md
+docs/architecture/ARCHITECTURE.md
+docs/audits/AUDIT-REPORT-2026-04-13.md
+docs/archive/CHANGELOG-layout-2026-04-13.md
+docs/archive/CHANGELOG-ADVANCED.md
+docs/archive/OVERVIEW.md
+docs/archive/README-IMPROVEMENTS.md
+docs/responsive/RESPONSIVIDADE.md
 ```
 
 Esses documentos podem registrar decisões técnicas, auditorias e melhorias históricas do projeto.
