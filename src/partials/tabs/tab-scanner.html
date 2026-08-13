@@ -1,0 +1,463 @@
+<section id="tab-scanner" aria-labelledby="topbar-title" class="tab-content hidden">
+  <div class="max-w-4xl mx-auto">
+    <div
+      class="panel-card overflow-hidden shadow-lg"
+    >
+      <!-- Header com gradiente -->
+      <div
+        class="bg-gradient-to-r from-slate-900 to-slate-800 p-3 sm:p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div class="flex flex-wrap gap-2 w-full sm:w-auto items-center">
+          <button
+            id="btn-mode-usb"
+            type="button"
+            onclick="App.Scanner.setMode('usb')"
+            class="btn btn-primary w-full sm:w-auto px-3 sm:px-4 py-2.5 text-sm min-h-11 hover:scale-105 active:scale-95"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="mr-1.5 shrink-0"
+            >
+              <path d="M10 17l-5-5 5-5" />
+              <path d="M17 17l-5-5 5-5" />
+            </svg>
+            USB
+          </button>
+          <button
+            id="btn-mode-cam"
+            type="button"
+            onclick="App.Scanner.setMode('cam')"
+            class="btn btn-secondary w-full sm:w-auto px-3 sm:px-4 py-2.5 text-sm min-h-11 hover:scale-105 active:scale-95"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="mr-1.5 shrink-0"
+            >
+              <path
+                d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"
+              />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
+            Câmera
+          </button>
+        </div>
+        <div
+          class="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-center sm:justify-end gap-2 sm:gap-3"
+        >
+          <!-- Indicador de status contextual -->
+          <div
+            class="w-full sm:w-auto flex items-center justify-center sm:justify-start gap-2 rounded-xl bg-white/5 px-4 sm:px-3 py-2.5 sm:py-2 text-[11px] sm:text-xs font-mono text-center sm:text-left"
+            id="scanner-status-indicator"
+          >
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="scanner-status-text" class="text-slate-300 leading-relaxed" aria-live="polite">
+              Aguardando leitura via USB</span
+            >
+          </div>
+        </div>
+      </div>
+      <div class="p-6 min-h-[400px] flex flex-col items-center justify-center relative">
+        <div id="scanner-waiting" class="text-center space-y-6">
+          <div
+            class="w-24 h-24 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 rounded-full flex items-center justify-center mx-auto scanner-icon"
+          >
+            <svg
+              class="w-10 h-10"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+              <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+              <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+              <rect width="14" height="14" x="5" y="5" rx="2" />
+            </svg>
+          </div>
+          <h3 class="text-xl font-extrabold text-slate-900 dark:text-white">
+            Leitura Rápida
+          </h3>
+          <p class="text-slate-500 max-w-xs mx-auto" id="scanner-instruction-text">
+            Conecte o leitor USB e aponte para o código QR.
+          </p>
+          <div class="max-w-xs mx-auto">
+            <input
+              id="manual-scan-input"
+              type="text"
+              placeholder="Ou digite o código..."
+              class="scanner-input w-full px-4 py-3 text-center text-lg font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
+            />
+          </div>
+        </div>
+        <div
+          id="mode-cam-container"
+          class="hidden-tab absolute inset-0 bg-black z-10 flex flex-col"
+        >
+          <div id="reader" class="flex-1 overflow-hidden"></div>
+          <button
+            id="btn-toggle-torch"
+            type="button"
+            onclick="App.Scanner.toggleTorch()"
+            class="absolute top-4 right-16 z-20 p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-full transition-colors"
+            title="Ligar/Desligar Lanterna"
+          >
+            <svg
+              id="torch-icon"
+              class="w-5 h-5 transition-colors"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path
+                d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.3 1.5 1.5 2.5"
+              />
+              <path d="M9 18h6" />
+              <path d="M10 22h4" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onclick="App.Scanner.setMode('usb')"
+            class="absolute top-4 right-4 z-20 p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-full"
+          >
+            <svg
+              class="w-5 h-5"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+        <div
+  id="scanner-result"
+  class="hidden w-full max-w-lg text-center space-y-6 animate-fade-in"
+        >
+          <div
+            id="scanner-line-indicator"
+            class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-500 via-indigo-500 to-brand-500"
+          ></div>
+          <div id="res-image-container" class="flex justify-center"></div>
+          <div>
+            <h3
+              id="res-name"
+              class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight"
+            ></h3>
+            <p
+              id="res-code"
+              class="text-sm font-mono font-bold text-brand-600 dark:text-brand-400 mt-1"
+            ></p>
+          </div>
+          <div class="flex items-center justify-center gap-3">
+            <span class="text-xs font-bold text-slate-400 uppercase">Categoria:</span>
+            <span
+              id="res-category"
+              class="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-bold text-slate-600 dark:text-slate-300"
+            ></span>
+          </div>
+          <div id="res-badge-container" class="flex justify-center"></div>
+  <div id="scanner-status-box" class="hidden"></div>
+          <div
+    id="scanner-checkout"
+    class="hidden bg-emerald-50 dark:bg-emerald-900/20 p-6 rounded-2xl border border-emerald-100 dark:border-emerald-900"
+          >
+            <p class="text-sm font-bold text-emerald-800 dark:text-emerald-300 mb-3">
+              Autorizar Retirada Para:
+            </p>
+            <input
+              id="checkout-user-badge"
+              type="text"
+              placeholder="Crachá ou Nome do Colaborador"
+              class="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-xl text-center font-bold mb-4 outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            <button
+              type="button"
+              onclick="App.Scanner.processCheckout()"
+              class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+            >
+              Confirmar Empréstimo
+            </button>
+          </div>
+          <div
+    id="scanner-return"
+    class="hidden bg-amber-50 dark:bg-amber-900/20 p-6 rounded-2xl border border-amber-100 dark:border-amber-900"
+          >
+            <p class="text-sm font-bold text-amber-800 dark:text-amber-300 mb-3">
+              Ferramenta Emprestada
+            </p>
+            <p
+              id="return-user-info"
+              class="text-xs text-amber-700 dark:text-amber-400 mb-4"
+            ></p>
+            <div class="grid grid-cols-2 gap-2 sm:gap-3">
+              <button
+                type="button"
+                onclick="App.Scanner.reset()"
+                class="w-full py-3 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 font-bold rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onclick="App.Scanner.processReturn()"
+                class="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg shadow-amber-600/30 transition-all active:scale-95"
+              >
+                Devolver
+              </button>
+            </div>
+          </div>
+          <div
+    id="scanner-processing"
+    class="hidden flex items-center justify-center gap-3 py-4"
+          >
+            <svg
+              class="w-6 h-6 animate-spin text-brand-600"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            <span class="font-bold text-slate-600 dark:text-slate-400"
+              >Processando...</span
+            >
+          </div>
+
+          <!-- Ações Rápidas Após Leitura -->
+          <div
+    id="scanner-quick-actions"
+    class="hidden mt-6 pt-6 border-t border-slate-200 dark:border-slate-700"
+          >
+            <p class="text-xs font-bold text-slate-500 uppercase mb-3 text-center">
+              Ações Rápidas
+            </p>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <button
+                id="btn-action-loan"
+                type="button"
+                onclick="App.Scanner.quickAction('loan')"
+                class="w-full px-2 sm:px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-[13px] sm:text-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+              >
+                <svg
+                  class="w-4 h-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M7 10h14l-4-4" />
+                  <path d="M17 14H3l4 4" />
+                </svg>
+                Emprestar
+              </button>
+              <button
+                id="btn-action-return"
+                type="button"
+                onclick="App.Scanner.quickAction('return')"
+                class="w-full px-2 sm:px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-[13px] sm:text-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+              >
+                <svg
+                  class="w-4 h-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                  <polyline points="10 17 15 12 10 7" />
+                  <line x1="15" x2="3" y1="12" y2="12" />
+                </svg>
+                Devolver
+              </button>
+              <button
+                type="button"
+                onclick="App.Scanner.quickAction('details')"
+                class="w-full col-span-2 sm:col-span-1 px-2 sm:px-4 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-[13px] sm:text-sm transition-all hover:scale-105 active:scale-95 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center gap-1.5"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
+                Detalhes
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid Unificado de Estatísticas e Leituras Recentes -->
+      <div
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mt-6 items-stretch"
+      >
+        <!-- Histórico de Leituras Recentes -->
+        <div
+          class="sm:col-span-2 lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 flex flex-col min-h-[250px]"
+          id="recent-scans-container"
+        >
+          <h4
+            class="text-sm md:text-base font-bold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2 shrink-0"
+          >
+            <svg
+              class="w-4 h-4"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Últimas Leituras
+          </h4>
+          <div class="space-y-2 overflow-y-auto flex-1 pr-1" id="recent-scans-list">
+            <div class="text-center py-4 text-slate-400 text-xs">
+              Nenhuma leitura realizada ainda
+            </div>
+          </div>
+        </div>
+
+        <!-- Leituras Hoje -->
+        <div
+          class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 flex flex-col items-center justify-center text-center gap-3 hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+        >
+          <div
+            class="w-12 h-12 bg-brand-50 dark:bg-brand-900/20 rounded-xl flex items-center justify-center text-brand-500 shrink-0"
+          >
+            <svg class="w-6 h-6" aria-hidden="true"><use href="#icon-plus"></use></svg>
+          </div>
+          <div>
+            <p
+              class="text-3xl font-black text-brand-600 leading-none"
+              id="stat-scans-today"
+            >
+              0
+            </p>
+            <p
+              class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider mt-2"
+            >
+              Leituras Hoje
+            </p>
+          </div>
+        </div>
+
+        <!-- Taxa de Sucesso -->
+        <div
+          class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 flex flex-col items-center justify-center text-center gap-3 hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+        >
+          <div
+            class="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center text-emerald-500 shrink-0"
+          >
+            <svg
+              class="w-6 h-6"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          </div>
+          <div>
+            <p
+              class="text-3xl font-black text-emerald-600 leading-none"
+              id="stat-success-rate"
+            >
+              100%
+            </p>
+            <p
+              class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider mt-2"
+            >
+              Taxa Sucesso
+            </p>
+          </div>
+        </div>
+
+        <!-- Tempo Médio -->
+        <div
+          class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 flex flex-col items-center justify-center text-center gap-3 hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+        >
+          <div
+            class="w-12 h-12 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-center justify-center text-amber-500 shrink-0"
+          >
+            <svg
+              class="w-6 h-6"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="m12 6-4 6h8l-4 6" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-3xl font-black text-amber-600 leading-none" id="stat-avg-time">
+              --
+            </p>
+            <p
+              class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider mt-2"
+            >
+              Tempo Médio
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <input
+        id="hidden-scanner"
+        type="text"
+        class="absolute opacity-0 -z-10"
+        autocomplete="off"
+      />
+    </div>
+  </div>
+</section>
