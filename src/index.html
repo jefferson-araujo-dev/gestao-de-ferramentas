@@ -3238,23 +3238,7 @@
     </dialog>
 
     <!-- Image Lightbox -->
-    <dialog
-      id="image-lightbox"
-      class="p-4 bg-transparent backdrop:bg-black/90 backdrop:backdrop-blur-sm"
-      onclick="App.UI.closeImagePreview()"
-    >
-      <img
-        id="lightbox-img"
-        src=""
-        class="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
-        onclick="event.stopPropagation()"
-      />
-      <p
-        id="lightbox-caption"
-        class="absolute bottom-8 left-0 right-0 text-center text-white font-bold text-lg drop-shadow-lg"
-        onclick="event.stopPropagation()"
-      ></p>
-    </dialog>
+    <!-- @include partials/modals/image-lightbox.html -->
 
     <!-- App Logic -->
     <script type="module" src="./js/app.js"></script>
