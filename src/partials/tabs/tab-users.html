@@ -1,0 +1,210 @@
+<section id="tab-users" aria-labelledby="topbar-title" class="tab-content hidden space-y-6">
+  <div class="panel-card panel-content">
+    <!-- Header com contadores e ações -->
+    <div class="grid gap-4 lg:grid-cols-[minmax(240px,1fr)_auto] items-start">
+    <div class="min-w-0">
+      <h3 class="text-2xl font-extrabold text-slate-900 dark:text-white">
+        Controle de Acesso e Usuários
+      </h3>
+      <p class="text-slate-500 dark:text-slate-400 mt-1">
+        Gerencie os colaboradores do sistema, atribua permissões e controle acessos.
+      </p>
+    </div>
+    <div class="min-w-0 space-y-3">
+      <div class="responsive-action-bar flex flex-wrap justify-start lg:justify-end gap-2 items-center pb-1 w-full lg:w-auto min-w-0 max-w-full">
+      <button
+        type="button"
+        onclick="App.CRUDUsers.exportExcel()"
+        class="btn px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
+      >
+        <svg class="w-4 h-4" aria-hidden="true"><use href="#icon-download"></use></svg>
+        Exportar
+      </button>
+      <button
+        type="button"
+        onclick="document.getElementById('crud-import-input-user').click()"
+        class="btn px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
+      >
+          <svg class="w-4 h-4 shrink-0" aria-hidden="true"><use href="#icon-import"></use></svg>
+          Importar
+        </button>
+        <button
+          type="button"
+          onclick="App.CRUDUsers.openModal()"
+        class="btn px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold shadow-md shadow-brand-600/20 transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
+        >
+          <svg class="w-4 h-4 shrink-0" aria-hidden="true"><use href="#icon-plus"></use></svg>
+      Novo
+        </button>
+      </div>
+      <input
+        type="file"
+        id="crud-import-input-user"
+        class="hidden"
+        accept=".xlsx, .xls"
+        onchange="App.CRUDUsers.importFile(event)"
+      />
+    </div>
+    </div>
+    <!-- Contadores de Usuários -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="users-counters">
+      <div
+        class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3"
+      >
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</p>
+        <p class="text-xl font-extrabold text-slate-900 dark:text-white" id="count-total">
+          -
+        </p>
+      </div>
+      <div
+        class="bg-white dark:bg-slate-900 rounded-xl border border-emerald-200 dark:border-emerald-800 p-3"
+      >
+        <p
+          class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider"
+        >
+          Ativos
+        </p>
+        <p
+          class="text-xl font-extrabold text-emerald-600 dark:text-emerald-400"
+          id="count-active"
+        >
+          -
+        </p>
+      </div>
+      <div
+        class="bg-white dark:bg-slate-900 rounded-xl border border-purple-200 dark:border-purple-800 p-3"
+      >
+        <p
+          class="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider"
+        >
+          Admins
+        </p>
+        <p
+          class="text-xl font-extrabold text-purple-600 dark:text-purple-400"
+          id="count-admins"
+        >
+          -
+        </p>
+      </div>
+      <div
+        class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-3"
+      >
+        <p
+          class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
+        >
+          Usuários
+        </p>
+        <p
+          class="text-xl font-extrabold text-slate-600 dark:text-slate-300"
+          id="count-users"
+        >
+          -
+        </p>
+      </div>
+    </div>
+  </div>
+  <!-- Barra de busca e filtros -->
+  <div class="space-y-3">
+    <div class="relative">
+      <svg
+            class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true"
+          ><use href="#icon-search"></use></svg>
+      <input
+        id="users-search"
+        type="text"
+        placeholder="Buscar por nome, e-mail ou departamento..."
+        class="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl outline-none text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all shadow-sm"
+        oninput="App.CRUDUsers.applyFilters()"
+      />
+    </div>
+    <!-- Filtros por Nível de Acesso -->
+    <div class="flex flex-wrap gap-2" id="users-filters">
+      <button
+        type="button"
+        onclick="App.CRUDUsers.setAccessFilter('all')"
+        class="filter-btn active px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border"
+        data-filter="all"
+      >
+        Todos
+      </button>
+      <button
+        type="button"
+        onclick="App.CRUDUsers.setAccessFilter('Administrador')"
+        class="filter-btn px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-300"
+        data-filter="Administrador"
+      >
+        Administradores
+      </button>
+      <button
+        type="button"
+        onclick="App.CRUDUsers.setAccessFilter('Usuario Padrao')"
+        class="filter-btn px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+        data-filter="Usuario Padrao"
+      >
+        Usuários Padrão
+      </button>
+      <button
+        type="button"
+        onclick="App.CRUDUsers.setAccessFilter('Ativo')"
+        class="filter-btn px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-300"
+        data-filter="Ativo"
+      >
+        Ativos
+      </button>
+      <button
+        type="button"
+        onclick="App.CRUDUsers.setAccessFilter('Inativo')"
+        class="filter-btn px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-rose-300"
+        data-filter="Inativo"
+      >
+        Inativos
+      </button>
+    </div>
+    <!-- Controles de Ordenação -->
+    <div
+      class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700"
+    >
+      <span
+        class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
+        >Ordenar:</span
+      >
+      <button
+        type="button"
+        onclick="App.CRUDUsers.setSort('name')"
+        class="sort-btn px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300"
+        data-sort="name"
+      >
+        Nome <span class="sort-indicator"></span>
+      </button>
+      <button
+        type="button"
+        onclick="App.CRUDUsers.setSort('email')"
+        class="sort-btn px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300"
+        data-sort="email"
+      >
+        Email <span class="sort-indicator"></span>
+      </button>
+      <button
+        type="button"
+        onclick="App.CRUDUsers.setSort('lastLogin')"
+        class="sort-btn px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300"
+        data-sort="lastLogin"
+      >
+        Último Login <span class="sort-indicator"></span>
+      </button>
+      <button
+        type="button"
+        onclick="App.CRUDUsers.setSort('status')"
+        class="sort-btn px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300"
+        data-sort="status"
+      >
+        Status <span class="sort-indicator"></span>
+      </button>
+    </div>
+  </div>
+
+  <div
+    id="user-management-body"
+    class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+  ></div>
+</section>
