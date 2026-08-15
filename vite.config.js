@@ -1,3 +1,5 @@
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -22,7 +24,7 @@ export default defineConfig({
       },
     }),
   ],
-  root: 'src',
+  root: realpathSync.native(fileURLToPath(new URL('./src', import.meta.url))),
   publicDir: '../public',
   build: {
     outDir: '../dist',
