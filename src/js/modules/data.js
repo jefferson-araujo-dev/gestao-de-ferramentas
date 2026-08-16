@@ -347,41 +347,68 @@ export const AppData = {
       ];
 
       let totalRestored = 0;
+      let usersRestoreBlocked = false;
+      const failedCollections = [];
 
       for (const colName of collections) {
         if (!backupData.data[colName]) {
           continue;
         }
 
-        const colRef = collection(db, DB_BASE_PATH, colName);
+        try {
+          const colRef = collection(db, DB_BASE_PATH, colName);
 
-        // Limpar coleção atual
-        const existingSnapshot = await getDocs(colRef);
-        const deletePromises = [];
-        existingSnapshot.forEach((d) => {
-          deletePromises.push(deleteDoc(doc(db, DB_BASE_PATH, colName, d.id)));
-        });
-        await Promise.all(deletePromises);
+          // Limpar coleção atual
+          const existingSnapshot = await getDocs(colRef);
+          const deletePromises = [];
+          existingSnapshot.forEach((d) => {
+            deletePromises.push(deleteDoc(doc(db, DB_BASE_PATH, colName, d.id)));
+          });
+          await Promise.all(deletePromises);
 
-        // Restaurar dados do backup
-        const restorePromises = [];
-        backupData.data[colName].forEach((item) => {
-          const { id, ...data } = item;
-          restorePromises.push(setDoc(doc(db, DB_BASE_PATH, colName, id), data));
-        });
-        await Promise.all(restorePromises);
+          // Restaurar dados do backup
+          const restorePromises = [];
+          backupData.data[colName].forEach((item) => {
+            const { id, ...data } = item;
+            restorePromises.push(setDoc(doc(db, DB_BASE_PATH, colName, id), data));
+          });
+          await Promise.all(restorePromises);
 
-        totalRestored += backupData.data[colName].length;
-        console.info(
-          `Coleção ${colName} restaurada: ${backupData.data[colName].length} registros.`
+          totalRestored += backupData.data[colName].length;
+          console.info(
+            `Coleção ${colName} restaurada: ${backupData.data[colName].length} registros.`
+          );
+        } catch (colError) {
+          if (colName === COLLECTIONS.USERS) {
+            usersRestoreBlocked = true;
+            console.warn(`Coleção ${colName} não pôde ser restaurada:`, colError);
+          } else {
+            failedCollections.push(colName);
+            console.error(`Falha ao restaurar a coleção ${colName}:`, colError);
+            notifications.error(
+              `Falha ao restaurar a coleção "${colName}": ${colError.message || colError}`
+            );
+          }
+        }
+      }
+
+      if (usersRestoreBlocked) {
+        notifications.warning(
+          'A coleção "users" não foi restaurada: por segurança, o Firestore só permite alterar usuários por um processo administrativo (Admin SDK), não pelo navegador. As demais coleções do backup foram processadas normalmente.',
+          { duration: 8000 }
         );
       }
 
-      window.AudioSys.playBeep('success');
-      notifications.success(`Backup restaurado com sucesso! ${totalRestored} registros.`);
+      if (failedCollections.length === 0) {
+        window.AudioSys.playBeep('success');
+        notifications.success(`Backup restaurado com sucesso! ${totalRestored} registros.`);
+      }
 
       // Recarregar dados
       window.App.Data.init();
+    } catch (error) {
+      console.error('Erro ao restaurar backup:', error);
+      notifications.error(`Erro ao restaurar backup: ${error.message || error}`);
     } finally {
       event.target.value = '';
     }
