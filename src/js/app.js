@@ -11,6 +11,7 @@ import {
   clearIndexedDbPersistence
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
+import { notifications } from './core/NotificationManager.js';
 import { AppAuth } from './modules/auth.js';
 import { AppData } from './modules/data.js';
 import { AppUI } from './modules/ui.js';
@@ -119,6 +120,9 @@ window.Logger = Logger;
 window.AudioSys = AudioSys;
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Inicializar container de notificações (toasts), já presente no DOM
+  notifications.init();
+
   // Registrar Service Worker para PWA (Funcionamento Offline)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
