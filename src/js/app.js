@@ -1,6 +1,10 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 import {
+  connectAuthEmulator,
+  getAuth
+} from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+import {
+  connectFirestoreEmulator,
   initializeFirestore,
   persistentLocalCache,
   persistentSingleTabManager,
@@ -58,6 +62,22 @@ export const db = initializeFirestore(firebaseApp, {
     tabManager: persistentSingleTabManager()
   })
 });
+
+// Conexão opt-in com o Firebase Emulator Suite local. Só é ativada quando
+// VITE_USE_FIREBASE_EMULATOR='true' é definida explicitamente no ambiente de
+// build; sem a flag, o comportamento padrão (produção) é preservado.
+if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+  if (!globalThis.__FIREBASE_EMULATOR_CONNECTED__) {
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', {
+      disableWarnings: true
+    });
+    globalThis.__FIREBASE_EMULATOR_CONNECTED__ = true;
+    console.warn(
+      '[dev] Conectado ao Firebase Emulator Suite local (Firestore :8080, Auth :9099).'
+    );
+  }
+}
 
 window.addEventListener('unhandledrejection', async (event) => {
   const msg = event.reason?.message || '';
