@@ -13,7 +13,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const PROJECT_ID = 'gestao-ferramentas-coeng-2026';
+const PROJECT_ID = 'gestao-de-ferramentas-3f8f1';
 const DB_BASE_PATH = `artifacts/${PROJECT_ID}/public/data`;
 
 const ADMIN_EMAIL = 'admin.teste@emulador.local';

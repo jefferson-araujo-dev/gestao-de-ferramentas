@@ -1,6 +1,6 @@
 # Firebase Emulator Suite (ambiente local de teste)
 
-Este projeto tem um único projeto Firebase configurado (`gestao-ferramentas-coeng-2026`), e ele é o de **produção** (ver `README.md`, seção "Produção", e `docs/audits/` para o histórico de homologação). Não existe projeto de staging separado. `npm run dev` sozinho conecta o cliente diretamente a esse projeto de produção — sempre foi assim, e continua sendo o padrão.
+Este projeto tem um único projeto Firebase configurado (`gestao-de-ferramentas-3f8f1`), e ele é o de **produção** (ver `README.md`, seção "Produção", e `docs/audits/` para o histórico de homologação). Não existe projeto de staging separado. `npm run dev` sozinho conecta o cliente diretamente a esse projeto de produção — sempre foi assim, e continua sendo o padrão.
 
 Este documento descreve como rodar a aplicação inteira (cliente + APIs) contra um **Firebase Emulator Suite local** (Firestore + Auth), como alternativa opt-in, sem tocar em dados reais. Isso é pré-requisito para retomar o Gate 17 — Fase 1 (validação de fluxos de negócio reais).
 
@@ -14,7 +14,7 @@ O Firestore Emulator e o Auth Emulator do Firebase são processos Java. É neces
 npm run emulators
 ```
 
-Isso inicia o Firestore Emulator na porta `8080`, o Auth Emulator na porta `9099`, e a UI do emulador em `http://127.0.0.1:4000` (configurado em `firebase.json`). Usa o projeto `gestao-ferramentas-coeng-2026` (definido em `.firebaserc`), mas **inteiramente local** — nenhuma chamada chega ao Firebase real.
+Isso inicia o Firestore Emulator na porta `8080`, o Auth Emulator na porta `9099`, e a UI do emulador em `http://127.0.0.1:4000` (configurado em `firebase.json`). Usa o projeto `gestao-de-ferramentas-3f8f1` (definido em `.firebaserc`), mas **inteiramente local** — nenhuma chamada chega ao Firebase real.
 
 ## Populando dados de teste
 

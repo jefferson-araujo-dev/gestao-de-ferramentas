@@ -7,7 +7,7 @@ service cloud.firestore {
     }
 
     function userProfilePath() {
-      return /databases/$(database)/documents/artifacts/gestao-ferramentas-coeng-2026/public/data/users/$(request.auth.uid);
+      return /databases/$(database)/documents/artifacts/gestao-de-ferramentas-3f8f1/public/data/users/$(request.auth.uid);
     }
 
     function hasActiveProfile() {
@@ -21,24 +21,24 @@ service cloud.firestore {
         && get(userProfilePath()).data.accessLevel == 'Administrador';
     }
 
-    match /artifacts/gestao-ferramentas-coeng-2026/public/data/users/{userId} {
+    match /artifacts/gestao-de-ferramentas-3f8f1/public/data/users/{userId} {
       allow get: if signedIn()
         && (userId == request.auth.uid || isAdmin());
       allow list: if isAdmin();
       allow create, update, delete: if false;
     }
 
-    match /artifacts/gestao-ferramentas-coeng-2026/public/data/tools/{toolId} {
+    match /artifacts/gestao-de-ferramentas-3f8f1/public/data/tools/{toolId} {
       allow read: if hasActiveProfile();
       allow write: if isAdmin();
     }
 
-    match /artifacts/gestao-ferramentas-coeng-2026/public/data/collaborators/{collaboratorId} {
+    match /artifacts/gestao-de-ferramentas-3f8f1/public/data/collaborators/{collaboratorId} {
       allow read: if hasActiveProfile();
       allow write: if isAdmin();
     }
 
-    match /artifacts/gestao-ferramentas-coeng-2026/public/data/history/{historyId} {
+    match /artifacts/gestao-de-ferramentas-3f8f1/public/data/history/{historyId} {
       allow read, write: if isAdmin();
     }
 

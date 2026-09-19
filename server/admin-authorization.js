@@ -1,7 +1,7 @@
 import { adminAuth, adminDb } from './firebase-admin.js';
 
 export const USERS_COLLECTION_PATH =
-  'artifacts/gestao-ferramentas-coeng-2026/public/data/users';
+  'artifacts/gestao-de-ferramentas-3f8f1/public/data/users';
 
 function createHttpError(statusCode, message) {
   const error = new Error(message);

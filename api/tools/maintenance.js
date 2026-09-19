@@ -5,7 +5,7 @@ import {
 } from '../../server/admin-authorization.js';
 
 const DB_BASE_PATH =
-  'artifacts/gestao-ferramentas-coeng-2026/public/data';
+  'artifacts/gestao-de-ferramentas-3f8f1/public/data';
 const TOOLS_COLLECTION_PATH = `${DB_BASE_PATH}/tools`;
 const HISTORY_COLLECTION_PATH = `${DB_BASE_PATH}/history`;
 

@@ -19,7 +19,7 @@
  * @type {AppConfig}
  */
 export const CONFIG = Object.freeze({
-  APP_ID: 'gestao-ferramentas-coeng-2026',
+  APP_ID: 'gestao-de-ferramentas-3f8f1',
   TIMEOUT_MS: 8000,
   SESSION_LIMIT_MS: 1209600000, // 14 dias
   IMAGE_QUALITY: 0.6,
@@ -48,12 +48,12 @@ export const CONFIG = Object.freeze({
  * @type {FirebaseConfig}
  */
 export const FIREBASE_CONFIG = Object.freeze({
-  apiKey: 'AIzaSyBABhQgRW4CELN62ITlLxRBSrT1AfQ2fPI',
-  authDomain: 'gestao-ferramentas-coeng-2026.firebaseapp.com',
-  projectId: 'gestao-ferramentas-coeng-2026',
-  storageBucket: 'gestao-ferramentas-coeng-2026.firebasestorage.app',
-  messagingSenderId: '498524753209',
-  appId: '1:498524753209:web:6068df61e9b35a9b4cece8'
+  apiKey: 'AIzaSyDfwvy6xS1kmN7hqbf26OUZFxHvOyrkUGQ',
+  authDomain: 'gestao-de-ferramentas-3f8f1.firebaseapp.com',
+  projectId: 'gestao-de-ferramentas-3f8f1',
+  storageBucket: 'gestao-de-ferramentas-3f8f1.firebasestorage.app',
+  messagingSenderId: '972907514604',
+  appId: '1:972907514604:web:dc80495f6413604f5bf3c9'
 });
 
 /**
