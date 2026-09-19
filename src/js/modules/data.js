@@ -423,7 +423,7 @@ export const AppData = {
       notifications.info('Carregando motor de planilhas...');
       try {
         await window.Utils.loadScript(
-          'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+          'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'
         );
       } catch {
         return notifications.error('Erro ao carregar o motor.');
@@ -481,7 +481,7 @@ export const AppData = {
       // Carrega biblioteca XLSX se necessário
       if (!window.XLSX) {
         await window.Utils?.loadScript?.(
-          'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+          'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'
         );
       }
 

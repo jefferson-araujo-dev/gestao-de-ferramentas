@@ -86,7 +86,7 @@ export const COLLECTIONS = Object.freeze({
  * @type {CDNResources}
  */
 export const CDN_URLS = Object.freeze({
-  XLSX: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  XLSX: 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
   JSPDF: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   QR_CODE: 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js',
   CHART_JS: 'https://cdn.jsdelivr.net/npm/chart.js'
