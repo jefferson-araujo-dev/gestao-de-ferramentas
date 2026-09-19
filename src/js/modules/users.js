@@ -1,4 +1,5 @@
 import { auth } from '../app.js';
+import { formatDateTime } from '../utils/dateFormat.js';
 
 async function requestUsersApi(endpoint, method, body) {
   const currentUser = auth.currentUser;
@@ -1008,7 +1009,7 @@ export const AppCRUDUsers = {
       'Nivel de Acesso': u.accessLevel || 'Usuário Padrão',
       Status: u.status || 'Ativo',
       Departamento: u.department || '-',
-      'Criado em': u.createdAt ? new Date(u.createdAt).toLocaleString('pt-BR') : '-'
+      'Criado em': formatDateTime(u.createdAt)
     }));
     const ws = window.XLSX.utils.json_to_sheet(data);
     const wb = window.XLSX.utils.book_new();
