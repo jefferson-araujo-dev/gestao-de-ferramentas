@@ -792,7 +792,7 @@ Para contribuir com melhorias:
 
 ## 📄 Licença
 
-Sistema proprietário - COENG © 2026
+Sistema proprietário © 2026
 
 ---
 

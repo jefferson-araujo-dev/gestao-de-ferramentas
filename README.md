@@ -1,6 +1,6 @@
-# Gestão de Ferramentas — COENG
+# Gestão de Ferramentas
 
-Sistema web para controle de ferramentas, colaboradores, empréstimos, devoluções, usuários e auditoria da COENG.
+Sistema web para controle de ferramentas, colaboradores, empréstimos, devoluções, usuários e auditoria.
 
 **Versão atual:** `v3.1.0`
 
@@ -95,8 +95,8 @@ firestore.rules
 Clone o repositório e instale as dependências:
 
 ```bash
-git clone https://github.com/smithnaguxi90/gestao-de-ferramentas-v3.git
-cd gestao-de-ferramentas-v3
+git clone https://github.com/jefferson-araujo-dev/gestao-de-ferramentas.git
+cd gestao-de-ferramentas
 npm install
 ```
 
@@ -297,4 +297,4 @@ Esses documentos podem registrar decisões técnicas, auditorias e melhorias his
 
 ## Licença e uso
 
-Projeto destinado à gestão interna de ferramentas da COENG. Defina formalmente a licença antes de distribuir ou reutilizar o código fora do contexto autorizado.
+Projeto destinado à gestão interna de ferramentas. Defina formalmente a licença antes de distribuir ou reutilizar o código fora do contexto autorizado.

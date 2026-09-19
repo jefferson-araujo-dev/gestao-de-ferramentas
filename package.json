@@ -1,7 +1,7 @@
 {
-  "name": "gestao-de-ferramentas-v3",
+  "name": "gestao-de-ferramentas",
   "version": "3.1.0",
-  "description": "Sistema de Gestão de Ferramentas - COENG",
+  "description": "Sistema de Gestão de Ferramentas",
   "engines": {
     "node": "24.x"
   },

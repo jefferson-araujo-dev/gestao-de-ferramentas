@@ -296,7 +296,7 @@ export const AppData = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `backup_coeng_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `backup_gestao_ferramentas_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -445,7 +445,7 @@ export const AppData = {
     const ws = window.XLSX.utils.json_to_sheet(data);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
-    window.XLSX.writeFile(wb, `inventario_coeng_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    window.XLSX.writeFile(wb, `inventario_ferramentas_${new Date().toISOString().slice(0, 10)}.xlsx`);
   },
 
   /**

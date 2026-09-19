@@ -1,4 +1,4 @@
-# 🚀 Sistema de Gestão de Ferramentas COENG v3.0
+# 🚀 Sistema de Gestão de Ferramentas v3.0
 
 > Sistema corporativo **avançado e profissional** para gestão de ferramentas, colaboradores e manutenções com sincronização em tempo real.
 
@@ -70,7 +70,7 @@ npm run export           # Exportar dados Firebase
 ## 🏗️ Estrutura do Projeto
 
 ```
-gestao-de-ferramentas-v3/
+gestao-de-ferramentas/
 ├── src/
 │   ├── js/
 │   │   ├── core/                    # 🆕 Módulos Core Avançados
@@ -403,7 +403,7 @@ Para contribuir com melhorias:
 
 ## 📄 Licença
 
-Sistema proprietário - COENG © 2026
+Sistema proprietário © 2026
 
 ---
 

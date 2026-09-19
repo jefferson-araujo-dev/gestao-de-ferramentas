@@ -354,7 +354,7 @@ export class AutoBackupManager {
     const a = document.createElement('a');
     const date = new Date().toISOString().slice(0, 10);
     a.href = url;
-    a.download = `backup_coeng_${date}_${Date.now()}.json`;
+    a.download = `backup_gestao_ferramentas_${date}_${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

@@ -32,7 +32,7 @@ export const AppPDF = {
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(24);
-    doc.text('COENG', 20, 20);
+    doc.text('FERRAMENTAS', 20, 20);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text('SISTEMA DE GESTÃO DE FERRAMENTAS', 20, 27);
@@ -133,7 +133,7 @@ export const AppPDF = {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.text(userName, 62.5, sY + 5, { align: 'center' });
-    doc.text('Administração COENG', 147.5, sY + 5, { align: 'center' });
+    doc.text('Administração', 147.5, sY + 5, { align: 'center' });
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.text('Assinatura do Colaborador', 62.5, sY + 9, {

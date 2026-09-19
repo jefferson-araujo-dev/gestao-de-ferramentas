@@ -1013,6 +1013,6 @@ export const AppCRUDUsers = {
     const ws = window.XLSX.utils.json_to_sheet(data);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Colaboradores');
-    window.XLSX.writeFile(wb, `colaboradores_coeng_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    window.XLSX.writeFile(wb, `colaboradores_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 };

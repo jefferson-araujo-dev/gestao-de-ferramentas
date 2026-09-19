@@ -4,7 +4,10 @@ import { precacheAndRoute } from 'workbox-precaching';
 // O vite-plugin-pwa substituirá self.__WB_MANIFEST pelos arquivos estáticos compilados com Hash
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-const CACHE_NAME = 'coeng-tools-cache-v6';
+const CACHE_PREFIX = 'gestao-ferramentas-cache';
+const CACHE_NAME = `${CACHE_PREFIX}-v6`;
+// Reconhece estruturalmente os caches customizados de versões anteriores do sistema
+const LEGACY_TOOLS_CACHE_PATTERN = /-tools-cache-v\d+$/;
 
 // INSTALAÇÃO
 self.addEventListener('install', () => {
@@ -19,7 +22,10 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((name) => {
           // Cuidado para limpar apenas os nossos antigos, e não os do Workbox (workbox-precache-v2-...)
-          if (name.startsWith('coeng-tools-cache') && name !== CACHE_NAME) {
+          if (
+            name !== CACHE_NAME &&
+            (name.startsWith(CACHE_PREFIX) || LEGACY_TOOLS_CACHE_PATTERN.test(name))
+          ) {
             return caches.delete(name);
           }
         })
