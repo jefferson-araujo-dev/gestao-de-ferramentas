@@ -1,5 +1,9 @@
 import { defineConfig } from '@playwright/test';
+import { assertResponsiveLocalEnvironment } from './tests/responsive/support/network-policy.mjs';
 import { RESPONSIVE_VIEWPORTS } from './tests/responsive/viewports.js';
+
+// Fail-closed: recusa credenciais reais e PLAYWRIGHT_BASE_URL remoto (salvo opt-in explícito).
+assertResponsiveLocalEnvironment();
 
 const externalBaseUrl = String(
   process.env.PLAYWRIGHT_BASE_URL || ''
@@ -13,6 +17,7 @@ const isCI = Boolean(process.env.CI);
 const responsiveProjects = RESPONSIVE_VIEWPORTS.map(
   ({ name, width, height, category, tier }) => ({
     name,
+    testIgnore: /network-guard\.spec\.js$/,
     metadata: {
       category,
       tier,
@@ -75,7 +80,14 @@ export default defineConfig({
     video: 'off'
   },
 
-  projects: responsiveProjects,
+  projects: [
+    ...responsiveProjects,
+    // Prova de poder de detecção do guard de rede (roda uma única vez, fora dos viewports).
+    {
+      name: 'network-guard',
+      testMatch: /network-guard\.spec\.js$/
+    }
+  ],
 
   webServer: externalBaseUrl
     ? undefined

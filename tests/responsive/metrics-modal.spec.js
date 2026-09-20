@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/network-guard.js';
 
 test.describe('Responsividade do modal de métricas', () => {
   test('@metrics-modal mantém cabeçalho e ações acessíveis', async ({ page }, testInfo) => {

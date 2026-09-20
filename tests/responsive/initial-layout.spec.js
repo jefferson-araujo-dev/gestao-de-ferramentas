@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/network-guard.js';
 
 const HORIZONTAL_TOLERANCE_PX = 1;
 

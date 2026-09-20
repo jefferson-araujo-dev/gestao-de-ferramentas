@@ -317,3 +317,26 @@ Se encontrar problemas:
 ---
 
 **Seu código agora está 100% responsivo! 🎉**
+
+---
+
+## 🔒 Isolamento de rede da suíte responsiva (Addendum 1-C1)
+
+`npm run test:responsive` roda **somente** contra o servidor local (Vite na porta 3100) e falha
+fechado, com a mesma allowlist do E2E autenticado (`tests/e2e/support/env.mjs`):
+
+- **Guard de rede** (`tests/responsive/support/network-guard.js`, política em
+  `tests/responsive/support/network-policy.mjs`): todo request do navegador passa pela política.
+  Permitidos: localhost, código estático de CDN (`www.gstatic.com/firebasejs/`, jsDelivr, cdnjs),
+  fontes e a imagem decorativa de terceiro da tela de login. Todo o resto (Firestore, Firebase Auth,
+  Functions, Google APIs, Vercel, qualquer host fora da allowlist, `/api/*` local e WebSocket remoto)
+  é **abortado no navegador** e **reprova o teste**. O log da violação não inclui query string.
+- **Guard de ambiente** (`playwright.config.js`): recusa `GOOGLE_APPLICATION_CREDENTIALS`, variáveis de
+  service account e `PLAYWRIGHT_BASE_URL` que não seja `127.0.0.1`/`localhost`.
+- **Vercel Preview (opt-in):** testar um deployment remoto exige `RESPONSIVE_ALLOW_REMOTE_PREVIEW=1`
+  (fora do gate oficial). Nesse modo o guard de rede fica **desligado** e isso é anotado no teste.
+- **Prova de detecção:** o projeto `network-guard` (`tests/responsive/network-guard.spec.js`) usa URLs
+  remotas simuladas (abortadas no navegador, sem tráfego real) e um teste `test.fail()` que só passa se
+  o fixture reprovar; `tests/unit/responsiveNetworkPolicy.test.mjs` cobre a política sem navegador.
+- **Evidência:** `RESPONSIVE_NETWORK_EVIDENCE_FILE=<arquivo>` grava, por teste, a contagem de requests por
+  host/tipo.

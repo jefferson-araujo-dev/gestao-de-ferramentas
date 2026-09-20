@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/network-guard.js';
 
 const interactive = 'button,a[href],input,select,textarea,[role=button]';
 

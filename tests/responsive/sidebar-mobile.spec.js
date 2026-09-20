@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/network-guard.js';
 
 /**
  * Regressão: no iPhone, o scroll vertical deriva horizontalmente e o handler

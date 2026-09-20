@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/network-guard.js';
 
 // Prefixos de hostname reconhecidos como deployments/aliases do projeto
 // Gestão de Ferramentas. Cada redeploy gera uma URL nova, por isso nenhuma
