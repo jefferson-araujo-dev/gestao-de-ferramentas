@@ -2,17 +2,23 @@ import { expect, test } from './support/network-guard.js';
 
 /**
  * Regressão: no iPhone, o scroll vertical deriva horizontalmente e o handler
- * global de swipe abria a sidebar sem o usuário tocar no botão hambúrguer.
- * A abertura por swipe foi removida; apenas o hambúrguer abre.
+ * global de swipe abria a sidebar sem o usuário tocar no botão de menu.
+ * A abertura por swipe foi removida; apenas o botão explícito abre.
+ *
+ * Contrato do shell (Gate 1-D): o DRAWER existe só em tablet (768–1023px). Abaixo de 768px a
+ * navegação é a barra inferior (sem drawer: a sidebar permanece oculta); a partir de 1024px a
+ * sidebar/rail é persistente e este teste não se aplica.
  */
 test.describe('Responsividade da sidebar mobile', () => {
-  test('@sidebar-mobile só abre pelo hambúrguer', async ({ page }, testInfo) => {
+  test('@sidebar-mobile só abre pelo botão de menu', async ({ page }, testInfo) => {
     const viewport = page.viewportSize();
 
     test.skip(
       !viewport || viewport.width >= 1024,
-      'A sidebar mobile só existe abaixo de 1024px.',
+      'Drawer/barra inferior só existem abaixo de 1024px.',
     );
+
+    const isTablet = viewport.width >= 768;
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(500);
@@ -39,7 +45,13 @@ test.describe('Responsividade da sidebar mobile', () => {
 
     // Fora da viewport: a borda direita da sidebar não pode passar de x = 0.
     const expectClosed = async (label) => {
-      await page.waitForTimeout(400); // transition-transform duration-300
+      if (!isTablet) {
+        // Mobile: não há drawer (a sidebar não é renderizada).
+        await expect(sidebar, label).toBeHidden();
+        return;
+      }
+
+      await page.waitForTimeout(400); // transition-transform
       const box = await sidebar.boundingBox();
 
       expect(box, label + ': sidebar sem boundingBox').not.toBeNull();
@@ -107,14 +119,29 @@ test.describe('Responsividade da sidebar mobile', () => {
     await verticalScrollGestureWithDrift();
     await expectClosed('após gesto de scroll com deriva horizontal');
 
-    // 4 e 5. O hambúrguer abre.
-    const hamburger = page
-      .locator('header button[onclick="App.UI.toggleSidebar()"]')
-      .first();
+    if (!isTablet) {
+      // Mobile: sem botão de menu e sem overflow; a navegação é a barra inferior.
+      await expect(page.locator('#btn-sidebar-toggle')).toBeHidden();
+      await expect(overlay).toBeHidden();
+      await expect(page.locator('#bottom-nav')).toBeVisible();
+
+      const mobileOverflow = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+
+      expect(mobileOverflow.scrollWidth, testInfo.project.name).toBeLessThanOrEqual(
+        mobileOverflow.clientWidth + 1,
+      );
+      return;
+    }
+
+    // 4 e 5. O botão de menu abre o drawer.
+    const hamburger = page.locator('#btn-sidebar-toggle');
 
     await expect(hamburger).toBeVisible();
     await hamburger.click();
-    await expectOpen('após clique no hambúrguer');
+    await expectOpen('após clique no botão de menu');
     await expect(overlay).toBeVisible();
 
     // 6 e 7. O mecanismo existente (overlay) fecha.

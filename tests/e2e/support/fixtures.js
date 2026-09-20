@@ -163,8 +163,9 @@ export async function assertEmulatorConnected(page) {
     .toBe(true);
 }
 
-export async function loginAs(page, user) {
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
+// `hash` (ex.: '#/auditoria') abre o app já com um deep link: a rota só é aplicada após o login.
+export async function loginAs(page, user, { hash = '' } = {}) {
+  await page.goto(`/${hash}`, { waitUntil: 'domcontentloaded' });
   await assertEmulatorConnected(page);
   await expect(page.locator('#login-screen')).toBeVisible();
   await page.locator('#login-email').fill(user.email);
@@ -175,67 +176,92 @@ export async function loginAs(page, user) {
   await expect(page.locator('#user-name')).toHaveText(/\S/);
 }
 
-// Contrato ATUAL de navegação (pré-router por hash). Centralizado para que o Gate 1-D
-// ajuste apenas este mapa e as funções abaixo quando a navegação mudar de propósito.
+// Contrato de navegação do app shell (Gate 1-D): rotas por hash, itens gerados por App.Shell a
+// partir de src/js/config/navigation.js e item ativo marcado com aria-current="page".
+// Centralizado aqui para não espalhar seletores pelos testes.
+export const APP_TITLE = 'Gestão de Ferramentas';
+
 export const TABS = {
   dashboard: {
+    id: 'dashboard',
+    route: 'painel',
     nav: '#nav-dashboard',
     label: 'Painel',
-    title: 'Visão Geral',
+    title: 'Painel',
     panel: '#tab-dashboard',
   },
   scanner: {
+    id: 'scanner',
+    route: 'scanner',
     nav: '#nav-scanner',
-    label: 'Leitor / Scanner',
-    title: 'Leitor / Scanner',
+    label: 'Retirar/Devolver',
+    title: 'Retirar/Devolver',
     panel: '#tab-scanner',
   },
   collaborators: {
+    id: 'collaborators',
+    route: 'colaboradores',
     nav: '#nav-collaborators',
     label: 'Colaboradores',
     title: 'Colaboradores',
     panel: '#tab-collaborators',
   },
   management: {
-    nav: { admin: '#nav-management', standard: '#nav-tools' },
-    label: { admin: 'Inventário', standard: 'Ferramentas' },
+    id: 'tools',
+    route: 'ferramentas',
+    nav: '#nav-tools',
+    label: 'Ferramentas',
     title: 'Ferramentas',
     panel: '#tab-management',
   },
   users: {
+    id: 'users',
+    route: 'usuarios',
     nav: '#nav-users',
-    label: 'Controle de Acesso',
-    title: 'Controle de Acesso',
+    label: 'Usuários e acessos',
+    title: 'Usuários e acessos',
     panel: '#tab-users',
   },
   history: {
+    id: 'history',
+    route: 'auditoria',
     nav: '#nav-history',
     label: 'Auditoria',
-    title: 'Auditoria de Sistema',
+    title: 'Auditoria',
     panel: '#tab-history',
   },
 };
 
-const pick = (value, isAdmin) =>
-  typeof value === 'object' && value !== null && 'admin' in value
-    ? value[isAdmin ? 'admin' : 'standard']
-    : value;
+// O segundo argumento (isAdmin) é aceito só por compatibilidade com os testes existentes: o item
+// "Ferramentas" é o mesmo para todos os perfis (não existe mais "Inventário" separado).
+export const navSelector = (tab) => TABS[tab].nav;
+export const navLabel = (tab) => TABS[tab].label;
 
-export const navSelector = (tab, isAdmin = false) => pick(TABS[tab].nav, isAdmin);
-export const navLabel = (tab, isAdmin = false) => pick(TABS[tab].label, isAdmin);
+// Abre uma tela pela navegação visível no viewport atual: sidebar/rail (tablet+) ou barra inferior;
+// no mobile, destinos que não couberam na barra inferior ficam em "Mais".
+export async function openTab(page, tab) {
+  const { id } = TABS[tab];
+  const visible = page.locator(`[data-nav-id="${id}"]:visible`).first();
 
-export async function openTab(page, tab, { isAdmin = false } = {}) {
-  await page
-    .locator('#main-sidebar')
-    .getByRole('button', { name: navLabel(tab, isAdmin), exact: true })
-    .click();
+  if ((await visible.count()) > 0) {
+    await visible.click();
+    return;
+  }
+
+  await page.locator('#bnav-more').click();
+  await expect(page.locator('#more-sheet')).toBeVisible();
+  await page.locator(`#more-nav [data-nav-id="${id}"]`).click();
+  await expect(page.locator('#more-sheet')).toBeHidden();
 }
 
-// Item ativo hoje = classe de destaque no botão de navegação. O redesign deve trocar esta
-// única função por aria-current="page" quando mudar de propósito.
-export async function expectActiveTab(page, tab, { isAdmin = false, initialLoad = false } = {}) {
-  await expect(page.locator('#topbar-title')).toHaveText(TABS[tab].title);
-  await expect(page.locator(TABS[tab].panel)).toBeVisible();
+// Tela ativa = painel visível + título + URL (#/rota) + document.title + aria-current no item.
+export async function expectActiveTab(page, tab) {
+  const { id, route, title, panel } = TABS[tab];
+
+  await expect(page.locator('#topbar-title')).toHaveText(title);
+  await expect(page.locator(panel)).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`#/${route}$`));
+  await expect(page).toHaveTitle(`${title} · ${APP_TITLE}`);
 
   for (const [other, definition] of Object.entries(TABS)) {
     if (other !== tab) {
@@ -243,14 +269,14 @@ export async function expectActiveTab(page, tab, { isAdmin = false, initialLoad 
     }
   }
 
-  if (initialLoad) {
-    // Baseline atual: logo após o login nenhum item de navegação está destacado.
-    await expect(page.locator('.nav-btn.bg-brand-600')).toHaveCount(0);
-    return;
-  }
-
-  await expect(page.locator(navSelector(tab, isAdmin))).toHaveClass(/(^|\s)bg-brand-600(\s|$)/);
-  await expect(page.locator('.nav-btn.bg-brand-600')).toHaveCount(1);
+  // Todo item com aria-current="page" (sidebar, barra inferior, "Mais") é o da tela ativa.
+  await expect
+    .poll(() =>
+      page
+        .locator('[aria-current="page"]')
+        .evaluateAll((nodes) => [...new Set(nodes.map((node) => node.dataset.navId))])
+    )
+    .toEqual([id]);
 }
 
 export async function openUserMenu(page) {

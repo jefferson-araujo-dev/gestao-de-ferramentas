@@ -55,12 +55,9 @@ test.describe('PADRÃO — login, navegação e limites de autorização da UI',
   test('ausência visual: itens de navegação, menu e ações administrativas', async ({ page }) => {
     const sidebar = page.locator('#main-sidebar');
 
-    await expect(page.locator('#admin-section')).toBeHidden();
-    await expect(sidebar.getByRole('button', { name: 'Auditoria', exact: true })).toHaveCount(0);
-    await expect(
-      sidebar.getByRole('button', { name: 'Controle de Acesso', exact: true })
-    ).toHaveCount(0);
-    await expect(sidebar.getByRole('button', { name: 'Inventário', exact: true })).toHaveCount(0);
+    for (const name of ['Auditoria', 'Usuários e acessos', 'Inventário']) {
+      await expect(sidebar.getByRole('link', { name, exact: true })).toHaveCount(0);
+    }
     await expect(page.locator('#btn-export-dashboard')).toBeHidden();
 
     await openUserMenu(page);
@@ -70,7 +67,6 @@ test.describe('PADRÃO — login, navegação e limites de autorização da UI',
     await expect(page.locator('#admin-tools')).toBeHidden();
 
     for (const name of [
-      'Gerenciar Usuários',
       'Resetar dados operacionais',
       'Backup JSON',
       'Métricas do Sistema',
@@ -99,7 +95,7 @@ test.describe('PADRÃO — login, navegação e limites de autorização da UI',
   }) => {
     for (const tab of ['users', 'history']) {
       await page.evaluate((target) => window.App.UI.switchTab(target), tab);
-      await expect(page.locator('#topbar-title')).toHaveText('Visão Geral');
+      await expect(page.locator('#topbar-title')).toHaveText('Painel');
       await expect(page.locator(`#tab-${tab}`)).toBeHidden();
       await expect(
         page.locator('.toast-item').filter({ hasText: 'Acesso restrito' }).first()

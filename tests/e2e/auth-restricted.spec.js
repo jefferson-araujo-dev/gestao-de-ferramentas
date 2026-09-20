@@ -55,10 +55,8 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
   test('navegação: dashboard, scanner e ferramentas; sem Colaboradores', async ({ page }) => {
     const sidebar = page.locator('#main-sidebar');
 
-    await expect(sidebar.getByRole('button', { name: 'Colaboradores', exact: true })).toHaveCount(
-      0
-    );
-    await expect(page.locator('#nav-collaborators')).toBeHidden();
+    await expect(sidebar.getByRole('link', { name: 'Colaboradores', exact: true })).toHaveCount(0);
+    await expect(page.locator('#nav-collaborators')).toHaveCount(0);
 
     for (const tab of ['scanner', 'management', 'dashboard']) {
       await openTab(page, tab);
@@ -69,11 +67,9 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
   test('ausência das áreas administrativas (nav, menu e ações)', async ({ page }) => {
     const sidebar = page.locator('#main-sidebar');
 
-    await expect(page.locator('#admin-section')).toBeHidden();
-    await expect(sidebar.getByRole('button', { name: 'Auditoria', exact: true })).toHaveCount(0);
-    await expect(
-      sidebar.getByRole('button', { name: 'Controle de Acesso', exact: true })
-    ).toHaveCount(0);
+    for (const name of ['Auditoria', 'Usuários e acessos']) {
+      await expect(sidebar.getByRole('link', { name, exact: true })).toHaveCount(0);
+    }
 
     await openUserMenu(page);
     await expect(page.locator('#admin-tools')).toBeHidden();
@@ -88,7 +84,7 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
   }) => {
     for (const tab of ['users', 'history']) {
       await page.evaluate((target) => window.App.UI.switchTab(target), tab);
-      await expect(page.locator('#topbar-title')).toHaveText('Visão Geral');
+      await expect(page.locator('#topbar-title')).toHaveText('Painel');
       await expect(page.locator(`#tab-${tab}`)).toBeHidden();
     }
   });
@@ -99,14 +95,11 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
   test('perfil restrito não alcança Colaboradores: navegação programática recusada', async ({
     page,
   }) => {
-    await expect(page.locator('#nav-collaborators')).toBeHidden();
+    await expect(page.locator('#nav-collaborators')).toHaveCount(0);
 
-    for (const attempt of [
-      () => window.App.UI.switchTab('collaborators'),
-      () => window.App.UI.switchTab('collaborators', 'nav-dashboard'),
-    ]) {
+    for (const attempt of [() => window.App.UI.switchTab('collaborators')]) {
       await page.evaluate(attempt);
-      await expect(page.locator('#topbar-title')).toHaveText('Visão Geral');
+      await expect(page.locator('#topbar-title')).toHaveText('Painel');
       await expect(page.locator('#tab-collaborators')).toBeHidden();
       await expect(page.locator('#tab-dashboard')).toBeVisible();
     }

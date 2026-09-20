@@ -36,15 +36,17 @@ O script sobe os emuladores (`firebase emulators:exec`), semeia o estado, inicia
 | `restricted-loan.spec.js` | Scanner do perfil restrito: empréstimo por crachá exato (`collaboratorBadge`), recibo sem a lista, recusa genérica, sem busca por nome e devolução; controle do perfil padrão (`collaboratorId`) |
 | `modals.spec.js` | ferramenta, colaborador, perfil, senha, histórico, métricas, logout (sem salvar nada) |
 | `scanner.spec.js` | ciclo de vida do Scanner com câmera falsa |
-| `navigation-baseline.spec.js` | comportamento ATUAL da navegação (pré-router por hash) |
-| `a11y-baseline.spec.js` | baseline axe (desktop, tema claro) |
+| `navigation.spec.js` | rotas por hash (`#/painel`…), back/forward, reload, deep link, rota desconhecida, recusa das rotas não autorizadas (padrão/restrito), `aria-current`, `document.title` |
+| `shell.spec.js` | app shell por breakpoint: sidebar 256/72px, rail notebook, drawer tablet, barra inferior + "Mais" no mobile, foco/Esc, mudança de breakpoint em tempo real |
+| `a11y-baseline.spec.js` | baseline axe (desktop, tema claro), inclui drawer (tablet) e rail expandido (notebook) |
 | `visual-baseline.spec.js` | 4 capturas desktop |
 | `foundation.spec.js` | Gate 1-C: tokens LIGHT/DARK no navegador, `:focus-visible`, movimento reduzido e equivalência das regras legadas migradas para tokens (`docs/design/DESIGN_FOUNDATION.md`) |
-| `baseline.mobile.spec.js` | navegação mobile atual, 2 capturas e axe mobile |
+| `baseline.mobile.spec.js` | barra inferior mobile (C-01 resolvido), 2 capturas e axe mobile |
 
-`support/fixtures.js` centraliza login, mapa de abas e a definição de "item ativo". Quando a
-navegação mudar de propósito (Gate 1-D), ajuste esses helpers e os testes `*-baseline` em vez de
-espalhar seletores.
+`support/fixtures.js` centraliza login (com deep link opcional), mapa de abas (`TABS`: rota, item, título) e a
+definição de "tela ativa" (painel visível + URL `#/rota` + título + `document.title` + `aria-current`). O Gate 1-D
+atualizou esses helpers de propósito; ajuste-os em vez de espalhar seletores. Contrato completo em
+`docs/design/APP_SHELL.md`.
 
 ## Achados registrados como `test.fail()`
 

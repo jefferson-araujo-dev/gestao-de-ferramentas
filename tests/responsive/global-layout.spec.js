@@ -23,6 +23,17 @@ test('@global-layout mantém controles dentro da viewport', async ({ page }, tes
     login.classList.add('hidden');
     app.classList.remove('hidden');
 
+    // Sem autenticação a navegação nasce vazia (default-deny): popula o shell completo para que a
+    // sidebar/rail, a barra inferior e "Mais" sejam medidos em todos os viewports.
+    window.App?.Shell?.applyPermissions({
+      canAccessDashboard: true,
+      canAccessScanner: true,
+      canReadTools: true,
+      canReadCollaborators: true,
+      canAccessUsers: true,
+      canAccessHistory: true,
+    });
+
     const frame = () =>
       new Promise((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
@@ -157,7 +168,9 @@ test('@global-layout mantém controles dentro da viewport', async ({ page }, tes
       }
     }
 
-    for (const element of document.querySelectorAll('aside button,aside a[href]')) {
+    for (const element of document.querySelectorAll(
+      'aside button,aside a[href],#bottom-nav a[href],#bottom-nav button',
+    )) {
       inspect(element, 'sidebar-control-clipped', 'sidebar', {
         skipWhenOutside: true,
       });

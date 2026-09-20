@@ -94,7 +94,6 @@ test.describe('ADMIN — login, navegação e contrato visível de autorização
     const menu = page.locator('#user-dropdown-menu');
 
     for (const name of [
-      'Gerenciar Usuários',
       'Resetar dados operacionais',
       'Backup JSON',
       'Métricas do Sistema',

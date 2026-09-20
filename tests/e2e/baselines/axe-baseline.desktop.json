@@ -17,7 +17,7 @@
     "admin-dashboard": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 6
+        "nodes": 3
       },
       "select-name": {
         "impact": "critical",
@@ -27,7 +27,7 @@
     "admin-scanner": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 5
+        "nodes": 2
       },
       "label": {
         "impact": "critical",
@@ -37,7 +37,7 @@
     "admin-colaboradores": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 4
+        "nodes": 1
       },
       "select-name": {
         "impact": "critical",
@@ -47,7 +47,7 @@
     "admin-ferramentas": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 4
+        "nodes": 1
       },
       "select-name": {
         "impact": "critical",
@@ -57,7 +57,7 @@
     "admin-auditoria": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 4
+        "nodes": 1
       },
       "select-name": {
         "impact": "critical",
@@ -67,13 +67,13 @@
     "admin-controle-acesso": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 6
+        "nodes": 3
       }
     },
     "admin-menu-avatar": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 8
+        "nodes": 5
       }
     },
     "admin-modal-perfil": {
@@ -100,10 +100,30 @@
         "nodes": 1
       }
     },
+    "admin-drawer-tablet": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 2
+      },
+      "select-name": {
+        "impact": "critical",
+        "nodes": 2
+      }
+    },
+    "admin-rail-expandido-notebook": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 3
+      },
+      "select-name": {
+        "impact": "critical",
+        "nodes": 2
+      }
+    },
     "padrao-dashboard": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 5
+        "nodes": 3
       },
       "select-name": {
         "impact": "critical",
@@ -113,7 +133,7 @@
     "padrao-ferramentas": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 3
+        "nodes": 1
       },
       "select-name": {
         "impact": "critical",

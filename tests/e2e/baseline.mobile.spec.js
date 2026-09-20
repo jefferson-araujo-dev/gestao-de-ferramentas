@@ -10,23 +10,8 @@ import {
 import { expect, expectActiveTab, loginAs, test } from './support/fixtures.js';
 import { E2E_USERS } from './support/seed-data.mjs';
 
-// BASELINE MOBILE (390x844) da navegação ATUAL, pré-redesign. Estes testes documentam o
-// comportamento de hoje e serão atualizados DE PROPÓSITO no Gate 1-D (barra inferior / novo shell).
-const hamburger = (page) =>
-  page.locator('header button[onclick="App.UI.toggleSidebar()"]:visible').first();
-
-// O drawer anima por 300ms (transition-all): espera a posição estabilizar fora da tela.
-async function expectDrawerClosed(page) {
-  await expect
-    .poll(async () => {
-      const box = await page.locator('#main-sidebar').boundingBox();
-
-      return box ? box.x + box.width : null;
-    })
-    .toBeLessThanOrEqual(1);
-  await expect(page.locator('#sidebar-overlay')).toBeHidden();
-}
-
+// MOBILE 390x844 (Gate 1-D): barra inferior com 4 destinos + "Mais" (o drawer antigo, só com ícones,
+// deixou de existir abaixo de 768px). Baselines visuais/axe abaixo descrevem o shell NOVO.
 const dynamicMasks = (page) => [
   page.locator('#current-date-full'),
   page.locator('#current-date-full-short'),
@@ -36,48 +21,44 @@ const dynamicMasks = (page) => [
   page.locator('#dash-mini-timeline'),
 ];
 
-test.describe('MOBILE 390x844 — navegação atual (baseline)', () => {
+test.describe('MOBILE 390x844 — navegação (barra inferior)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, E2E_USERS.admin);
   });
 
-  test('drawer: fechado no início, abre pelo hambúrguer e fecha ao escolher uma tela', async ({
+  test('barra inferior: Painel ativo no início; escolher um destino navega e marca aria-current', async ({
     page,
   }) => {
-    await expectDrawerClosed(page);
-    await expectActiveTab(page, 'dashboard', { isAdmin: true, initialLoad: true });
+    await expect(page.locator('#main-sidebar')).toBeHidden();
+    await expectActiveTab(page, 'dashboard');
 
-    await hamburger(page).click();
-    await expect(page.locator('#sidebar-overlay')).toBeVisible();
-    await expect(page.locator('#nav-scanner')).toBeVisible();
-
-    await page.locator('#nav-scanner').click();
-    await expectActiveTab(page, 'scanner', { isAdmin: true });
-    await expectDrawerClosed(page);
+    await page.locator('#bnav-scanner').click();
+    await expectActiveTab(page, 'scanner');
+    await expect(page.locator('#bnav-scanner')).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('#bnav-dashboard')).not.toHaveAttribute('aria-current', 'page');
   });
 
-  test('drawer: fecha ao tocar no overlay', async ({ page }) => {
-    await hamburger(page).click();
-    await expect(page.locator('#sidebar-overlay')).toBeVisible();
-    await page.locator('#sidebar-overlay').click({ position: { x: 380, y: 400 } });
-    await expectDrawerClosed(page);
-  });
-
-  // Baseline do achado C-01 (Gate 1-A): abaixo de 768px o drawer mostra só ícones. Os botões não
-  // têm rótulo visível nem aria-label/title. Este teste muda de propósito no Gate 1-D.
-  test('drawer atual: botões de navegação só com ícone (sem rótulo visível nem nome acessível)', async ({
+  // Achado C-01 (Gate 1-A) RESOLVIDO: no mobile todo destino tem rótulo visível e nome acessível
+  // (antes: botões só com ícone, sem texto, aria-label ou title).
+  test('C-01 resolvido: todo destino da barra inferior tem rótulo visível e nome acessível', async ({
     page,
   }) => {
-    await hamburger(page).click();
+    const nav = page.getByRole('navigation', { name: 'Navegação inferior' });
 
-    for (const id of ['nav-dashboard', 'nav-scanner', 'nav-collaborators', 'nav-management']) {
-      const button = page.locator(`#${id}`);
+    for (const [id, name] of [
+      ['bnav-dashboard', 'Painel'],
+      ['bnav-scanner', 'Retirar/Devolver'],
+      ['bnav-tools', 'Ferramentas'],
+      ['bnav-collaborators', 'Colaboradores'],
+    ]) {
+      const link = page.locator(`#${id}`);
 
-      await expect(button).toBeVisible();
-      expect(await button.evaluate((el) => el.innerText.trim())).toBe('');
-      expect(await button.getAttribute('aria-label')).toBeNull();
-      expect(await button.getAttribute('title')).toBeNull();
+      await expect(link).toBeVisible();
+      expect((await link.innerText()).replace(/\s+/g, '')).toBe(name.replace(/\s+/g, ''));
+      await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
     }
+
+    await expect(nav.getByRole('button', { name: 'Mais', exact: true })).toBeVisible();
   });
 
   test('avatar: menu abre e mostra as ações do perfil admin', async ({ page }) => {
@@ -88,7 +69,7 @@ test.describe('MOBILE 390x844 — navegação atual (baseline)', () => {
   });
 });
 
-test.describe('MOBILE 390x844 — visual (baseline estrutural)', () => {
+test.describe('MOBILE 390x844 — visual (baseline do shell novo)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, E2E_USERS.admin);
   });
@@ -98,14 +79,14 @@ test.describe('MOBILE 390x844 — visual (baseline estrutural)', () => {
     await expect(page).toHaveScreenshot('dashboard-admin-mobile.png', { mask: dynamicMasks(page) });
   });
 
-  test('navegação: drawer aberto', async ({ page }) => {
-    await hamburger(page).click();
-    await expect(page.locator('#sidebar-overlay')).toBeVisible();
-    await expect(page).toHaveScreenshot('drawer-aberto-mobile.png', { mask: dynamicMasks(page) });
+  test('navegação: "Mais" aberto', async ({ page }) => {
+    await page.locator('#bnav-more').click();
+    await expect(page.locator('#more-sheet')).toBeVisible();
+    await expect(page).toHaveScreenshot('mais-aberto-mobile.png', { mask: dynamicMasks(page) });
   });
 });
 
-test.describe('MOBILE 390x844 — axe (baseline)', () => {
+test.describe('MOBILE 390x844 — axe (shell novo)', () => {
   test.describe.configure({ mode: 'serial' });
 
   const collected = {};
@@ -123,7 +104,7 @@ test.describe('MOBILE 390x844 — axe (baseline)', () => {
     console.log(`EVIDENCE AXE_MOBILE_UNIQUE_RULES_BY_IMPACT=${JSON.stringify(uniqueByImpact)}`);
   });
 
-  test('dashboard e drawer aberto', async ({ page }, testInfo) => {
+  test('dashboard e Mais aberto', async ({ page }, testInfo) => {
     const project = testInfo.project.name;
 
     await loginAs(page, E2E_USERS.admin);
@@ -132,7 +113,7 @@ test.describe('MOBILE 390x844 — axe (baseline)', () => {
 
     for (const [screen, prepare] of [
       ['mobile-dashboard', async () => {}],
-      ['mobile-drawer-aberto', async () => hamburger(page).click()],
+      ['mobile-mais-aberto', async () => page.locator('#bnav-more').click()],
     ]) {
       await prepare();
 

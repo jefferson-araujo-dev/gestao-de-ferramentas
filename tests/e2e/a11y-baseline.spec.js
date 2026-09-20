@@ -38,7 +38,7 @@ async function check(page, project, screen) {
   }
 }
 
-test.describe('AXE — baseline pré-redesign (desktop, tema claro)', () => {
+test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D para o shell novo)', () => {
   test.afterAll(async ({}, testInfo) => {
     if (UPDATE_BASELINE) {
       saveBaseline(testInfo.project.name, collected, axeVersion);
@@ -91,6 +91,26 @@ test.describe('AXE — baseline pré-redesign (desktop, tema claro)', () => {
     await expect(page.locator('#crud-modal')).toBeVisible();
     await check(page, project, 'admin-modal-ferramenta');
     await page.keyboard.press('Escape');
+  });
+
+  // Gate 1-D: estados novos do shell (drawer no tablet e rail expandido sobre o conteúdo no notebook).
+  test('SHELL: drawer (tablet) e rail expandido (notebook)', async ({ page }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await expect(page.locator('#dash-list')).toContainText('Furadeira de Impacto');
+
+    await page.setViewportSize({ width: 820, height: 1000 });
+    await page.locator('#btn-sidebar-toggle').click();
+    await expect(page.locator('#main-sidebar')).toBeVisible();
+    await check(page, project, 'admin-drawer-tablet');
+    await page.keyboard.press('Escape');
+
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await page.locator('#btn-sidebar-toggle').click();
+    await expect(page.locator('#main-sidebar')).toHaveAttribute('data-state', 'open');
+    await check(page, project, 'admin-rail-expandido-notebook');
   });
 
   test('PADRÃO: dashboard e ferramentas', async ({ page }, testInfo) => {
