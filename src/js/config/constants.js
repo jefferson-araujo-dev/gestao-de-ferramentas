@@ -10,8 +10,6 @@
  * @property {number} DEBOUNCE_DELAY - Delay padrão para debounce em ms
  * @property {boolean} ENABLE_METRICS - Habilitar sistema de métricas
  * @property {boolean} ENABLE_CACHE - Habilitar sistema de cache
- * @property {boolean} ENABLE_AUTO_BACKUP - Habilitar backup automático
- * @property {number} AUTO_BACKUP_INTERVAL - Intervalo de backup em ms
  * @property {'debug'|'info'|'warn'|'error'} LOG_LEVEL - Nível de log
  */
 
@@ -29,8 +27,6 @@ export const CONFIG = Object.freeze({
   DEBOUNCE_DELAY: 300,
   ENABLE_METRICS: true,
   ENABLE_CACHE: true,
-  ENABLE_AUTO_BACKUP: false,
-  AUTO_BACKUP_INTERVAL: 3600000, // 1 hora
   LOG_LEVEL: 'info'
 });
 

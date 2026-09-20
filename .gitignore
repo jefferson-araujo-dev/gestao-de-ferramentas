@@ -21,3 +21,11 @@ test-results/
 
 # Pacote de extensão do VS Code adicionado acidentalmente ao repositório
 Microsoft.VisualStudio.Services.VSIXPackage
+
+# Backups e exportações do Firestore (contêm dados pessoais e operacionais)
+backup-*.json
+backup_*.json
+backup_gestao_ferramentas*.json
+pre_restore_*.json
+pre_reset_*.json
+firebase-data-export.json
