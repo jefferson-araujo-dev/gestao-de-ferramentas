@@ -113,18 +113,13 @@ const hue = (hex) => {
   return (h * 60 + 360) % 360;
 };
 
-// Exceção documentada (docs/design/DESIGN_FOUNDATION.md): text-muted (slate-500, referência do
-// Gate 1-A) sobre surface-muted claro fica em ~4.34:1. O texto informativo nesse fundo usa
-// text-secondary. A lista é fechada: qualquer par novo abaixo de AA reprova o teste.
-const AA_EXCEPTIONS = { 'light|text-muted|surface-muted': 4.3 };
-
+// Sem exceções: todo par abaixo do mínimo reprova o teste.
 function assertContrast(theme, tokens, fg, bg, minimum) {
-  const floor = AA_EXCEPTIONS[`${theme}|${fg}|${bg}`] ?? minimum;
   const ratio = contrast(tokens[fg], tokens[bg]);
 
   assert.ok(
-    ratio >= floor,
-    `${theme}: ${fg} sobre ${bg} = ${ratio.toFixed(2)}:1 (mínimo ${floor}:1)`
+    ratio >= minimum,
+    `${theme}: ${fg} sobre ${bg} = ${ratio.toFixed(2)}:1 (mínimo ${minimum}:1)`
   );
 }
 
@@ -209,10 +204,18 @@ describe('tokens semânticos: contraste (piso arquitetural)', () => {
     });
   }
 
-  test('a exceção documentada continua sendo a única e permanece acima de 4.3:1', () => {
-    assert.deepEqual(Object.keys(AA_EXCEPTIONS), ['light|text-muted|surface-muted']);
-    assert.ok(contrast(LIGHT['text-muted'], LIGHT['surface-muted']) < 4.5);
-  });
+  for (const [theme, tokens] of themes) {
+    test(`${theme}: a hierarquia primary > secondary > muted se mantém em todas as superfícies`, () => {
+      for (const surface of SURFACES) {
+        const [primary, secondary, muted] = ['text-primary', 'text-secondary', 'text-muted'].map(
+          (text) => contrast(tokens[text], tokens[surface])
+        );
+
+        assert.ok(primary > secondary, `${theme}/${surface}: primary <= secondary`);
+        assert.ok(secondary > muted + 1, `${theme}/${surface}: secondary e muted muito próximos`);
+      }
+    });
+  }
 });
 
 describe('tokens semânticos: accent e estados', () => {

@@ -50,7 +50,7 @@ Exigidos pelo gate: `background`, `surface`, `surface-elevated`, `surface-muted`
 | border-control | `#748296` | `#748296` |
 | text-primary | `#0f172a` (slate-900) | `#f1f5f9` (slate-100) |
 | text-secondary | `#475569` (slate-600) | `#cbd5e1` (slate-300) |
-| text-muted | `#64748b` (slate-500) | `#94a3b8` (slate-400) |
+| text-muted | `#617188` (slate-500 escurecido) | `#94a3b8` (slate-400) |
 | text-inverse | `#ffffff` | `#0f172a` |
 | accent / hover / active | `#1d4ed8` / `#1e40af` / `#1e3a8a` | `#2563eb` / `#1d4ed8` / `#1e40af` |
 | success | `#047857` | `#34d399` |
@@ -84,11 +84,14 @@ superfícies. Tudo é verificado automaticamente por `tests/unit/designTokens.te
 dois temas (texto x 4 superfícies, on-accent x accent, accent-text, estados x superfícies e
 `-subtle`, border-control, focus-ring).
 
-**Exceção documentada (única):** LIGHT `text-muted` (slate-500, referência do Gate 1-A) sobre
-`surface-muted` (`#f1f5f9`) mede 4,34:1, abaixo de AA. Sobre `background`, `surface` e
-`surface-elevated` passa (4,55 a 4,76). Regra: em `surface-muted` use `text-secondary`. O teste
-trava a lista de exceções em exatamente esse par. Não use slate-400 (`#94a3b8`) sobre branco
-para texto informativo (2,56:1); no DARK ele é o `text-muted` (>= 5,7:1 sobre as superfícies).
+**Sem exceções.** Todo texto (`text-primary`, `text-secondary`, `text-muted`) mede >= 4,5:1 sobre
+`background`, `surface`, `surface-elevated` e `surface-muted`, nos dois temas. O LIGHT `text-muted`
+seria o slate-500 puro (`#64748b`, referência do Gate 1-A), que mede 4,34:1 sobre `surface-muted`
+(`#f1f5f9`). O Addendum 1-C1 o escureceu em 3 unidades por canal, para `#617188`: é o menor passo
+que fecha AA (com 2 unidades ainda dá 4,47:1). Contraste do LIGHT `text-muted`: 4,54 (surface-muted),
+4,75 (background), 4,97 (surface/elevated). No DARK o `text-muted` (`#94a3b8`) mede >= 5,71:1. A
+hierarquia primary > secondary > muted é verificada pelo teste. Não use slate-400 (`#94a3b8`) sobre
+branco para texto informativo (2,56:1).
 
 `border-control` (`#748296`) é o mesmo nos dois temas: 3,57 a 3,91:1 no claro e 3,74 a 5,16:1 no
 escuro. `border` (decorativo) não tem exigência de 3:1.

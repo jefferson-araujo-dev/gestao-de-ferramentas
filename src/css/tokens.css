@@ -34,7 +34,9 @@
   /* ---- Texto ---- */
   --color-text-primary: #0f172a;
   --color-text-secondary: #475569;
-  --color-text-muted: #64748b;
+  /* slate-500 (#64748b) escurecido em 3 unidades por canal: é o menor passo que dá >= 4.5:1
+     também sobre surface-muted (#f1f5f9). O slate-500 puro mede 4.34:1 nesse fundo. */
+  --color-text-muted: #617188;
   /* Texto sobre superfície invertida (ex.: dica escura sobre tela clara). */
   --color-text-inverse: #ffffff;
 
