@@ -1,4 +1,5 @@
 <dialog
+  data-dismissible="false"
   id="crud-user-modal"
   class="p-0 bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden open:animate-fade-in max-h-[calc(var(--app-height)-2rem)] open:grid grid-rows-[auto_minmax(0,1fr)_auto] backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm"
 >
@@ -12,7 +13,7 @@
       type="button"
       onclick="App.CRUDUsers.closeModal()"
       class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-    >
+     aria-label="Fechar">
       <svg class="w-5 h-5" aria-hidden="true"><use href="#icon-close"></use></svg>
     </button>
   </div>

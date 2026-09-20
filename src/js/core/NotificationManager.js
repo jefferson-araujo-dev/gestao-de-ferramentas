@@ -4,6 +4,8 @@
  */
 
 import { eventBus } from '../core/EventEmitter.js';
+import { TOAST_LABELS, toastDuration, toastRole } from '../components/toast-policy.js';
+import { Button, IconButton } from '../components/actions.js';
 
 export class NotificationManager {
   constructor() {
@@ -26,7 +28,24 @@ export class NotificationManager {
     this._container = document.getElementById('toast-container');
     if (!this._container) {
       console.warn('[NotificationManager] Container #toast-container não encontrado');
+      return this;
     }
+
+    // Regiões vivas PERSISTENTES (criadas antes de qualquer toast, para o leitor de tela anunciar):
+    // "status" (educado) para sucesso/informação e "alert" (assertivo) para erro/aviso.
+    this._container.setAttribute('role', 'region');
+    this._container.setAttribute('aria-label', 'Notificações');
+    this._regions = {};
+    ['status', 'alert'].forEach((role) => {
+      const region = document.createElement('div');
+
+      region.className = 'ui-toast-region';
+      region.setAttribute('role', role);
+      region.dataset.toastRegion = role;
+      this._container.appendChild(region);
+      this._regions[role] = region;
+    });
+
     return this;
   }
 
@@ -34,48 +53,28 @@ export class NotificationManager {
    * Mostra uma notificação de sucesso
    */
   success(message, options = {}) {
-    return this.show({
-      type: 'success',
-      message,
-      duration: options.duration || 3000,
-      ...options
-    });
+    return this.show({ type: 'success', message, ...options });
   }
 
   /**
    * Mostra uma notificação de erro
    */
   error(message, options = {}) {
-    return this.show({
-      type: 'error',
-      message,
-      duration: options.duration || 5000,
-      ...options
-    });
+    return this.show({ type: 'error', message, ...options });
   }
 
   /**
    * Mostra uma notificação de aviso
    */
   warning(message, options = {}) {
-    return this.show({
-      type: 'warning',
-      message,
-      duration: options.duration || 4000,
-      ...options
-    });
+    return this.show({ type: 'warning', message, ...options });
   }
 
   /**
    * Mostra uma notificação de informação
    */
   info(message, options = {}) {
-    return this.show({
-      type: 'info',
-      message,
-      duration: options.duration || this._defaultDuration,
-      ...options
-    });
+    return this.show({ type: 'info', message, ...options });
   }
 
   /**
@@ -234,19 +233,25 @@ export class NotificationManager {
   }
 
   /**
-   * Renderiza uma notificação no DOM
+   * Renderiza uma notificação no DOM (Toast do design system).
+   * - Vive numa região viva persistente (role="status" ou "alert").
+   * - Tipo repetido em texto para leitor de tela (não só cor/ícone).
+   * - Botão de fechar acessível; pausa a contagem com mouse/foco (WCAG 2.2.1).
    */
   _renderNotification(notification) {
     if (!this._container) {
       return;
     }
 
+    const role = toastRole(notification.type);
+    const region = this._regions?.[role] || this._container;
     const element = document.createElement('div');
+
     element.id = `notification-${notification.id}`;
-    element.className = this._getNotificationClasses(notification.type);
+    element.className = `toast-item ui-toast ui-toast--${notification.type}`;
+    element.dataset.type = notification.type;
     element.innerHTML = this._getNotificationHTML(notification);
 
-    // Adiciona evento de clique no botão de fechar
     const closeBtn = element.querySelector('[data-dismiss]');
     if (closeBtn) {
       closeBtn.addEventListener('click', () => {
@@ -254,7 +259,6 @@ export class NotificationManager {
       });
     }
 
-    // Adiciona evento de ação
     const actionBtn = element.querySelector('[data-action]');
     if (actionBtn && notification.action) {
       actionBtn.addEventListener('click', () => {
@@ -263,25 +267,58 @@ export class NotificationManager {
       });
     }
 
-    this._container.appendChild(element);
+    region.appendChild(element);
     notification.visible = true;
 
-    // Animação de entrada
     requestAnimationFrame(() => {
       element.classList.add('show');
     });
 
-    // Play sound
     if (this._soundEnabled) {
       this._playSound(notification.type);
     }
 
-    // Auto-dismiss
-    if (notification.duration !== Infinity) {
-      setTimeout(() => {
-        this.dismiss(notification.id);
-      }, notification.duration);
+    this._scheduleDismiss(notification, element);
+  }
+
+  /**
+   * Fecha sozinho após a duração da política; hover/foco SUSPENDEM a contagem e ao sair ela retoma
+   * com o tempo restante. Duração Infinity = só fecha manualmente.
+   */
+  _scheduleDismiss(notification, element) {
+    if (notification.duration === Infinity) {
+      return;
     }
+
+    let remaining = notification.duration;
+    let startedAt = 0;
+    let timer = null;
+
+    const start = () => {
+      startedAt = Date.now();
+      timer = setTimeout(() => this.dismiss(notification.id), remaining);
+    };
+    const pause = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+        remaining = Math.max(1500, remaining - (Date.now() - startedAt));
+      }
+    };
+
+    element.addEventListener('mouseenter', pause);
+    element.addEventListener('focusin', pause);
+    element.addEventListener('mouseleave', () => {
+      if (!timer && !element.matches(':focus-within')) {
+        start();
+      }
+    });
+    element.addEventListener('focusout', () => {
+      if (!timer && !element.matches(':hover')) {
+        start();
+      }
+    });
+    start();
   }
 
   /**
@@ -309,75 +346,35 @@ export class NotificationManager {
   }
 
   /**
-   * Obtém classes CSS para tipo de notificação
-   */
-  _getNotificationClasses(type) {
-    const classes = {
-      success: 'bg-emerald-600 border-emerald-500 text-white',
-      error: 'bg-rose-600 border-rose-500 text-white',
-      warning: 'bg-amber-500 border-amber-400 text-slate-900',
-      info: 'bg-slate-800 border-slate-700 text-white',
-      progress: 'bg-brand-600 border-brand-500 text-white'
-    };
-
-    return `toast-item flex items-center p-4 rounded-2xl shadow-2xl border w-full sm:w-auto ${classes[type] || classes.info}`;
-  }
-
-  /**
-   * Obtém HTML interno da notificação
+   * HTML interno: ícone decorativo + tipo (oculto visualmente) + mensagem + ação + fechar.
    */
   _getNotificationHTML(notification) {
-    const icon = this._getNotificationIcon(notification.type);
+    const label = TOAST_LABELS[notification.type] || TOAST_LABELS.info;
+    const iconId =
+      {
+        success: 'icon-check-circle',
+        error: 'icon-x-circle',
+        warning: 'icon-alert-triangle',
+        info: 'icon-info',
+        progress: 'icon-info'
+      }[notification.type] || 'icon-info';
 
-    let progressBar = '';
-    if (notification.type === 'progress') {
-      progressBar = `
-        <div class="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
-          <div class="h-full bg-white transition-all duration-300" style="width: ${notification.progress}%"></div>
-        </div>
-      `;
-    }
+    const progressBar =
+      notification.type === 'progress'
+        ? `<div class="ui-toast__progress" role="progressbar" aria-label="Progresso" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(notification.progress || 0)}"><div class="ui-toast__progress-bar" style="width: ${Number(notification.progress) || 0}%"></div></div>`
+        : '';
 
-    let actionButton = '';
-    if (notification.action) {
-      actionButton = `
-        <button data-action class="ml-3 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold transition-colors">
-          ${notification.action.label}
-        </button>
-      `;
-    }
+    const actionButton = notification.action
+      ? Button({ label: notification.action.label, variant: 'secondary', size: 'sm', attributes: { 'data-action': true } })
+      : '';
 
     return `
-      ${icon}
-      <span class="font-bold text-sm pr-6 leading-tight flex-1">${this._escapeHTML(notification.message)}</span>
+      <svg class="ui-toast__icon" aria-hidden="true" focusable="false"><use href="#${iconId}"></use></svg>
+      <p class="ui-toast__body"><span class="ui-sr-only">${label}: </span><span class="ui-toast__message">${this._escapeHTML(notification.message)}</span></p>
       ${actionButton}
-      <button data-dismiss aria-label="Fechar" class="ml-auto focus:outline-none bg-white/30 rounded-full p-1 hover:bg-white/40 transition-colors">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">
-          <path d="M18 6 6 18"/>
-          <path d="m6 6 12 12"/>
-        </svg>
-      </button>
+      ${IconButton({ label: 'Fechar notificação', icon: 'icon-close', attributes: { 'data-dismiss': true } })}
       ${progressBar}
     `;
-  }
-
-  /**
-   * Obtém ícone SVG para tipo de notificação
-   */
-  _getNotificationIcon(type) {
-    const icons = {
-      success:
-        '<svg class="w-5 h-5 mr-3 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m22 4 12 12-4-4"/></svg>',
-      error:
-        '<svg class="w-5 h-5 mr-3 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
-      warning:
-        '<svg class="w-5 h-5 mr-3 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
-      info: '<svg class="w-5 h-5 mr-3 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
-      progress:
-        '<svg class="w-5 h-5 mr-3 shrink-0 animate-spin" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>'
-    };
-
-    return icons[type] || icons.info;
   }
 
   /**
@@ -460,10 +457,15 @@ export class NotificationManager {
    * Parse e merge de opções
    */
   _parseOptions(options) {
+    const type = options.type || 'info';
+
     return {
-      duration: this._defaultDuration,
       priority: 'normal',
-      ...options
+      ...options,
+      duration: toastDuration(type, options.message, {
+        duration: options.duration,
+        persistent: options.persistent
+      })
     };
   }
 

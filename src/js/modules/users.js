@@ -106,9 +106,7 @@ export const AppCRUDUsers = {
 
     if (
       action === 'delete' &&
-      !confirm(
-        `Excluir definitivamente ${users.length} usuário(s)?`
-      )
+      !(await window.App.UI.confirmDanger('Excluir usuários?', `Excluir definitivamente ${users.length} usuário(s)?`))
     ) {
       return;
     }
@@ -807,9 +805,7 @@ export const AppCRUDUsers = {
       user.name || user.email || id
     ).trim();
 
-    const confirmed = confirm(
-      `Excluir definitivamente o usuário "${identification}"?`
-    );
+    const confirmed = await window.App.UI.confirmDanger('Excluir usuário?', `Excluir definitivamente o usuário "${identification}"?`);
 
     if (!confirmed) {
       return;

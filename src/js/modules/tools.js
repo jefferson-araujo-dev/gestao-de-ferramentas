@@ -336,7 +336,7 @@ export const AppCRUDTools = {
     }
   },
 
-  bulkAction: function (action, payload = null) {
+  bulkAction: async function (action, payload = null) {
     if (!this.canManageTools()) {
       window.App.UI.showToast('Acesso restrito a administradores.', 'error');
       return;
@@ -351,9 +351,7 @@ export const AppCRUDTools = {
     switch (action) {
       case 'status':
         if (
-          !confirm(
-            `Alterar o status de ${tools.length} ferramenta(s) para ${payload === 'available' ? 'Disponível' : 'Manutenção'}?`
-          )
+          !(await window.App.UI.confirmAction('Alterar status em lote?', `Alterar o status de ${tools.length} ferramenta(s) para ${payload === 'available' ? 'Disponível' : 'Manutenção'}?`, 'Alterar'))
         ) {
           return;
         }
@@ -366,7 +364,9 @@ export const AppCRUDTools = {
         this.clearSelection();
         break;
       case 'category':
-        if (!confirm(`Mover ${tools.length} ferramenta(s) para a categoria ${payload}?`)) {
+        if (
+          !(await window.App.UI.confirmAction('Mover de categoria?', `Mover ${tools.length} ferramenta(s) para a categoria ${payload}?`, 'Mover'))
+        ) {
           return;
         }
         tools.forEach((t) =>
@@ -416,7 +416,9 @@ export const AppCRUDTools = {
       }
 
       case 'delete':
-        if (confirm(`Tem certeza que deseja excluir ${tools.length} ferramenta(s)?`)) {
+        if (
+          await window.App.UI.confirmDanger('Excluir ferramentas?', `Tem certeza que deseja excluir ${tools.length} ferramenta(s)?`)
+        ) {
           const promises = tools.map((t) =>
             deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.TOOLS, t.firebaseId))
           );
@@ -1259,7 +1261,9 @@ export const AppCRUDTools = {
       window.App.UI.showToast('Acesso restrito a administradores.', 'error');
       return;
     }
-    if (confirm('Excluir definitivamente esta ferramenta?')) {
+    if (
+      await window.App.UI.confirmDanger('Excluir ferramenta?', 'Excluir definitivamente esta ferramenta?')
+    ) {
       try {
         await deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.TOOLS, id));
         window.App.UI.showToast('Excluída com sucesso.', 'success');

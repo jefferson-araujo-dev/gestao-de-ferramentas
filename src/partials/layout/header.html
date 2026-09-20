@@ -60,11 +60,12 @@
         >Sistema Online</span
       >
     </div>
-    <div class="relative" id="user-menu-container">
+    <div class="relative" id="user-menu-container" data-dropdown>
       <button
         type="button"
-        onclick="App.UI.toggleUserMenu(event)"
+        id="user-menu-trigger"
         data-testid="user-menu-trigger"
+        aria-label="Menu da conta"
         class="flex items-center gap-3 p-1 pr-3 rounded-full border border-slate-200/60 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all bg-white dark:bg-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20"
       >
         <div
@@ -111,253 +112,92 @@
         </svg>
       </button>
 
-      <div
-        id="user-dropdown-menu"
-        class="absolute right-0 top-full mt-2 w-64 opacity-0 invisible transition-all duration-200 transform origin-top-right z-50"
-      >
-        <div
-          class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 p-2"
-        >
-          <button
-            id="btn-profile-modal"
-            type="button"
-            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-            onclick="App.Auth.openProfileModal()"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="lucide lucide-user w-4 h-4 text-slate-400"
-            >
-              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
+      <!-- Menu da CONTA (componente Dropdown: teclado, Esc, clique fora). Ações sem onclick inline:
+           data-menu-action é tratado por App.UI. A seção "Dados (transitório)" segue como dívida
+           documentada até a tela Dados e backup. -->
+      <div id="user-dropdown-menu" class="ui-menu" aria-label="Menu da conta">
+        <button id="btn-profile-modal" type="button" role="menuitem" class="ui-menu__item" data-menu-action="profile">
+          <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          Meu Perfil
+        </button>
+        <button id="btn-password-modal" type="button" role="menuitem" class="ui-menu__item" data-menu-action="password">
+          <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          Alterar Senha
+        </button>
+        <button id="btn-dark-mode" type="button" role="menuitem" class="ui-menu__item" data-menu-action="theme">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="dark-mode-icon" class="w-4 h-4 shrink-0" aria-hidden="true" focusable="false">
+            <path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path>
+          </svg>
+          <span id="dark-mode-text">Modo Noturno</span>
+        </button>
+
+        <div id="admin-tools" role="group" aria-labelledby="admin-tools-heading">
+          <div class="ui-menu__sep" role="separator"></div>
+          <p class="ui-menu__label" id="admin-tools-heading">Dados (transitório)</p>
+          <label class="ui-menu__item" role="menuitem">
+            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>
+              <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+              <path d="M8 13h2"></path>
+              <path d="M14 13h2"></path>
+              <path d="M8 17h2"></path>
+              <path d="M14 17h2"></path>
             </svg>
-            Meu Perfil
+            Importar Excel
+            <input type="file" accept=".xlsx,.xls" id="file-import-excel" class="hidden" />
+          </label>
+          <button id="btn-reset-data" type="button" role="menuitem" class="ui-menu__item ui-menu__item--danger" data-menu-action="reset">
+            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+              <path d="M3 6h18"></path>
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            Resetar dados operacionais
           </button>
-          <button
-            id="btn-password-modal"
-            type="button"
-            onclick="App.Auth.openPasswordModal()"
-            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="lucide lucide-lock w-4 h-4 text-slate-400"
-            >
-              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          <button id="btn-export-json" type="button" role="menuitem" class="ui-menu__item" data-menu-action="export-json">
+            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+              <path d="M3 5V19A9 3 0 0 0 21 19V5"></path>
+              <path d="M3 12A9 3 0 0 0 21 12"></path>
             </svg>
-            Alterar Senha
+            Backup JSON
           </button>
-          <button
-            id="btn-dark-mode"
-            type="button"
-            onclick="App.UI.toggleDarkMode()"
-            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              id="dark-mode-icon"
-              class="lucide lucide-moon w-4 h-4 text-slate-400"
-            >
-              <path
-                d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"
-              ></path>
+          <label class="ui-menu__item" role="menuitem">
+            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M12 13v8"></path>
+              <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+              <path d="m8 17 4-4 4 4"></path>
             </svg>
-            <span id="dark-mode-text">Modo Noturno</span>
-          </button>
-          <div id="admin-tools">
-            <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
-            <p
-              class="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400"
-            >
-              Dados (transitório)
-            </p>
-            <label
-              class="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-file-spreadsheet w-4 h-4 text-brand-500"
-              >
-                <path
-                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
-                ></path>
-                <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
-                <path d="M8 13h2"></path>
-                <path d="M14 13h2"></path>
-                <path d="M8 17h2"></path>
-                <path d="M14 17h2"></path>
-              </svg>
-              Importar Excel
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                id="file-import-excel"
-                class="hidden"
-                onchange="App.Data.importExcel?.(event)"
-              />
-            </label>
-            <button
-              id="btn-reset-data"
-              type="button"
-              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-              onclick="App.Data.resetAllData()"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-trash-2 w-4 h-4"
-              >
-                <path d="M10 11v6"></path>
-                <path d="M14 11v6"></path>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-                <path d="M3 6h18"></path>
-                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-              Resetar dados operacionais
-            </button>
-            <button
-              id="btn-export-json"
-              type="button"
-              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors"
-              onclick="App.Data.exportJSON()"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-database w-4 h-4"
-              >
-                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-                <path d="M3 5V19A9 3 0 0 0 21 19V5"></path>
-                <path d="M3 12A9 3 0 0 0 21 12"></path>
-              </svg>
-              Backup JSON
-            </button>
-            <label
-              class="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl cursor-pointer transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-upload-cloud w-4 h-4 text-amber-500"
-              >
-                <path d="M12 13v8"></path>
-                <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
-                <path d="m8 17 4-4 4 4"></path>
-              </svg>
-              Restaurar JSON
-              <input
-                type="file"
-                accept=".json"
-                id="file-restore-json"
-                class="hidden"
-                onchange="App.Data.importJSON(event)"
-              />
-            </label>
-            <button
-              id="btn-metrics-report"
-              type="button"
-              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-xl transition-colors"
-              onclick="App.UI.openMetricsModal()"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-bar-chart-2 w-4 h-4"
-              >
-                <line x1="18" x2="18" y1="20" y2="10"></line>
-                <line x1="12" x2="12" y1="20" y2="4"></line>
-                <line x1="6" x2="6" y1="20" y2="14"></line>
-              </svg>
-              Métricas do Sistema
-            </button>
-          </div>
-          <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
-          <button
-            id="btn-logout-header"
-            type="button"
-            onclick="App.Auth.logout()"
-            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="lucide lucide-log-out w-4 h-4"
-            >
-              <path d="m16 17 5-5-5-5"></path>
-              <path d="M21 12H9"></path>
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            Restaurar JSON
+            <input type="file" accept=".json" id="file-restore-json" class="hidden" />
+          </label>
+          <button id="btn-metrics-report" type="button" role="menuitem" class="ui-menu__item" data-menu-action="metrics">
+            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <line x1="18" x2="18" y1="20" y2="10"></line>
+              <line x1="12" x2="12" y1="20" y2="4"></line>
+              <line x1="6" x2="6" y1="20" y2="14"></line>
             </svg>
-            Sair do Sistema
+            Métricas do Sistema
           </button>
         </div>
+
+        <div class="ui-menu__sep" role="separator"></div>
+        <button id="btn-logout-header" type="button" role="menuitem" class="ui-menu__item ui-menu__item--danger" data-menu-action="logout">
+          <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <path d="m16 17 5-5-5-5"></path>
+            <path d="M21 12H9"></path>
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          </svg>
+          Sair do Sistema
+        </button>
       </div>
     </div>
   </div>

@@ -1,3 +1,4 @@
+import { EmptyState, SkeletonCard, StatusBadge } from '../components/display.js';
 /**
  * AdvancedUtils - Utilitários avançados com funções auxiliares profissionais
  */
@@ -728,33 +729,18 @@ export function compressImageToBase64(
   });
 }
 
+// Badge/skeleton/estado vazio: delegam aos componentes do design system (src/js/components), mantendo
+// as assinaturas antigas para os chamadores existentes.
 export function getBadgeHTML(s) {
-  const b = {
-    available:
-      'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800/50 dark:text-emerald-400',
-    borrowed:
-      'text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-900/30 dark:border-amber-800/50 dark:text-amber-400',
-    maintenance:
-      'text-rose-700 bg-rose-50 border-rose-200 dark:bg-rose-900/30 dark:border-rose-800/50 dark:text-rose-400',
-    in: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400',
-    out: 'text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400'
-  };
-  const txt = {
-    available: 'Disponível',
-    borrowed: 'Emprestada',
-    maintenance: 'Manutenção',
-    in: 'Devolução',
-    out: 'Retirada'
-  };
-  return `<span class="inline-flex items-center gap-1 px-2.5 py-1 border rounded-lg text-[10px] font-extrabold tracking-widest uppercase shadow-sm ${b[s] || 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}">${txt[s] || s}</span>`;
+  return StatusBadge(s);
 }
 
 export function getSkeletonHTML() {
-  return '<div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 animate-pulse flex flex-col gap-4"><div class="flex gap-4"><div class="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div><div class="flex-1"><div class="h-4 bg-slate-200 dark:bg-slate-700 w-3/4 rounded mb-2"></div><div class="h-3 bg-slate-200 dark:bg-slate-700 w-1/2 rounded"></div></div></div><div class="border-t border-slate-100 dark:border-slate-800"></div><div class="h-3 bg-slate-200 dark:bg-slate-700 w-full rounded"></div></div>';
+  return SkeletonCard();
 }
 
 export function getEmptyStateHTML(msg) {
-  return `<div class="col-span-full p-12 flex flex-col items-center justify-center text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800"><div class="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 text-slate-400"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div><p class="text-slate-500 dark:text-slate-400 font-medium">${msg}</p></div>`;
+  return EmptyState({ title: String(msg ?? ''), className: 'col-span-full' });
 }
 
 export const Logger = {

@@ -363,7 +363,9 @@ export const AppCRUDCollaborators = {
     );
 
     if (action === 'delete') {
-      if (!confirm(`Excluir permanentemente ${collabs.length} colaborador(es)?`)) {
+      if (
+        !(await window.App.UI.confirmDanger('Excluir colaboradores?', `Excluir permanentemente ${collabs.length} colaborador(es)?`))
+      ) {
         return;
       }
       try {
@@ -683,7 +685,9 @@ export const AppCRUDCollaborators = {
       return;
     }
 
-    if (confirm('Excluir este colaborador?')) {
+    if (
+      await window.App.UI.confirmDanger('Excluir colaborador?', 'Excluir este colaborador?')
+    ) {
       try {
         await deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.COLLABORATORS, id));
         window.App.UI.showToast('Removido com sucesso.', 'success');

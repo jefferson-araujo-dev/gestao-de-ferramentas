@@ -2,6 +2,7 @@
 @import './tokens.css';
 @import './base.css';
 @import './shell.css';
+@import './components.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -167,17 +168,6 @@ body,
   z-index: 9999;
   pointer-events: none;
 }
-.toast-item {
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  transform: translateX(120%);
-  opacity: 0;
-  pointer-events: auto;
-  backdrop-filter: blur(10px);
-}
-.toast-item.show {
-  transform: translateX(0);
-  opacity: 1;
-}
 
 /* QR Code Video */
 #reader video {
@@ -261,83 +251,6 @@ body,
   color: #93c5fd !important;
 }
 
-.btn[class*='bg-emerald-600'],
-.btn[class*='bg-sky-600'],
-.btn[class*='bg-amber-600'],
-.btn[class*='bg-indigo-600'] {
-  background-color: var(--color-surface) !important;
-  border: 1px solid var(--color-border) !important;
-  color: var(--color-text-secondary) !important;
-  box-shadow: none !important;
-}
-
-.btn[class*='bg-emerald-600']:hover,
-.btn[class*='bg-sky-600']:hover,
-.btn[class*='bg-amber-600']:hover,
-.btn[class*='bg-indigo-600']:hover {
-  background-color: #f8fafc !important;
-  border-color: #cbd5e1 !important;
-  color: #334155 !important;
-}
-
-.dark .btn[class*='bg-emerald-600']:hover,
-.dark .btn[class*='bg-sky-600']:hover,
-.dark .btn[class*='bg-amber-600']:hover,
-.dark .btn[class*='bg-indigo-600']:hover {
-  background-color: #1e293b !important;
-  border-color: #475569 !important;
-  color: #e2e8f0 !important;
-}
-
-.stat-card:hover {
-  border-color: #cbd5e1 !important;
-}
-
-.dark .stat-card:hover {
-  border-color: #475569 !important;
-}
-
-.stat-card > .absolute {
-  background-color: #f1f5f9 !important;
-  opacity: 0.65 !important;
-}
-
-.dark .stat-card > .absolute {
-  background-color: #1e293b !important;
-}
-
-.stat-card [class*='bg-brand-50'],
-.stat-card [class*='bg-brand-100'],
-.stat-card [class*='bg-emerald-50'],
-.stat-card [class*='bg-emerald-100'],
-.stat-card [class*='bg-amber-50'],
-.stat-card [class*='bg-amber-100'],
-.stat-card [class*='bg-rose-50'],
-.stat-card [class*='bg-rose-100'] {
-  background-color: #f8fafc !important;
-}
-
-.dark .stat-card [class*='bg-brand-900'],
-.dark .stat-card [class*='bg-emerald-900'],
-.dark .stat-card [class*='bg-amber-900'],
-.dark .stat-card [class*='bg-rose-900'] {
-  background-color: rgba(30, 41, 59, 0.72) !important;
-}
-
-.stat-card [class*='text-brand'],
-.stat-card [class*='text-emerald'],
-.stat-card [class*='text-amber'],
-.stat-card [class*='text-rose'] {
-  color: #334155 !important;
-}
-
-.dark .stat-card [class*='text-brand'],
-.dark .stat-card [class*='text-emerald'],
-.dark .stat-card [class*='text-amber'],
-.dark .stat-card [class*='text-rose'] {
-  color: #e2e8f0 !important;
-}
-
 #inventory-stats > div {
   background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
@@ -386,12 +299,6 @@ body,
   body {
     font-size: 0.875rem;
   }
-  .stat-card {
-    padding: 0.75rem;
-  }
-  .stat-card .stat-number {
-    font-size: 1.5rem;
-  }
   .header-title {
     font-size: 0.875rem;
   }
@@ -415,12 +322,6 @@ body,
   .stats-grid {
     grid-template-columns: 1fr;
     gap: 0.75rem;
-  }
-  .stat-card {
-    padding: 1rem;
-  }
-  .stat-card .stat-number {
-    font-size: 1.75rem;
   }
   .header-controls {
     gap: 0.5rem;
@@ -454,12 +355,6 @@ body,
     grid-template-columns: repeat(2, 1fr);
     gap: 0.75rem;
   }
-  .stat-card {
-    padding: 1rem;
-  }
-  .stat-card .stat-number {
-    font-size: 1.75rem;
-  }
   .header-controls {
     gap: 0.75rem;
     flex-wrap: wrap;
@@ -485,12 +380,6 @@ body,
     grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
   }
-  .stat-card {
-    padding: 1.25rem;
-  }
-  .stat-card .stat-number {
-    font-size: 2rem;
-  }
   .header-controls {
     gap: 1rem;
   }
@@ -514,9 +403,6 @@ body,
   .stats-grid {
     grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
-  }
-  .stat-card {
-    padding: 1.5rem;
   }
 }
 
@@ -579,12 +465,6 @@ body,
   .stats-grid {
     grid-template-columns: repeat(4, 1fr);
     gap: 1.25rem;
-  }
-  .stat-card {
-    padding: 1.75rem;
-  }
-  .stat-card .stat-number {
-    font-size: 2.5rem;
   }
   .main-content-wrapper {
     max-width: 1920px;
@@ -725,16 +605,6 @@ body,
 .quick-filter-btn.active {
   filter: brightness(0.95);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-/* Stat card hover effect */
-.stat-card {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
 }
 
 /* Sort dropdown styling */

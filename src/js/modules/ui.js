@@ -2,6 +2,15 @@ import { notifications } from '../core/NotificationManager.js';
 import { metrics } from '../core/MetricsManager.js';
 import { Router } from '../core/Router.js';
 import {
+  Button,
+  Dropdown,
+  Search,
+  Select,
+  StatCard,
+  confirmDialog,
+  initModals
+} from '../components/index.js';
+import {
   DEFAULT_ROUTE,
   getItemByRoute,
   getItemByTab,
@@ -18,12 +27,35 @@ export const AppUI = {
     window.App?.Shell?.setOverlayOpen(isOpen);
   },
 
+  // Menu da conta: componente Dropdown (teclado, Esc, clique fora). Fachada de compatibilidade.
   closeUserMenu: function () {
-    const userMenu = document.getElementById('user-dropdown-menu');
-    if (!userMenu) {
+    if (this.userMenu) {
+      this.userMenu.close({ restoreFocus: false });
       return;
     }
-    userMenu.classList.add('opacity-0', 'invisible');
+
+    const userMenu = document.getElementById('user-dropdown-menu');
+    if (userMenu) {
+      userMenu.hidden = true;
+    }
+  },
+
+  // Confirmação assíncrona (substitui window.confirm): ver components/overlays.js
+  confirm: function (options) {
+    return confirmDialog(options);
+  },
+  // Atalhos: ação destrutiva (foco inicial em Cancelar + aviso) e ação comum.
+  confirmDanger: function (title, description, confirmLabel = 'Excluir') {
+    return confirmDialog({
+      title,
+      description,
+      warning: 'Esta ação não pode ser desfeita.',
+      confirmLabel,
+      variant: 'danger'
+    });
+  },
+  confirmAction: function (title, description, confirmLabel = 'Confirmar') {
+    return confirmDialog({ title, description, confirmLabel });
   },
 
   syncResponsiveLayout: function () {
@@ -98,15 +130,130 @@ export const AppUI = {
     if (e) {
       e.stopPropagation();
     }
-    const menu = document.getElementById('user-dropdown-menu');
-    if (menu) {
-      menu.classList.toggle('opacity-0');
-      menu.classList.toggle('invisible');
+    if (!this.userMenu) {
+      return;
+    }
 
-      // Fechar o drawer / rail expandido se o menu de usuário for aberto
-      if (!menu.classList.contains('opacity-0')) {
-        window.App?.Shell?.closeOverlay({ restoreFocus: false });
-      }
+    this.userMenu.toggle();
+
+    // Fechar o drawer / rail expandido se o menu de usuário for aberto
+    if (this.userMenu.isOpen()) {
+      window.App?.Shell?.closeOverlay({ restoreFocus: false });
+    }
+  },
+  // Ações do menu da conta (data-menu-action) e demais ações delegadas (data-action).
+  _handleMenuAction: function (action) {
+    const app = window.App;
+
+    if (action === 'profile') {
+      app.Auth.openProfileModal();
+    } else if (action === 'password') {
+      app.Auth.openPasswordModal();
+    } else if (action === 'theme') {
+      this.toggleDarkMode();
+    } else if (action === 'logout') {
+      app.Auth.logout();
+    } else if (action === 'reset') {
+      app.Data.resetAllData();
+    } else if (action === 'export-json') {
+      app.Data.exportJSON();
+    } else if (action === 'metrics') {
+      this.openMetricsModal();
+    }
+  },
+  clearDashboardFilters: function () {
+    document.getElementById('dash-search').value = '';
+    document.getElementById('dash-filter').value = 'all';
+    document.getElementById('dash-sort').value = 'recent';
+    this.setQuickFilter?.('all');
+  },
+  // Indicadores (StatCard) e barra de busca/filtro (Search/Select/Button) do Painel.
+  renderDashboardControls: function () {
+    const stats = document.getElementById('dash-stats');
+    if (stats) {
+      const card = (filter, options) =>
+        StatCard({
+          ...options,
+          interactive: true,
+          attributes: { 'data-action': 'quick-filter', 'data-filter': filter }
+        });
+
+      stats.innerHTML = [
+        card('all', {
+          label: 'Total',
+          valueId: 'stat-total',
+          icon: 'icon-inventory',
+          meta: 'Atualizado hoje',
+          metaIcon: 'icon-history'
+        }),
+        card('available', {
+          label: 'Disponíveis',
+          valueId: 'stat-available',
+          icon: 'icon-check-circle',
+          tone: 'success',
+          meta: 'Maior ociosidade em 7d',
+          metaIcon: 'icon-trending-up'
+        }),
+        card('borrowed', {
+          label: 'Emprestadas',
+          valueId: 'stat-borrowed',
+          icon: 'icon-repeat',
+          tone: 'warning',
+          meta: 'Aumento desde ontem',
+          metaIcon: 'icon-arrow-up'
+        }),
+        card('maintenance', {
+          label: 'Manutenção',
+          valueId: 'stat-maintenance',
+          icon: 'icon-wrench',
+          tone: 'danger',
+          meta: 'Equipamentos parados',
+          metaIcon: 'icon-alert-triangle'
+        })
+      ].join('');
+    }
+
+    const toolbar = document.getElementById('dash-toolbar');
+    if (toolbar) {
+      toolbar.innerHTML =
+        Search({
+          id: 'dash-search',
+          label: 'Buscar ferramentas',
+          placeholder: 'Buscar patrimônio, nome, marca ou responsável...',
+          className: 'flex-1 min-w-0'
+        }) +
+        Select({
+          id: 'dash-filter',
+          label: 'Filtrar por situação',
+          hideLabel: true,
+          className: 'md:w-48',
+          options: [
+            { value: 'all', label: 'Todos' },
+            { value: 'available', label: 'Disponíveis' },
+            { value: 'borrowed', label: 'Emprestadas' },
+            { value: 'maintenance', label: 'Manutenção' },
+            { value: 'late', label: 'Em Atraso' },
+            { value: 'maintenance-due', label: 'Revisão Vencida' }
+          ]
+        }) +
+        Select({
+          id: 'dash-sort',
+          label: 'Ordenar por',
+          hideLabel: true,
+          className: 'md:w-44',
+          options: [
+            { value: 'name-asc', label: 'Nome A-Z' },
+            { value: 'name-desc', label: 'Nome Z-A' },
+            { value: 'recent', label: 'Mais Recentes' },
+            { value: 'category', label: 'Categoria' }
+          ]
+        }) +
+        Button({
+          label: 'Limpar',
+          variant: 'secondary',
+          id: 'dash-clear',
+          attributes: { 'data-action': 'dash-clear' }
+        });
     }
   },
   updateNetworkStatus: function (isOnline) {
@@ -167,27 +314,40 @@ export const AppUI = {
       this.updateNetworkStatus(false);
     });
 
-    // Fechar menu do usuário ao clicar fora da área dele
-    document.addEventListener('click', (e) => {
-      const menuContainer = document.getElementById('user-menu-container');
-      const menu = document.getElementById('user-dropdown-menu');
-      if (
-        menu &&
-        !menu.classList.contains('opacity-0') &&
-        menuContainer &&
-        !menuContainer.contains(e.target)
-      ) {
-        menu.classList.add('opacity-0', 'invisible');
-      }
-    });
+    // Indicadores e filtros do Painel são renderizados pelos componentes (antes dos listeners).
+    this.renderDashboardControls();
 
-    // Fechar o menu do usuário ao clicar em qualquer opção do dropdown
-    const userDropdownMenu = document.getElementById('user-dropdown-menu');
-    if (userDropdownMenu) {
-      userDropdownMenu.addEventListener('click', (e) => {
-        const target = e.target;
-        if (target.closest('button, a, label') || target.closest('[data-close-user-menu]')) {
-          this.closeUserMenu();
+    // Menu da conta: componente Dropdown; ações por data-menu-action (sem onclick inline).
+    const userTrigger = document.getElementById('user-menu-trigger');
+    const userPanel = document.getElementById('user-dropdown-menu');
+    if (userTrigger && userPanel && !this.userMenu) {
+      this.userMenu = new Dropdown({ trigger: userTrigger, panel: userPanel });
+      userPanel.addEventListener('click', (e) => {
+        const action = e.target.closest('[data-menu-action]')?.dataset.menuAction;
+        if (action) {
+          this._handleMenuAction(action);
+        }
+      });
+      document
+        .getElementById('file-import-excel')
+        ?.addEventListener('change', (e) => window.App.Data.importExcel?.(e));
+      document
+        .getElementById('file-restore-json')
+        ?.addEventListener('change', (e) => window.App.Data.importJSON(e));
+    }
+
+    // Ações delegadas (data-action): filtros rápidos e limpar filtros do Painel.
+    if (!this._actionsBound) {
+      this._actionsBound = true;
+      document.addEventListener('click', (e) => {
+        const trigger = e.target.closest('[data-action]');
+        if (!trigger) {
+          return;
+        }
+        if (trigger.dataset.action === 'quick-filter') {
+          this.setQuickFilter?.(trigger.dataset.filter);
+        } else if (trigger.dataset.action === 'dash-clear') {
+          this.clearDashboardFilters();
         }
       });
     }
@@ -324,28 +484,9 @@ export const AppUI = {
       }
     }
 
-    // Adiciona o fechamento por clique no backdrop para todos os modais da tela
-    document.querySelectorAll('dialog').forEach((dialog) => {
-      dialog.addEventListener('click', (event) => {
-        // Verifica se o clique foi fora da área de conteúdo (no backdrop)
-        const rect = dialog.getBoundingClientRect();
-        const isInDialog =
-          rect.top <= event.clientY &&
-          event.clientY <= rect.top + rect.height &&
-          rect.left <= event.clientX &&
-          event.clientX <= rect.left + rect.width;
-        if (!isInDialog) {
-          dialog.close();
-        }
-      });
-
-      // Garante que a lógica de limpeza ou auditoria ocorra de forma idêntica
-      // quer o usuário feche no botão, no clique de fundo ou usando a tecla ESC.
-      dialog.addEventListener('close', () => {
-        // Útil para parar câmeras, limpar formulários nativamente, ou logar métricas:
-        // console.log(`Modal fechado: ${dialog.id}`);
-      });
-    });
+    // Política de fechamento dos modais (dismissible true/false, Esc com formulário alterado,
+    // nome acessível): ver components/overlays.js.
+    initModals();
   },
   // Ponto de entrada ÚNICO para trocar de tela: links #/rota, back/forward e chamadas programáticas
   // (onclick inline, scanner, cards). Aplica as guardas de autorização (a UI só esconde itens; esta
@@ -828,17 +969,17 @@ export const AppUI = {
       lb.close();
     }
   },
-  showToast: function (msg, type = 'info') {
+  showToast: function (msg, type = 'info', options = {}) {
     // Proxy Pattern: Repassa a chamada para o novo NotificationManager Core
     try {
       if (type === 'success') {
-        notifications.success(msg);
+        notifications.success(msg, options);
       } else if (type === 'error') {
-        notifications.error(msg);
+        notifications.error(msg, options);
       } else if (type === 'warning') {
-        notifications.warning(msg);
+        notifications.warning(msg, options);
       } else {
-        notifications.info(msg);
+        notifications.info(msg, options);
       }
     } catch {
       window.Logger.warn('NotificationManager falhou. Fallback log:', msg);

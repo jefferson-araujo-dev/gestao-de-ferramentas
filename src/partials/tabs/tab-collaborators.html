@@ -19,7 +19,7 @@
         id="btn-collaborators-export"
         type="button"
         onclick="App.CRUDCollaborators.exportList()"
-        class="btn px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
+        class="ui-btn ui-btn--secondary shrink-0"
       >
         <svg class="w-4 h-4" aria-hidden="true"><use href="#icon-download"></use></svg>
         Exportar
@@ -122,17 +122,11 @@
       <p class="text-xs text-slate-500" id="collab-result-count" aria-live="polite">
         Mostrando 0 de 0 colaboradores
       </p>
-      <label
-        class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer"
-      >
-        <input
-          type="checkbox"
-          id="collab-group-toggle"
-          class="w-4 h-4 text-brand-600 rounded focus:ring-brand-500"
-          checked
-        />
-        <span>Agrupar por cargo</span>
-      </label>
+      <div class="ui-switch">
+        <input class="ui-switch__input" type="checkbox" role="switch" id="collab-group-toggle" checked />
+        <span class="ui-switch__track" aria-hidden="true"><span class="ui-switch__thumb"></span></span>
+        <label class="ui-switch__label" for="collab-group-toggle">Agrupar por cargo</label>
+      </div>
     </div>
   </div>
 

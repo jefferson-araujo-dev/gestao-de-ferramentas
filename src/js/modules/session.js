@@ -34,7 +34,9 @@ export const AppSession = {
     this.t = setTimeout(() => {
       if (auth.currentUser) {
         window.App.Auth.logout(true);
-        alert('Sessão expirada. Faça login novamente.');
+        window.App.UI.showToast('Sessão expirada. Faça login novamente.', 'warning', {
+          persistent: true
+        });
       }
     }, CONFIG.SESSION_LIMIT_MS);
   }
