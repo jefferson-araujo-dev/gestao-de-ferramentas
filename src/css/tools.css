@@ -1,0 +1,355 @@
+/* ============================================
+   TELA "FERRAMENTAS" (Gate 1-F2)
+   ============================================
+
+   Só tokens (tokens.css): claro/escuro pelos próprios tokens, sem variante de tema ad hoc, sem
+   importância forçada e sem cor literal. Usa os componentes do Gate 1-E (ui-btn, ui-card, ui-badge,
+   ui-menu, ui-empty...) e acrescenta só o layout da tela. Breakpoints do contrato do shell:
+   767.98 (mobile), 768 (tablet) e 1024 (notebook: a lista vira tabela).
+   ============================================ */
+
+.tools-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* `display` dos componentes (ui-btn...) vence o atributo `hidden` do navegador: reafirma-o na tela. */
+.tools-screen [hidden] {
+  display: none;
+}
+
+/* Ações do inventário (só administrador): sem ações visíveis, o cabeçalho não ocupa espaço. */
+.tools-header {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.tools-header:not(:has(.ui-btn:not([style*='display: none']))) {
+  display: none;
+}
+
+.tools-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tools-actions .ui-btn {
+  flex: none;
+}
+
+/* Filtros de status (com contagem). O estado ativo não é só cor: borda mais grossa e peso maior. */
+.tools-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tools-chip {
+  gap: var(--space-2);
+}
+
+.tools-chip[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.tools-chip__count {
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-ui-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.tools-chip[aria-pressed='true'] .tools-chip__count {
+  background: var(--color-surface);
+}
+
+.tools-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.tools-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-height: 2rem;
+  font-size: var(--text-label);
+  line-height: 1rem;
+  color: var(--color-text-secondary);
+}
+
+.tools-meta__count {
+  margin: 0;
+}
+
+.tools-meta__filters {
+  font-weight: 600;
+  color: var(--color-accent-text);
+}
+
+.tools-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.tools-feedback:empty {
+  display: none;
+}
+
+.tools-more {
+  display: flex;
+  justify-content: center;
+}
+
+.tools-skeleton {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+/* ---------- Miniatura, nome e status (tabela e cartões) ---------- */
+
+.tools-tool {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.tools-thumb {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ui-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+button.tools-thumb {
+  cursor: zoom-in;
+}
+
+.tools-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tools-tool__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tools-tool__name {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.tools-tool__meta {
+  font-size: var(--text-label);
+  line-height: 1rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.tools-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.tools-actions-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tools-menu {
+  position: relative;
+}
+
+/* ---------- Tabela (>= 1024) ---------- */
+
+.tools-table-wrap {
+  padding: 0;
+}
+
+.tools-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  color: var(--color-text-primary);
+}
+
+.tools-table thead th {
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  font-size: var(--text-label);
+  line-height: 1rem;
+  font-weight: 600;
+  text-align: start;
+  color: var(--color-text-secondary);
+}
+
+.tools-table thead th:first-child {
+  border-start-start-radius: var(--radius-ui-lg);
+}
+
+.tools-table thead th:last-child {
+  border-start-end-radius: var(--radius-ui-lg);
+}
+
+.tools-row + .tools-row > .tools-cell {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.tools-row:hover {
+  background: var(--color-surface-muted);
+}
+
+.tools-cell {
+  padding: var(--space-3) var(--space-4);
+  vertical-align: middle;
+  text-align: start;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.tools-cell--date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tools-cell--actions {
+  width: 1%;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.tools-cell--tool {
+  min-width: 14rem;
+}
+
+/* Emprestar/Devolver têm larguras diferentes: largura mínima comum mantém as ações alinhadas. */
+.tools-cell--actions .ui-btn {
+  min-width: 5.5rem;
+}
+
+/* ---------- Cartões (< 1024) ---------- */
+
+.tools-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tools-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+.tools-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-label);
+  line-height: 1rem;
+}
+
+.tools-facts__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tools-facts dt {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.tools-facts dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: end;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.tools-card .tools-actions-cell {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.tools-card .tools-actions-cell .ui-btn {
+  flex: 1;
+}
+
+/* Ponteiro grosso (toque): alvos de 44px também nos botões compactos desta tela. */
+@media (pointer: coarse) {
+  .tools-screen .ui-btn--sm {
+    min-height: var(--ui-control-h);
+  }
+}
+
+@media (min-width: 768px) {
+  .tools-toolbar {
+    grid-template-columns: minmax(0, 1fr) 13rem 12rem;
+  }
+
+  .tools-cards,
+  .tools-skeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767.98px) {
+  .tools-header,
+  .tools-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .tools-actions .ui-btn {
+    flex: 1 1 auto;
+  }
+}

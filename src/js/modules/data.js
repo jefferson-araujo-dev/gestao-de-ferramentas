@@ -93,6 +93,7 @@ export const AppData = {
   historyLimit: 20,
   historyUnsub: null,
   toolsLoaded: false,
+  toolsError: false,
   usersLoaded: false,
   collaboratorsLoaded: false,
   allHistoryLogs: null,
@@ -108,6 +109,7 @@ export const AppData = {
   init: function (permissions) {
     this.destroyListeners();
     this.toolsLoaded = false;
+    this.toolsError = false;
     this.usersLoaded = false;
     this.collaboratorsLoaded = false;
     window.App.UI.renderAll();
@@ -122,11 +124,13 @@ export const AppData = {
               ...d.data()
             }));
             this.toolsLoaded = true;
+            this.toolsError = false;
             window.App.UI.renderAll();
           },
           (err) => {
             this.tools = [];
             this.toolsLoaded = true;
+            this.toolsError = true;
             window.Logger.warn('Erro ao carregar ferramentas', err);
             window.App.UI.renderAll();
           }

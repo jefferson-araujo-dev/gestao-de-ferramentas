@@ -310,6 +310,8 @@ export const AppUI = {
 
     // Indicadores e filtros do Painel são renderizados pelos componentes (antes dos listeners).
     this.renderDashboardControls();
+    // Busca, categoria, ordenação e filtros de status de Ferramentas (também antes dos listeners).
+    window.App.CRUDTools.mountControls();
 
     // Menu da conta: componente Dropdown; ações por data-menu-action (sem onclick inline).
     const userTrigger = document.getElementById('user-menu-trigger');
@@ -424,32 +426,10 @@ export const AppUI = {
       // Mudança de orientação: o shell reage aos limites de breakpoint via matchMedia (App.Shell).
     }
 
-    // Inventory sort
-    document.getElementById('inventory-sort')?.addEventListener('change', () => {
-      window.App.CRUDTools.render();
-    });
-
+    // Ordenação e categoria de Ferramentas: listeners e opções são de App.CRUDTools (mountControls).
     document
       .getElementById('history-time-filter')
       ?.addEventListener('change', () => window.App.Data.processAndRenderHistory());
-
-    document.getElementById('inventory-category-filter')?.addEventListener('change', () => {
-      window.App.CRUDTools.render();
-    });
-
-    // Populate category filter dropdown
-    const categoryFilterEl = document.getElementById('inventory-category-filter');
-    if (categoryFilterEl && categoryFilterEl.options.length <= 1) {
-      const categories = [
-        ...new Set(window.App.Data.tools.map((t) => t.category).filter(Boolean)),
-      ].sort();
-      categories.forEach((cat) => {
-        const option = document.createElement('option');
-        option.value = cat;
-        option.textContent = cat;
-        categoryFilterEl.appendChild(option);
-      });
-    }
 
     // Back to top button listener
     if (!this._scrollListenerSetup) {

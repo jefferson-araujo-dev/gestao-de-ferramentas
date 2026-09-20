@@ -5,6 +5,47 @@ import {
   deleteDoc,
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { auth, db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
+import {
+  Alert,
+  Badge,
+  Button,
+  Dropdown,
+  EmptyState,
+  IconButton,
+  Search,
+  Select,
+  SkeletonCard,
+  StatusBadge,
+  esc,
+  icon
+} from '../components/index.js';
+import { BREAKPOINTS } from '../config/breakpoints.js';
+
+// Status (com contagem) da barra de filtros. Os valores são os mesmos de sempre.
+const STATUS_FILTERS = Object.freeze([
+  { value: 'all', label: 'Todas' },
+  { value: 'available', label: 'Disponíveis' },
+  { value: 'borrowed', label: 'Emprestadas' },
+  { value: 'maintenance', label: 'Manutenção' },
+  { value: 'late', label: 'Em atraso', hint: 'Ferramentas emprestadas há mais de 7 dias.' },
+  {
+    value: 'maintenance-due',
+    label: 'Revisão vencida',
+    hint: 'Ferramentas com calibração ou revisão vencida.'
+  }
+]);
+
+const SORT_OPTIONS = Object.freeze([
+  { value: 'name-asc', label: 'Nome A-Z' },
+  { value: 'name-desc', label: 'Nome Z-A' },
+  { value: 'category', label: 'Categoria' },
+  { value: 'status', label: 'Status' },
+  { value: 'recent', label: 'Mais recentes' },
+  { value: 'patrimony', label: 'Patrimônio' }
+]);
+
+// A lista vira tabela a partir do notebook (rail + conteúdo largo); abaixo disso são cartões.
+const TABLE_QUERY = `(min-width: ${BREAKPOINTS.notebook}px)`;
 
 async function requestToolMaintenance(body) {
   const currentUser = auth.currentUser;
@@ -56,6 +97,9 @@ export const AppCRUDTools = {
   currentFilter: 'all',
   selectedTools: new Set(),
   manualPreviewUrl: null,
+  _mounted: false,
+  _menus: [],
+  _renderPending: false,
 
   clearManualPreview: function () {
     if (this.manualPreviewUrl) {
@@ -203,12 +247,7 @@ export const AppCRUDTools = {
 
   setQuickFilter: function (filter) {
     this.currentFilter = filter;
-    document.querySelectorAll('.inv-filter-btn').forEach((btn) => {
-      btn.classList.remove('active');
-      if (btn.dataset.filter === filter) {
-        btn.classList.add('active');
-      }
-    });
+    this._syncChips();
     this.render();
   },
 
@@ -884,13 +923,300 @@ export const AppCRUDTools = {
     }
   },
 
+  // ---------------------------------------------------------------------------------------------
+  // TELA FERRAMENTAS (Gate 1-F2): controles, lista e ações.
+  // ---------------------------------------------------------------------------------------------
+
+  // Filtros e busca/ordenação são montados uma única vez (com os componentes do design system) e
+  // depois só atualizados: assim o foco do usuário não se perde a cada renderização.
+  mountControls: function () {
+    const filters = document.getElementById('tools-filters');
+    const toolbar = document.getElementById('tools-toolbar');
+
+    if (this._mounted || !filters || !toolbar) {
+      return;
+    }
+
+    this._mounted = true;
+
+    filters.innerHTML = STATUS_FILTERS.map((filter) => {
+      const hint = filter.hint
+        ? `<span id="tools-hint-${filter.value}" class="ui-sr-only">${esc(filter.hint)}</span>`
+        : '';
+
+      return `<button type="button" class="ui-btn ui-btn--secondary ui-btn--sm tools-chip" data-tools-filter="${filter.value}" aria-pressed="${filter.value === this.currentFilter}"${
+        filter.hint ? ` aria-describedby="tools-hint-${filter.value}"` : ''
+      }><span class="ui-btn__label">${esc(filter.label)}</span><span class="tools-chip__count" data-tools-count="${filter.value}">0</span></button>${hint}`;
+    }).join('');
+
+    toolbar.innerHTML =
+      Search({
+        id: 'tools-search',
+        label: 'Buscar por nome, patrimônio ou categoria',
+        placeholder: 'Nome, patrimônio ou categoria',
+        className: 'tools-toolbar__search'
+      }) +
+      Select({
+        id: 'inventory-category-filter',
+        label: 'Filtrar por categoria',
+        hideLabel: true,
+        className: 'tools-toolbar__select',
+        options: [{ value: 'all', label: 'Todas as categorias' }]
+      }) +
+      Select({
+        id: 'inventory-sort',
+        label: 'Ordenar por',
+        hideLabel: true,
+        className: 'tools-toolbar__select',
+        options: SORT_OPTIONS
+      });
+
+    this._bindEvents();
+  },
+
+  // Listeners da tela (delegação): nada de onclick inline nos itens renderizados.
+  _bindEvents: function () {
+    const screen = document.getElementById('tab-management');
+
+    screen?.addEventListener('click', (event) => this._onClick(event));
+    document
+      .getElementById('inventory-category-filter')
+      ?.addEventListener('change', () => this.render());
+    document.getElementById('inventory-sort')?.addEventListener('change', () => this.render());
+    document
+      .getElementById('crud-import-input-tool')
+      ?.addEventListener('change', (event) => this.importFile(event));
+
+    // A lista troca de forma (tabela x cartões) na mudança do breakpoint; os dados são os mesmos.
+    const wide = window.matchMedia(TABLE_QUERY);
+
+    wide.addEventListener('change', () => {
+      if (window.App?.UI?.activeTab === 'management') {
+        this.render();
+      }
+    });
+  },
+
+  _onClick: function (event) {
+    const filter = event.target.closest('[data-tools-filter]');
+
+    if (filter) {
+      this.setQuickFilter(filter.dataset.toolsFilter);
+      return;
+    }
+
+    const trigger = event.target.closest('[data-tools-action]');
+
+    if (!trigger || trigger.disabled) {
+      return;
+    }
+
+    const { toolsAction: action, toolId } = trigger.dataset;
+
+    // Item de menu: devolve o foco ao gatilho da linha antes da ação. Se a ação abrir um modal, o
+    // navegador devolve o foco a esse gatilho ao fechá-lo (o item do menu já não existe visível).
+    if (trigger.getAttribute('role') === 'menuitem') {
+      this._focusMenuTrigger(toolId);
+    }
+
+    switch (action) {
+      case 'export':
+        this.quickExport();
+        break;
+      case 'import':
+        document.getElementById('crud-import-input-tool')?.click();
+        break;
+      case 'new':
+        this.openModal();
+        break;
+      case 'clear-filters':
+        this.clearFilters();
+        break;
+      case 'load-more':
+        window.App.Data.loadMoreCrud();
+        break;
+      case 'scanner':
+        window.App.UI.switchTab('scanner');
+        setTimeout(() => window.App.Scanner.setMode('cam'), 100);
+        break;
+      case 'edit':
+        this.openModal(toolId);
+        break;
+      case 'maintenance':
+        this.openMaintenanceModal(toolId);
+        break;
+      case 'history':
+        this.showHistory(toolId);
+        break;
+      case 'status':
+        this.quickStatusUpdate(toolId, trigger.dataset.nextStatus);
+        break;
+      case 'preview':
+        window.App.UI.showImagePreview(
+          trigger.querySelector('img')?.src || '',
+          trigger.dataset.name
+        );
+        break;
+      default:
+    }
+  },
+
+  clearFilters: function () {
+    const search = document.getElementById('tools-search');
+    const category = document.getElementById('inventory-category-filter');
+
+    if (search) {
+      search.value = '';
+    }
+
+    if (category) {
+      category.value = 'all';
+    }
+
+    this.setQuickFilter('all');
+    // O botão "Limpar filtros" some ao limpar: o foco vai para a busca, não se perde.
+    search?.focus();
+  },
+
+  // Categorias vêm dos dados carregados (a lista só é conhecida depois do carregamento).
+  _syncCategories: function (tools) {
+    const select = document.getElementById('inventory-category-filter');
+
+    if (!select) {
+      return;
+    }
+
+    const categories = [...new Set(tools.map((t) => t.category).filter(Boolean))].sort((a, b) =>
+      a.localeCompare(b, 'pt-BR')
+    );
+    const key = categories.join('\u0000');
+
+    if (select.dataset.categories === key) {
+      return;
+    }
+
+    const previous = select.value;
+
+    select.innerHTML =
+      '<option value="all">Todas as categorias</option>' +
+      categories.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    select.value = categories.includes(previous) ? previous : 'all';
+    select.dataset.categories = key;
+  },
+
+  _isTableLayout: function () {
+    return window.matchMedia(TABLE_QUERY).matches;
+  },
+
+  _disposeMenus: function () {
+    this._menus.forEach((menu) => menu.dispose());
+    this._menus = [];
+  },
+
+  _mountMenus: function (list) {
+    this._menus = [...list.querySelectorAll('[data-dropdown]')].map(
+      (root) =>
+        new Dropdown({
+          trigger: root.querySelector('[data-tools-menu-trigger]'),
+          panel: root.querySelector('.ui-menu'),
+          onClose: ({ restoreFocus } = {}) =>
+            this._flushPendingRender({
+              restoreFocus,
+              toolId: root.closest('[data-tool-id]')?.dataset.toolId
+            })
+        })
+    );
+  },
+
+  // Uma atualização de dados durante um menu aberto esperaria o menu fechar: re-renderizar agora
+  // faria o menu sumir debaixo do teclado/leitor de tela.
+  _flushPendingRender: function ({ restoreFocus = false, toolId } = {}) {
+    if (this._renderPending && !this._menus.some((menu) => menu.isOpen())) {
+      this._renderPending = false;
+      this.render();
+
+      // O gatilho antigo saiu do DOM com a renderização: o foco volta ao gatilho novo da mesma linha.
+      if (restoreFocus) {
+        this._focusMenuTrigger(toolId);
+      }
+    }
+  },
+
+  _focusMenuTrigger: function (toolId) {
+    const row = [...document.querySelectorAll('#crud-list tr[data-tool-id], #crud-list li[data-tool-id]')].find(
+      (element) => element.dataset.toolId === toolId
+    );
+
+    row?.querySelector('[data-tools-menu-trigger]')?.focus({ preventScroll: true });
+  },
+
+  _setMeta: function ({ count, filters = 0 }) {
+    const countEl = document.getElementById('inventory-result-count');
+    const filtersEl = document.getElementById('tools-active-filters');
+    const clearButton = document.getElementById('tools-clear-filters');
+
+    if (countEl) {
+      countEl.textContent = count;
+    }
+
+    if (filtersEl) {
+      filtersEl.textContent = filters
+        ? `${filters} filtro${filters !== 1 ? 's' : ''} ativo${filters !== 1 ? 's' : ''}`
+        : '';
+    }
+
+    if (clearButton) {
+      clearButton.hidden = filters === 0;
+    }
+  },
+
   render: function () {
     const list = window.App.UI.domCache?.crudList || document.getElementById('crud-list');
     if (!list) {
       return;
     }
+
+    if (this._menus.some((menu) => menu.isOpen())) {
+      this._renderPending = true;
+      return;
+    }
+
+    this._disposeMenus();
+
+    const loadMore = document.getElementById('crud-load-more');
+    const feedback = document.getElementById('tools-feedback');
+
+    if (feedback) {
+      feedback.innerHTML = '';
+    }
+
     if (!window.App.Data.toolsLoaded) {
-      list.innerHTML = Array(6).fill(window.Utils.getSkeletonHTML()).join('');
+      list.setAttribute('aria-busy', 'true');
+      list.innerHTML = `<div class="tools-skeleton">${Array(6).fill(SkeletonCard()).join('')}</div>`;
+      this._setMeta({ count: 'Carregando ferramentas...' });
+      if (loadMore) {
+        loadMore.hidden = true;
+      }
+      return;
+    }
+
+    list.removeAttribute('aria-busy');
+
+    // Falha ao carregar: aviso persistente e distinto de "nenhuma ferramenta cadastrada".
+    if (window.App.Data.toolsError) {
+      if (feedback) {
+        feedback.innerHTML = Alert({
+          tone: 'danger',
+          title: 'Não foi possível carregar as ferramentas',
+          message:
+            'Verifique a conexão e recarregue a página. Se o problema continuar, procure um administrador.'
+        });
+      }
+      list.innerHTML = '';
+      this._setMeta({ count: '' });
+      if (loadMore) {
+        loadMore.hidden = true;
+      }
       return;
     }
 
@@ -902,25 +1228,23 @@ export const AppCRUDTools = {
 
     this.updateDashboardCharts(tools);
 
-    const setText = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.textContent = val;
-      }
-    };
-    setText('inv-stat-total', tools.length);
-    setText('inv-stat-available', cA);
-    setText('inv-stat-borrowed', cB);
-    setText('inv-stat-maintenance', cM);
-
-    setText('filter-inv-available', cA);
-    setText('filter-inv-borrowed', cB);
-    setText('filter-inv-maintenance', cM);
-
     const cLate = tools.filter((t) => this.isLate(t)).length;
     const cMaintDue = tools.filter((t) => this.isMaintenanceDue(t)).length;
-    setText('filter-count-late', cLate);
-    setText('filter-count-maintenance-due', cMaintDue);
+
+    const counts = {
+      all: tools.length,
+      available: cA,
+      borrowed: cB,
+      maintenance: cM,
+      late: cLate,
+      'maintenance-due': cMaintDue
+    };
+
+    document.querySelectorAll('[data-tools-count]').forEach((el) => {
+      el.textContent = counts[el.dataset.toolsCount] ?? 0;
+    });
+    this._syncChips();
+    this._syncCategories(tools);
 
     const q = window.Utils.removeAccents(
       document.getElementById('tools-search')?.value || ''
@@ -977,100 +1301,193 @@ export const AppCRUDTools = {
       }
     });
 
-    const resultCountEl = document.getElementById('inventory-result-count');
-    if (resultCountEl) {
-      resultCountEl.textContent = `Mostrando ${Math.min(filtered.length, window.App.Data.crudLimit)} de ${filtered.length} ferramenta${filtered.length !== 1 ? 's' : ''}`;
-    }
+    const activeFilters =
+      (this.currentFilter !== 'all' ? 1 : 0) + (categoryFilter !== 'all' ? 1 : 0) + (q ? 1 : 0);
+
+    this._setMeta({
+      count: `Mostrando ${Math.min(filtered.length, window.App.Data.crudLimit)} de ${filtered.length} ferramenta${filtered.length !== 1 ? 's' : ''}`,
+      filters: activeFilters
+    });
 
     if (!filtered.length) {
-      const hasFilters =
-        this.currentFilter !== 'all' ||
-        q ||
-        document.getElementById('inventory-category-filter')?.value !== 'all';
-
-      list.innerHTML = `<div class="col-span-full text-center py-16 empty-state">
-        <div class="w-24 h-24 mx-auto mb-6 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center">
-          <svg class="w-12 h-12 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-          </svg>
-        </div>
-        <h3 class="text-xl font-bold text-slate-700 dark:text-slate-300">${hasFilters ? 'Nenhuma ferramenta encontrada' : 'Nenhuma ferramenta cadastrada'}</h3>
-        <p class="text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto">${hasFilters ? 'Tente ajustar os filtros de busca ou selecione outra categoria.' : 'Comece adicionando ferramentas ao inventário para gerenciar seu patrimônio.'}</p>
-        ${!hasFilters && this.canManageTools() ? '<button onclick="App.CRUDTools.openModal()" class="mt-6 px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-lg shadow-brand-600/30 transition-all active:scale-95 flex items-center gap-2 mx-auto"><svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Nova Ferramenta</button>' : ''}
-      </div>`;
-      document.getElementById('crud-load-more')?.classList.add('hidden');
+      list.innerHTML = this._emptyStateHtml(tools.length > 0);
+      if (loadMore) {
+        loadMore.hidden = true;
+      }
       return;
     }
 
-    const showLoadMore = filtered.length > window.App.Data.crudLimit;
-    document.getElementById('crud-load-more')?.classList.toggle('hidden', !showLoadMore);
+    if (loadMore) {
+      loadMore.hidden = filtered.length <= window.App.Data.crudLimit;
+    }
     const paginated = filtered.slice(0, window.App.Data.crudLimit);
 
-    list.innerHTML = this.renderGridView(paginated);
+    list.innerHTML = this._isTableLayout()
+      ? this.renderTableView(paginated)
+      : this.renderCardsView(paginated);
+    this._mountMenus(list);
   },
 
-  renderGridView: function (tools) {
-    const canManage = this.canManageTools();
-    return tools
-      .map((t) => {
-        const safeName = window.Utils.escapeHTML(t.name);
-        const imgHtml = t.imageUrl
-          ? `<img src="${window.Utils.escapeHTML(t.imageUrl)}" data-name="${safeName}" onclick="App.UI.showImagePreview(this.src, this.getAttribute('data-name'))" class="w-16 h-16 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0 cursor-zoom-in shadow-sm hover:scale-105 transition-transform" loading="lazy" decoding="async">`
-          : '<div class="w-16 h-16 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 text-slate-300 dark:text-slate-600"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>';
-        const dotColor =
-          t.status === 'borrowed'
-            ? 'bg-amber-500'
-            : t.status === 'maintenance'
-              ? 'bg-rose-500'
-              : 'bg-emerald-500';
-        const statusBorder =
-          t.status === 'borrowed'
-            ? 'border-l-amber-500'
-            : t.status === 'maintenance'
-              ? 'border-l-rose-500'
-              : 'border-l-emerald-500';
-        const isLate = this.isLate(t);
-        const isMaintDue = this.isMaintenanceDue(t);
-        const isMaintWarn = this.isMaintenanceWarning(t);
-        let customBadges = '';
-        if (isLate) {
-          customBadges += `<span class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded animate-pulse border border-rose-200 shadow-sm whitespace-nowrap">⚠️ Atrasada (${this.getDaysLate(t)}d)</span>`;
-        }
-        if (isMaintDue) {
-          customBadges +=
-            '<span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-bold rounded animate-pulse border border-orange-200 shadow-sm whitespace-nowrap">⚠️ Rev. Vencida</span>';
-        } else if (isMaintWarn) {
-          customBadges +=
-            '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-[10px] font-bold rounded border border-yellow-200 shadow-sm whitespace-nowrap">⏳ Rev. Próxima</span>';
-        }
+  // EMPTY: o inventário está vazio. NO_RESULTS: há ferramentas, mas nenhuma atende à busca/filtros.
+  _emptyStateHtml: function (hasTools) {
+    if (hasTools) {
+      const action = Button({
+        label: 'Limpar filtros',
+        variant: 'secondary',
+        attributes: { 'data-tools-action': 'clear-filters' }
+      });
 
-        const overrideBorder = isLate
-          ? 'border-2 border-rose-500 shadow-rose-500/20'
-          : isMaintDue
-            ? 'border-2 border-orange-500 shadow-orange-500/20'
-            : '';
-        const finalBorderClass =
-          overrideBorder ||
-          `border border-slate-200 dark:border-slate-800 border-l-4 ${statusBorder}`;
+      return EmptyState({
+        title: 'Nenhuma ferramenta encontrada',
+        description: 'Nenhuma ferramenta corresponde à busca e aos filtros atuais.',
+        icon: 'icon-search',
+        action
+      });
+    }
 
-        const quickActionBtn = canManage
-          ? t.status === 'available'
-            ? '<button aria-label="Emprestar" onclick="App.UI.switchTab(\'scanner\'); setTimeout(() => App.Scanner.setMode(\'cam\'), 100);" class="flex-1 py-2 bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-400 rounded-xl border border-brand-200 dark:border-brand-800 transition-colors flex items-center justify-center shadow-sm" title="Emprestar"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10h14l-4-4"/><path d="M17 14H3l4 4"/></svg></button>'
-            : t.status === 'borrowed'
-              ? '<button aria-label="Devolver" onclick="App.UI.switchTab(\'scanner\'); setTimeout(() => App.Scanner.setMode(\'cam\'), 100);" class="flex-1 py-2 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 rounded-xl border border-emerald-200 dark:border-emerald-800 transition-colors flex items-center justify-center shadow-sm" title="Devolver"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg></button>'
-              : ''
-          : '';
-        const maintenanceActionBtn =
-          canManage && t.status !== 'borrowed'
-            ? `<button aria-label="Registrar manutenção" onclick="App.CRUDTools.openMaintenanceModal('${t.firebaseId}')" class="flex-1 py-2 bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-400 rounded-xl border border-rose-200 dark:border-rose-800 transition-colors flex items-center justify-center shadow-sm" title="Registrar Manutenção"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></button>`
-            : '';
-
-        const statusControl = canManage
-          ? `<select onchange="App.CRUDTools.quickStatusUpdate('${t.firebaseId}', this.value)" class="text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 outline-none focus:ring-2 focus:ring-brand-500/20 cursor-pointer ${t.status === 'borrowed' ? 'text-amber-600' : t.status === 'maintenance' ? 'text-rose-600' : 'text-emerald-600'}"><option value="available" ${t.status === 'available' ? 'selected' : ''}>Disponível</option><option value="borrowed" ${t.status === 'borrowed' ? 'selected' : ''}>Emprestada</option><option value="maintenance" ${t.status === 'maintenance' ? 'selected' : ''}>Manutenção</option></select>`
-          : `<span class="text-[11px] font-bold ${t.status === 'borrowed' ? 'text-amber-600' : t.status === 'maintenance' ? 'text-rose-600' : 'text-emerald-600'}">${t.status === 'borrowed' ? 'Emprestada' : t.status === 'maintenance' ? 'Manutenção' : 'Disponível'}</span>`;
-        return `<div class="tool-card bg-white dark:bg-slate-900 rounded-2xl shadow-sm ${finalBorderClass} p-5 flex flex-col gap-4 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"><div class="flex items-start gap-4 pl-2"><div class="relative">${imgHtml}<span class="absolute -top-1 -right-1 w-3 h-3 rounded-full ${dotColor} border-2 border-white dark:border-slate-900 shadow-sm"></span></div><div class="flex-1 min-w-0"><h3 class="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${safeName}">${safeName}</h3><div class="flex items-center gap-1.5 mt-1.5 flex-wrap"><span class="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 text-[10px] font-bold rounded">${window.Utils.escapeHTML(t.category)}</span><p class="text-[10px] font-bold text-slate-500 truncate">Pat: ${window.Utils.escapeHTML(t.code)}</p>${customBadges}</div></div></div><div class="border-t border-slate-100 dark:border-slate-800 ml-2"></div><div class="flex flex-col gap-2 pl-2"><div class="flex justify-between items-center"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status Atual</span>${statusControl}</div><div class="flex justify-between items-center mt-0.5"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest" title="Última atualização do status"><svg class="w-3 h-3 inline-block mr-0.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Última Ação</span><span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">${t.lastAction ? window.Utils.formatDate(t.lastAction) : '-'}</span></div>${t.currentUser ? `<div class="flex justify-between items-center"><span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Responsável</span><span class="text-[10px] font-bold text-brand-600 dark:text-brand-400 truncate max-w-[120px]">${window.Utils.escapeHTML(t.currentUser)}</span></div>` : ''}</div><div class="flex gap-1.5 mt-2">${quickActionBtn}${maintenanceActionBtn}<button aria-label="Editar" onclick="App.CRUDTools.openModal('${t.firebaseId}')" class="${canManage ? '' : 'hidden'} flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Editar Ferramenta"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button><button aria-label="Histórico" onclick="App.CRUDTools.showHistory('${t.firebaseId}')" class="${canManage ? '' : 'hidden'} flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Ver Histórico"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button></div></div>`;
+    const action = this.canManageTools()
+      ? Button({
+        label: 'Nova ferramenta',
+        variant: 'secondary',
+        icon: 'icon-plus',
+        attributes: { 'data-tools-action': 'new' }
       })
-      .join(' ');
+      : '';
+
+    return EmptyState({
+      title: 'Nenhuma ferramenta cadastrada',
+      description: 'Comece adicionando ferramentas ao inventário para gerenciar seu patrimônio.',
+      icon: 'icon-inventory',
+      action
+    });
+  },
+
+  _syncChips: function () {
+    document.querySelectorAll('[data-tools-filter]').forEach((chip) => {
+      chip.setAttribute('aria-pressed', String(chip.dataset.toolsFilter === this.currentFilter));
+    });
+  },
+
+  // Miniatura: clicável (amplia) quando há imagem; ícone decorativo quando não há.
+  _thumb: function (t) {
+    const name = esc(t.name);
+
+    return t.imageUrl
+      ? `<button type="button" class="tools-thumb" data-tools-action="preview" data-name="${name}" aria-label="Ampliar imagem de ${name}"><img src="${esc(t.imageUrl)}" alt="" loading="lazy" decoding="async"></button>`
+      : `<span class="tools-thumb" aria-hidden="true">${icon('icon-inventory', 'ui-icon')}</span>`;
+  },
+
+  // Status (StatusBadge, sempre com texto) + alertas de prazo, sempre em palavras.
+  _statusCell: function (t) {
+    let flags = '';
+
+    if (this.isLate(t)) {
+      flags += Badge({ label: `Atrasada (${this.getDaysLate(t)}d)`, tone: 'danger' });
+    }
+
+    if (this.isMaintenanceDue(t)) {
+      flags += Badge({ label: 'Revisão vencida', tone: 'warning' });
+    } else if (this.isMaintenanceWarning(t)) {
+      flags += Badge({ label: 'Revisão próxima', tone: 'info' });
+    }
+
+    return `<div class="tools-status">${StatusBadge(t.status)}${flags}</div>`;
+  },
+
+  // Ação principal (Emprestar/Devolver, atalho para o Scanner) + menu com as demais. Só para quem
+  // pode gerenciar ferramentas; cada ação continua validando a permissão ao executar.
+  _actionsCell: function (t) {
+    if (!this.canManageTools()) {
+      return '';
+    }
+
+    const id = esc(t.firebaseId);
+    const borrowed = t.status === 'borrowed';
+    const item = (action, label, extra = '') =>
+      `<button type="button" role="menuitem" class="ui-menu__item" data-tools-action="${action}" data-tool-id="${id}"${extra}>${esc(label)}</button>`;
+
+    let primary = '';
+
+    if (t.status === 'available' || borrowed) {
+      const label = borrowed ? 'Devolver' : 'Emprestar';
+
+      primary = Button({
+        label,
+        size: 'sm',
+        variant: 'secondary',
+        attributes: { 'data-tools-action': 'scanner', 'aria-label': `${label} ${t.name}` }
+      });
+    }
+
+    let items = item('edit', 'Editar');
+
+    if (!borrowed) {
+      items += item('maintenance', 'Registrar manutenção');
+    }
+
+    items += item('history', 'Histórico');
+
+    if (!borrowed) {
+      const targets = [
+        ['available', 'Marcar como disponível'],
+        ['borrowed', 'Marcar como emprestada'],
+        ['maintenance', 'Marcar como em manutenção']
+      ].filter(([status]) => status !== t.status);
+
+      items += '<hr class="ui-menu__sep" role="separator">';
+      items += targets
+        .map(([status, label]) => item('status', label, ` data-next-status="${status}"`))
+        .join('');
+    }
+
+    const trigger = IconButton({
+      label: `Mais ações de ${t.name}`,
+      icon: 'icon-more',
+      attributes: { 'data-tools-menu-trigger': true }
+    });
+
+    return `<div class="tools-actions-cell">${primary}<div class="tools-menu" data-dropdown>${trigger}<div class="ui-menu" aria-label="Ações de ${esc(t.name)}">${items}</div></div></div>`;
+  },
+
+  _dash: function (label) {
+    return `<span aria-hidden="true">—</span><span class="ui-sr-only">${esc(label)}</span>`;
+  },
+
+  // Desktop/notebook (>= 1024): tabela semântica para comparar ferramentas lado a lado.
+  renderTableView: function (tools) {
+    const canManage = this.canManageTools();
+    const rows = tools
+      .map(
+        (t) =>
+          `<tr class="tools-row" data-tool-id="${esc(t.firebaseId)}"><th scope="row" class="tools-cell tools-cell--tool"><div class="tools-tool">${this._thumb(t)}<div class="tools-tool__text"><span class="tools-tool__name">${esc(t.name)}</span><span class="tools-tool__meta">${esc(t.code)} · ${esc(t.category)}</span></div></div></th><td class="tools-cell">${this._statusCell(t)}</td><td class="tools-cell">${
+            t.currentUser ? esc(t.currentUser) : this._dash('Sem responsável')
+          }</td><td class="tools-cell tools-cell--date">${
+            t.lastAction ? esc(window.Utils.formatDate(t.lastAction)) : this._dash('Sem registro')
+          }</td>${canManage ? `<td class="tools-cell tools-cell--actions">${this._actionsCell(t)}</td>` : ''}</tr>`
+      )
+      .join('');
+
+    return `<div class="ui-card tools-table-wrap"><table class="tools-table"><caption class="ui-sr-only">Lista de ferramentas</caption><thead><tr><th scope="col">Ferramenta</th><th scope="col">Status</th><th scope="col">Responsável</th><th scope="col">Última ação</th>${
+      canManage ? '<th scope="col"><span class="ui-sr-only">Ações</span></th>' : ''
+    }</tr></thead><tbody>${rows}</tbody></table></div>`;
+  },
+
+  // Tablet/mobile (< 1024): cartões compactos, mesma informação, mesma ordem de leitura.
+  renderCardsView: function (tools) {
+    const items = tools
+      .map(
+        (t) =>
+          `<li class="ui-card tools-card" data-tool-id="${esc(t.firebaseId)}"><div class="tools-tool">${this._thumb(t)}<div class="tools-tool__text"><h3 class="tools-tool__name">${esc(t.name)}</h3><span class="tools-tool__meta">${esc(t.code)} · ${esc(t.category)}</span></div></div>${this._statusCell(t)}<dl class="tools-facts">${
+            t.currentUser
+              ? `<div class="tools-facts__row"><dt>Responsável</dt><dd>${esc(t.currentUser)}</dd></div>`
+              : ''
+          }<div class="tools-facts__row"><dt>Última ação</dt><dd>${
+            t.lastAction ? esc(window.Utils.formatDate(t.lastAction)) : this._dash('Sem registro')
+          }</dd></div></dl>${this._actionsCell(t)}</li>`
+      )
+      .join('');
+
+    return `<ul class="tools-cards" role="list">${items}</ul>`;
   },
 
   openModal: function (id = null) {

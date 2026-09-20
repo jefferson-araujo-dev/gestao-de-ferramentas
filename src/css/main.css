@@ -4,6 +4,7 @@
 @import './shell.css';
 @import './components.css';
 @import './data-admin.css';
+@import './tools.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -202,7 +203,6 @@ body,
 
 /* Camada de sobriedade visual para reduzir disputa entre filtros, cards e ações secundárias. */
 #quick-filters .quick-filter-btn,
-#inventory-quick-filters .inv-filter-btn,
 #users-filters .filter-btn,
 #collab-quick-filters .collab-filter-btn,
 .sort-btn {
@@ -214,7 +214,6 @@ body,
 }
 
 #quick-filters .quick-filter-btn:hover,
-#inventory-quick-filters .inv-filter-btn:hover,
 #users-filters .filter-btn:hover,
 #collab-quick-filters .collab-filter-btn:hover,
 .sort-btn:hover {
@@ -223,7 +222,6 @@ body,
 }
 
 .dark #quick-filters .quick-filter-btn:hover,
-.dark #inventory-quick-filters .inv-filter-btn:hover,
 .dark #users-filters .filter-btn:hover,
 .dark #collab-quick-filters .collab-filter-btn:hover,
 .dark .sort-btn:hover {
@@ -232,7 +230,6 @@ body,
 }
 
 #quick-filters .quick-filter-btn.active,
-#inventory-quick-filters .inv-filter-btn.active,
 #users-filters .filter-btn.active,
 #collab-quick-filters .collab-filter-btn.active,
 .sort-btn.active {
@@ -243,37 +240,12 @@ body,
 }
 
 .dark #quick-filters .quick-filter-btn.active,
-.dark #inventory-quick-filters .inv-filter-btn.active,
 .dark #users-filters .filter-btn.active,
 .dark #collab-quick-filters .collab-filter-btn.active,
 .dark .sort-btn.active {
   background-color: rgba(30, 64, 175, 0.22) !important;
   border-color: rgba(147, 197, 253, 0.36) !important;
   color: #93c5fd !important;
-}
-
-#inventory-stats > div {
-  background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
-}
-
-.dark #inventory-stats > div {
-  background-color: #0f172a !important;
-  border-color: #334155 !important;
-}
-
-#inventory-stats [class*='text-brand'],
-#inventory-stats [class*='text-emerald'],
-#inventory-stats [class*='text-amber'],
-#inventory-stats [class*='text-rose'] {
-  color: #334155 !important;
-}
-
-.dark #inventory-stats [class*='text-brand'],
-.dark #inventory-stats [class*='text-emerald'],
-.dark #inventory-stats [class*='text-amber'],
-.dark #inventory-stats [class*='text-rose'] {
-  color: #e2e8f0 !important;
 }
 
 /* Animations */
@@ -764,11 +736,6 @@ body,
 .filter-btn.active {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.inv-filter-btn.active {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
 }
 
 /* User counter cards */
