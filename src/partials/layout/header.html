@@ -113,8 +113,8 @@
       </button>
 
       <!-- Menu da CONTA (componente Dropdown: teclado, Esc, clique fora). Ações sem onclick inline:
-           data-menu-action é tratado por App.UI. A seção "Dados (transitório)" segue como dívida
-           documentada até a tela Dados e backup. -->
+           data-menu-action é tratado por App.UI. As ações de dados moraram aqui até o Gate 1-F1 e agora
+           vivem na tela administrativa Dados e backup (#/dados). -->
       <div id="user-dropdown-menu" class="ui-menu" aria-label="Menu da conta">
         <button id="btn-profile-modal" type="button" role="menuitem" class="ui-menu__item" data-menu-action="profile">
           <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -136,58 +136,6 @@
           </svg>
           <span id="dark-mode-text">Modo Noturno</span>
         </button>
-
-        <div id="admin-tools" role="group" aria-labelledby="admin-tools-heading">
-          <div class="ui-menu__sep" role="separator"></div>
-          <p class="ui-menu__label" id="admin-tools-heading">Dados (transitório)</p>
-          <label class="ui-menu__item" role="menuitem">
-            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>
-              <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
-              <path d="M8 13h2"></path>
-              <path d="M14 13h2"></path>
-              <path d="M8 17h2"></path>
-              <path d="M14 17h2"></path>
-            </svg>
-            Importar Excel
-            <input type="file" accept=".xlsx,.xls" id="file-import-excel" class="hidden" />
-          </label>
-          <button id="btn-reset-data" type="button" role="menuitem" class="ui-menu__item ui-menu__item--danger" data-menu-action="reset">
-            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <path d="M10 11v6"></path>
-              <path d="M14 11v6"></path>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-              <path d="M3 6h18"></path>
-              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            </svg>
-            Resetar dados operacionais
-          </button>
-          <button id="btn-export-json" type="button" role="menuitem" class="ui-menu__item" data-menu-action="export-json">
-            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-              <path d="M3 5V19A9 3 0 0 0 21 19V5"></path>
-              <path d="M3 12A9 3 0 0 0 21 12"></path>
-            </svg>
-            Backup JSON
-          </button>
-          <label class="ui-menu__item" role="menuitem">
-            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <path d="M12 13v8"></path>
-              <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
-              <path d="m8 17 4-4 4 4"></path>
-            </svg>
-            Restaurar JSON
-            <input type="file" accept=".json" id="file-restore-json" class="hidden" />
-          </label>
-          <button id="btn-metrics-report" type="button" role="menuitem" class="ui-menu__item" data-menu-action="metrics">
-            <svg class="w-4 h-4 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-              <line x1="18" x2="18" y1="20" y2="10"></line>
-              <line x1="12" x2="12" y1="20" y2="4"></line>
-              <line x1="6" x2="6" y1="20" y2="14"></line>
-            </svg>
-            Métricas do Sistema
-          </button>
-        </div>
 
         <div class="ui-menu__sep" role="separator"></div>
         <button id="btn-logout-header" type="button" role="menuitem" class="ui-menu__item ui-menu__item--danger" data-menu-action="logout">

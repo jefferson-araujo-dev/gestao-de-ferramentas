@@ -24,6 +24,8 @@ const resetApi = read('api/backup/reset.js');
 const serverCore = read('server/backup-operations.js');
 const contract = read('src/js/utils/backupContract.js');
 const dataModule = read('src/js/modules/data.js');
+const dataAdminModel = read('src/js/utils/dataAdminModel.js');
+const dataAdminScreen = read('src/js/modules/dataAdmin.js');
 const cli = read('scripts/backup-database.mjs');
 
 describe('seguranca estatica - APIs de backup', () => {
@@ -119,12 +121,13 @@ describe('seguranca estatica - nucleo server-side', () => {
 });
 
 describe('cliente - restore/reset sem escrita direta no Firestore', () => {
-  const importJson = sliceBetween(dataModule, '  importJSON: async function', '  exportExcel: async function');
+  // Gate 1-F1: a restauração ganhou etapas (inspectBackupFile valida; restoreBackup confirma e executa).
+  const importJson = sliceBetween(dataModule, '  restoreBackup: async function', '  exportExcel: async function');
   const resetAll = sliceBetween(dataModule, '  resetAllData: async function', '  exportJSON: async function');
   const exportJson = sliceBetween(dataModule, '  exportJSON: async function', '  latestKnownActivity: function');
   const FIRESTORE_WRITES = /\b(deleteDoc|setDoc|updateDoc|addDoc|writeBatch|runTransaction)\s*\(/;
 
-  test('importJSON e resetAllData nao chamam deleteDoc/setDoc/etc.', () => {
+  test('restoreBackup e resetAllData nao chamam deleteDoc/setDoc/etc.', () => {
     assert.doesNotMatch(importJson, FIRESTORE_WRITES);
     assert.doesNotMatch(resetAll, FIRESTORE_WRITES);
     assert.doesNotMatch(dataModule.slice(0, dataModule.indexOf('export const AppData')), /\bsetDoc\b/);
@@ -151,9 +154,31 @@ describe('cliente - restore/reset sem escrita direta no Firestore', () => {
     assert.ok(resetAll.indexOf("filenamePrefix: 'pre_reset'") < resetAll.indexOf('/api/backup/reset'));
   });
 
-  test('importJSON valida localmente com o contrato antes de qualquer chamada', () => {
+  test('restoreBackup revalida com o contrato antes de qualquer chamada; a inspecao valida o arquivo', () => {
     assert.match(importJson, /normalizeBackup\(parsed, \{ requireNonEmpty: true \}\)/);
     assert.ok(importJson.indexOf('normalizeBackup(') < importJson.indexOf('requestBackupApi('));
+    assert.match(dataAdminModel, /normalizeBackup\(parsed, \{ requireNonEmpty: true \}\)/);
+    assert.match(dataAdminModel, /verifyBackupDataHash\(/);
+  });
+
+  test('restauracao em etapas: selecionar o arquivo nunca chama a API nem escreve', () => {
+    const inspect = sliceBetween(dataModule, '  inspectBackupFile: async function', '  restoreBackup: async function');
+
+    assert.match(inspect, /canBackupData !== true/);
+    assert.doesNotMatch(inspect, /requestBackupApi|fetch\(|\/api\//);
+    assert.doesNotMatch(inspect, FIRESTORE_WRITES);
+    assert.doesNotMatch(dataAdminModel, /\bfetch\(|requestBackupApi\(|from .*firebase/i);
+    assert.doesNotMatch(dataAdminScreen, /fetch\(|\/api\/|requestBackupApi/);
+  });
+
+  test('operacoes destrutivas usam ConfirmDialog reforcado e nunca confirm() nativo', () => {
+    assert.doesNotMatch(dataModule, /(^|[^.\w])confirm\(/m);
+    assert.doesNotMatch(dataModule, /\balert\(|\bprompt\(/);
+    assert.match(importJson, /requireText: RESTORE_CONFIRM_WORD/);
+    assert.match(resetAll, /requireText: RESET_CONFIRM_WORD/);
+    // Cancelar (confirmed === false) sai antes de qualquer backup de seguranca ou chamada de API.
+    assert.ok(importJson.indexOf('if (!confirmed)') < importJson.indexOf("filenamePrefix: 'pre_restore'"));
+    assert.ok(resetAll.indexOf('if (!confirmed)') < resetAll.indexOf("filenamePrefix: 'pre_reset'"));
   });
 
   test('exportJSON gera somente o schema v4 e restringe o prefixo do nome', () => {
@@ -162,9 +187,13 @@ describe('cliente - restore/reset sem escrita direta no Firestore', () => {
     assert.match(dataModule, /BACKUP_FILENAME_BASE = 'backup_gestao_ferramentas_v4'/);
   });
 
-  test('rotulo do botao de reset atualizado', () => {
-    assert.match(read('src/partials/layout/header.html'), /Resetar dados operacionais/);
-    assert.doesNotMatch(read('src/partials/layout/header.html'), /Resetar Dados/);
+  test('acoes de dados vivem na tela Dados e backup, nao mais no menu da conta', () => {
+    const header = read('src/partials/layout/header.html');
+
+    assert.match(dataAdminScreen, /Resetar dados operacionais/);
+    assert.doesNotMatch(dataAdminScreen, /Resetar Dados/);
+    assert.doesNotMatch(header, /Resetar dados|Backup JSON|Restaurar JSON|Importar Excel|Métricas do Sistema|admin-tools/);
+    assert.doesNotMatch(read('src/js/modules/ui.js'), /resetAllData|exportJSON|importJSON|openMetricsModal/);
   });
 });
 

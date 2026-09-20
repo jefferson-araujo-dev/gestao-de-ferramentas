@@ -11,12 +11,20 @@ import {
 import { db, auth, DB_BASE_PATH, COLLECTIONS } from '../app.js';
 import { notifications } from '../core/NotificationManager.js';
 import { buildBackupV4, normalizeBackup, verifyBackupDataHash } from '../utils/backupContract.js';
+import {
+  HISTORY_RETENTION_DAYS,
+  RESET_CONFIRM_WORD,
+  RESTORE_CONFIRM_WORD,
+  describeBackupApiError,
+  inspectBackupFile,
+  isStaleBackup,
+  restoreDetails
+} from '../utils/dataAdminModel.js';
 
 const BACKUP_FILENAME_BASE = 'backup_gestao_ferramentas_v4';
 const SAFETY_BACKUP_PREFIXES = Object.freeze(['pre_restore', 'pre_reset']);
 const RESTORE_CONFIRMATION = 'RESTORE_OPERATIONAL_DATA';
 const RESET_CONFIRMATION = 'RESET_OPERATIONAL_DATA';
-const MAX_RESTORE_FILE_BYTES = 4000000;
 
 async function readCollectionForBackup(collectionName) {
   const snapshot = await getDocs(collection(db, DB_BASE_PATH, collectionName));
@@ -59,34 +67,18 @@ async function requestBackupApi(endpoint, body) {
   return payload;
 }
 
+// Notifica o erro da API e devolve o resultado descrito (a tela mostra um Alert persistente).
+// Um incidente (servidor sem conseguir reverter) exige ação do administrador: Toast persistente.
 function notifyBackupApiError(error, actionLabel) {
   console.error(`Erro na ${actionLabel}:`, error?.message);
-  const details = error?.details;
+  const outcome = describeBackupApiError(error, actionLabel);
 
-  if (details?.incident === true) {
-    notifications.error(
-      `INCIDENTE na ${actionLabel}: o servidor não conseguiu reverter ao estado anterior. Não repita a operação, guarde o backup de segurança baixado e avise um administrador do sistema.`,
-      { duration: 20000 }
-    );
-    return;
-  }
+  notifications.error(
+    outcome.message,
+    outcome.persistent ? { persistent: true } : { duration: outcome.duration }
+  );
 
-  if (details?.rolledBack === true) {
-    notifications.error(
-      `A ${actionLabel} falhou na verificação e o estado anterior foi restaurado automaticamente. Nenhum dado foi perdido.`,
-      { duration: 10000 }
-    );
-    return;
-  }
-
-  if (details?.applied === false) {
-    notifications.error(`A ${actionLabel} não foi aplicada. Nenhum dado foi alterado.`, {
-      duration: 10000
-    });
-    return;
-  }
-
-  notifications.error(`Erro na ${actionLabel}: ${error?.message || error}`, { duration: 10000 });
+  return { kind: outcome.kind, message: outcome.message };
 }
 
 export const AppData = {
@@ -154,6 +146,7 @@ export const AppData = {
             if (window.App.UI.activeTab === 'users') {
               window.App.CRUDUsers.render();
             }
+            this._refreshDataScreen();
           },
           (err) => {
             this.users = [];
@@ -162,6 +155,7 @@ export const AppData = {
             if (window.App.UI.activeTab === 'users') {
               window.App.CRUDUsers.render();
             }
+            this._refreshDataScreen();
           }
         )
       );
@@ -183,6 +177,7 @@ export const AppData = {
             if (window.App.UI.activeTab === 'collaborators') {
               window.App.CRUDCollaborators.render();
             }
+            this._refreshDataScreen();
           },
           (err) => {
             this.collaborators = [];
@@ -191,6 +186,7 @@ export const AppData = {
             if (window.App.UI.activeTab === 'collaborators') {
               window.App.CRUDCollaborators.render();
             }
+            this._refreshDataScreen();
           }
         )
       );
@@ -245,6 +241,7 @@ export const AppData = {
     if (window.App.UI.activeTab === 'history') {
       window.App.UI.renderHistory();
     }
+    this._refreshDataScreen();
   },
   loadMoreHistory: function () {
     this.historyLimit += 20;
@@ -284,46 +281,153 @@ export const AppData = {
       device: window.App.Session.currentDevice || 'Desconhecido'
     });
   },
-  cleanOldLogs: async function () {
-    if (!confirm('Deseja excluir registros > 30 dias?')) {
-      return;
+  // Uma operação de dados por vez (exportar, restaurar, resetar, limpar): impede duplo envio mesmo
+  // que a tela falhe em desabilitar o botão. A tela ouve o evento para refletir o estado.
+  _operation: null,
+  isOperationRunning: function () {
+    return this._operation !== null;
+  },
+  _beginOperation: function (name) {
+    if (this._operation !== null) {
+      notifications.info('Aguarde: outra operação de dados ainda está em andamento.');
+      return false;
     }
-    const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const s = await getDocs(query(collection(db, DB_BASE_PATH, COLLECTIONS.HISTORY)));
-    let del = 0;
-    const deletePromises = [];
-    s.forEach((d) => {
-      const data = d.data();
-      if (data.date && data.date < old) {
-        deletePromises.push(deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.HISTORY, d.id)));
-        del++;
+    this._operation = name;
+    document.dispatchEvent(new CustomEvent('data-operation', { detail: { running: true, name } }));
+    return true;
+  },
+  // O botão só entra em "carregando" depois da confirmação do usuário (a tela ouve este evento).
+  _markExecuting: function () {
+    document.dispatchEvent(
+      new CustomEvent('data-operation', {
+        detail: { running: true, name: this._operation, executing: true }
+      })
+    );
+  },
+  _endOperation: function () {
+    const name = this._operation;
+
+    this._operation = null;
+    document.dispatchEvent(new CustomEvent('data-operation', { detail: { running: false, name } }));
+  },
+  _refreshDataScreen: function () {
+    if (window.App?.UI?.activeTab === 'data') {
+      window.App.DataAdmin?.renderLive?.();
+    }
+  },
+  cleanOldLogs: async function () {
+    if (window.App?.Auth?.permissions?.canBackupData !== true) {
+      notifications.error('Acesso restrito a administradores.');
+      return { status: 'denied' };
+    }
+
+    if (!this._beginOperation('clean-history')) {
+      return { status: 'busy' };
+    }
+
+    try {
+      const retentionMs = HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+      const limitIso = () => new Date(Date.now() - retentionMs).toISOString();
+      const estimated = Array.isArray(this.allHistoryLogs)
+        ? this.allHistoryLogs.filter((log) => log.date && log.date < limitIso()).length
+        : null;
+
+      if (estimated === 0) {
+        notifications.info(
+          `Nenhum registro de histórico com mais de ${HISTORY_RETENTION_DAYS} dias.`
+        );
+        return { status: 'nothing' };
       }
-    });
-    await Promise.all(deletePromises);
-    notifications.success(`${del} registros antigos excluidos.`);
+
+      const confirmed = await window.App.UI.confirm({
+        title: `Excluir o histórico com mais de ${HISTORY_RETENTION_DAYS} dias?`,
+        description: `Ação administrativa: os registros de histórico (auditoria) mais antigos que ${HISTORY_RETENTION_DAYS} dias serão excluídos permanentemente do banco de dados.`,
+        details: [
+          estimated === null
+            ? 'A quantidade exata será calculada ao executar.'
+            : `${estimated} registro(s) serão excluídos.`,
+          `Ferramentas, colaboradores, usuários e os registros dos últimos ${HISTORY_RETENTION_DAYS} dias não são alterados.`,
+          'Nenhum backup é gerado automaticamente: se precisar guardar esses registros, exporte um backup antes.'
+        ],
+        warning: 'Esta ação não pode ser desfeita.',
+        confirmLabel: 'Excluir registros antigos',
+        variant: 'danger'
+      });
+
+      if (!confirmed) {
+        return { status: 'cancelled' };
+      }
+
+      this._markExecuting();
+
+      const old = limitIso();
+      const s = await getDocs(query(collection(db, DB_BASE_PATH, COLLECTIONS.HISTORY)));
+      let del = 0;
+      const deletePromises = [];
+      s.forEach((d) => {
+        const data = d.data();
+        if (data.date && data.date < old) {
+          deletePromises.push(deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.HISTORY, d.id)));
+          del++;
+        }
+      });
+      await Promise.all(deletePromises);
+      notifications.success(`${del} registros antigos excluidos.`);
+      return { status: 'done', deleted: del };
+    } catch (error) {
+      console.error('Erro ao limpar o histórico:', error?.message);
+      notifications.error(`Erro ao limpar o histórico: ${error?.message || error}`, {
+        duration: 10000
+      });
+      return { status: 'failed', message: error?.message || String(error) };
+    } finally {
+      this._endOperation();
+    }
   },
   resetAllData: async function () {
     if (window.App?.Auth?.permissions?.canBackupData !== true) {
       notifications.error('Acesso restrito a administradores.');
-      return;
+      return { status: 'denied' };
     }
 
-    const confirmText =
-      'RESETAR DADOS OPERACIONAIS\n\n- As ferramentas serão apagadas\n- Os colaboradores serão apagados\n- O histórico será apagado\n- Usuários e contas de acesso serão PRESERVADOS\n\nUm backup de segurança será baixado antes.\n\nTem certeza que deseja continuar?';
-    if (!confirm(confirmText)) {
-      return;
-    }
-
-    if (!confirm('ÚLTIMA CHANCE! Confirme para apagar os dados operacionais.')) {
-      return;
+    if (!this._beginOperation('reset')) {
+      return { status: 'busy' };
     }
 
     try {
-      const safetyBackup = await this.exportJSON({ filenamePrefix: 'pre_reset' });
+      const historyCount = Array.isArray(this.allHistoryLogs) ? this.allHistoryLogs.length : null;
+      const confirmed = await window.App.UI.confirm({
+        title: 'Resetar os dados operacionais?',
+        description: 'Todas as ferramentas, colaboradores e o histórico serão apagados do sistema.',
+        details: [
+          `Serão apagados: ${this.tools.length} ferramenta(s), ${this.collaborators.length} colaborador(es)${
+            historyCount === null
+              ? ' e todo o histórico'
+              : ` e ${historyCount} registro(s) de histórico`
+          }.`,
+          'Usuários e contas de acesso são preservados.',
+          'Um backup de segurança do estado atual é baixado antes de apagar.'
+        ],
+        warning:
+          'Não existe botão de desfazer: só é possível recuperar os dados restaurando o backup de segurança baixado.',
+        confirmLabel: 'Resetar dados',
+        variant: 'danger',
+        requireText: RESET_CONFIRM_WORD
+      });
+
+      if (!confirmed) {
+        return { status: 'cancelled' };
+      }
+
+      this._markExecuting();
+
+      const safetyBackup = await this._generateBackup({ filenamePrefix: 'pre_reset' });
       if (!safetyBackup) {
-        notifications.error('Não foi possível gerar o backup de segurança. Reset cancelado.');
-        return;
+        const message = 'Não foi possível gerar o backup de segurança. Reset cancelado.';
+
+        notifications.error(message);
+        return { status: 'failed', kind: 'safety-backup', message };
       }
 
       notifications.info('Resetando dados operacionais...');
@@ -332,12 +436,15 @@ export const AppData = {
       });
 
       window.AudioSys?.playBeep?.('success');
-      notifications.success(
-        `Dados operacionais resetados e verificados (${response.data?.totalDeleted ?? 0} registros). Usuários preservados.`
-      );
+      const message = `Dados operacionais resetados e verificados (${response.data?.totalDeleted ?? 0} registros). Usuários preservados.`;
+
+      notifications.success(message);
       window.App.Data.init(window.App.Auth.permissions);
+      return { status: 'done', message };
     } catch (error) {
-      notifyBackupApiError(error, 'reset');
+      return { status: 'failed', ...notifyBackupApiError(error, 'reset') };
+    } finally {
+      this._endOperation();
     }
   },
   exportJSON: async function (options) {
@@ -346,6 +453,20 @@ export const AppData = {
       return null;
     }
 
+    if (!this._beginOperation('export')) {
+      return null;
+    }
+
+    this._markExecuting();
+
+    try {
+      return await this._generateBackup(options);
+    } finally {
+      this._endOperation();
+    }
+  },
+  // Gera e baixa o backup v4. Uso interno (exportJSON e os backups de segurança de restore/reset).
+  _generateBackup: async function (options) {
     const safetyPrefix = SAFETY_BACKUP_PREFIXES.includes(options?.filenamePrefix)
       ? options.filenamePrefix
       : '';
@@ -389,7 +510,7 @@ export const AppData = {
 
       return backup;
     } catch (error) {
-      console.error('Erro ao gerar backup:', error);
+      console.error('Erro ao gerar backup:', error?.message);
       notifications.error(`Erro ao gerar backup: ${error.message || error}`);
       return null;
     }
@@ -404,104 +525,86 @@ export const AppData = {
 
     return dates.length > 0 ? Math.max(...dates) : null;
   },
-  importJSON: async function (event) {
-    const input = event?.target;
-    const file = input?.files?.[0];
-    const clearInput = () => {
-      if (input) {
-        input.value = '';
-      }
-    };
-
+  // SELECIONAR + VALIDAR + REVISAR: lê e valida o arquivo localmente. Nada é enviado nem alterado.
+  inspectBackupFile: async function (file) {
     if (window.App?.Auth?.permissions?.canBackupData !== true) {
       notifications.error('Acesso restrito a administradores.');
-      clearInput();
-      return;
+      return null;
     }
 
-    if (!file) {
-      return;
+    return inspectBackupFile(file, { latestActivity: this.latestKnownActivity() });
+  },
+  // CONFIRMAR + EXECUTAR: restaura a partir de um arquivo já inspecionado (inspectBackupFile).
+  restoreBackup: async function (inspection) {
+    if (window.App?.Auth?.permissions?.canBackupData !== true) {
+      notifications.error('Acesso restrito a administradores.');
+      return { status: 'denied' };
     }
 
-    if (!file.name.toLowerCase().endsWith('.json')) {
-      notifications.error('Por favor, selecione um arquivo JSON válido.');
-      clearInput();
-      return;
+    if (inspection?.ok !== true || !inspection.payload) {
+      const message = 'Selecione e valide um arquivo de backup antes de restaurar.';
+
+      notifications.error(message);
+      return { status: 'invalid', message };
     }
 
-    if (file.size > MAX_RESTORE_FILE_BYTES) {
-      notifications.error('O arquivo excede o tamanho máximo aceito para restauração.');
-      clearInput();
-      return;
+    if (!this._beginOperation('restore')) {
+      return { status: 'busy' };
     }
 
     try {
-      notifications.info('Lendo arquivo de backup...');
-
-      let parsed;
-      try {
-        parsed = JSON.parse(await file.text());
-      } catch {
-        throw new Error('O arquivo não é um JSON válido.');
-      }
-
+      const parsed = inspection.payload;
       const validation = normalizeBackup(parsed, { requireNonEmpty: true });
       if (!validation.ok) {
-        const codes = [...new Set(validation.errors.map((error) => error.code))].join(', ');
-        notifications.error(
-          `Backup inválido (${validation.errorCount} problema(s): ${codes}). Nenhum dado foi alterado.`,
-          { duration: 10000 }
-        );
-        return;
+        const message = `Backup inválido (${validation.errorCount} problema(s)). Nenhum dado foi alterado.`;
+
+        notifications.error(message, { duration: 10000 });
+        return { status: 'invalid', message };
       }
 
       const { meta } = validation;
       if (!meta.legacy && !(await verifyBackupDataHash(validation.backup)).ok) {
-        notifications.error('O hash do backup não confere. Nenhum dado foi alterado.');
-        return;
+        const message = 'O hash do backup não confere. Nenhum dado foi alterado.';
+
+        notifications.error(message);
+        return { status: 'invalid', message };
       }
 
-      const summary = [
-        'RESTAURAR DADOS OPERACIONAIS',
-        '',
-        `Formato: ${meta.sourceSchema} | Exportado em: ${new Date(meta.exportedAt).toLocaleString('pt-BR')}`,
-        `Ferramentas: ${meta.counts.tools} | Colaboradores: ${meta.counts.collaborators} | Histórico: ${meta.counts.history}`
-      ];
+      const confirmed = await window.App.UI.confirm({
+        title: 'Restaurar os dados operacionais?',
+        description:
+          'Os dados atuais de ferramentas, colaboradores e histórico serão substituídos pelo conteúdo do arquivo.',
+        details: restoreDetails(meta, { fileName: inspection.fileName }),
+        warning:
+          'Não existe botão de desfazer: só é possível voltar ao estado atual restaurando o backup de segurança baixado.',
+        confirmLabel: 'Restaurar dados',
+        variant: 'danger',
+        requireText: RESTORE_CONFIRM_WORD
+      });
 
-      if (meta.legacy) {
-        summary.push(
-          '',
-          `ATENÇÃO: backup LEGADO 3.0 será adaptado. ${meta.statusDefaulted} colaborador(es) sem status receberão "active".`
-        );
+      if (!confirmed) {
+        return { status: 'cancelled' };
       }
 
-      summary.push(
-        '',
-        'Ferramentas, colaboradores e histórico atuais serão SUBSTITUÍDOS pelo conteúdo do arquivo.',
-        'Usuários e contas de acesso serão PRESERVADOS (usuários do backup não são restaurados).',
-        'Um backup de segurança será baixado antes.',
-        '',
-        'Deseja continuar?'
-      );
-
-      if (!confirm(summary.join('\n'))) {
-        return;
-      }
-
-      const latestActivity = this.latestKnownActivity();
-      if (latestActivity !== null && latestActivity > Date.parse(meta.exportedAt)) {
-        const staleConfirmed = confirm(
-          'ATENÇÃO: este backup é MAIS ANTIGO que a atividade mais recente registrada no sistema.\n\nRestaurá-lo apagará essa atividade posterior.\n\nDeseja realmente continuar?'
+      if (isStaleBackup(meta.exportedAt, this.latestKnownActivity())) {
+        const staleConfirmed = await window.App.UI.confirmDanger(
+          'Restaurar um backup mais antigo que o sistema?',
+          'Este backup é MAIS ANTIGO que a atividade mais recente registrada no sistema. Restaurá-lo apagará essa atividade posterior.',
+          'Restaurar mesmo assim'
         );
         if (!staleConfirmed) {
-          return;
+          return { status: 'cancelled' };
         }
       }
 
-      const safetyBackup = await this.exportJSON({ filenamePrefix: 'pre_restore' });
+      this._markExecuting();
+
+      const safetyBackup = await this._generateBackup({ filenamePrefix: 'pre_restore' });
       if (!safetyBackup) {
-        notifications.error('Não foi possível gerar o backup de segurança. Restauração cancelada.');
-        return;
+        const message = 'Não foi possível gerar o backup de segurança. Restauração cancelada.';
+
+        notifications.error(message);
+        return { status: 'failed', kind: 'safety-backup', message };
       }
 
       notifications.info('Restaurando dados no servidor...');
@@ -511,14 +614,15 @@ export const AppData = {
       });
 
       window.AudioSys?.playBeep?.('success');
-      notifications.success(
-        `Backup restaurado e verificado: ${response.data?.totalRecords ?? meta.totalRecords} registros. Usuários preservados.`
-      );
+      const message = `Backup restaurado e verificado: ${response.data?.totalRecords ?? meta.totalRecords} registros. Usuários preservados.`;
+
+      notifications.success(message);
       window.App.Data.init(window.App.Auth.permissions);
+      return { status: 'done', message };
     } catch (error) {
-      notifyBackupApiError(error, 'restauração');
+      return { status: 'failed', ...notifyBackupApiError(error, 'restauração') };
     } finally {
-      clearInput();
+      this._endOperation();
     }
   },
   exportExcel: async function () {
@@ -562,26 +666,43 @@ export const AppData = {
   importExcel: async function (event) {
     const file = event?.target?.files?.[0];
     if (!file) {
-      return;
+      return { status: 'none' };
+    }
+
+    if (window.App?.Auth?.permissions?.canManageTools !== true) {
+      notifications.error('Acesso restrito a administradores.');
+      event.target.value = '';
+      return { status: 'denied' };
     }
 
     // Verifica extensão
     const validExts = ['.xlsx', '.xls'];
     const ext = '.' + file.name.split('.').pop().toLowerCase();
     if (!validExts.includes(ext)) {
-      notifications.error('Formato inválido. Use .xlsx ou .xls');
+      const message = 'Formato inválido. Use .xlsx ou .xls';
+
+      notifications.error(message);
       event.target.value = '';
-      return;
+      return { status: 'invalid', message };
     }
 
-    // Confirma importação
-    const confirmed = confirm(
-      'ATENÇÃO: Isso irá importar dados do arquivo Excel!\n\nDeseja continuar?'
+    // Confirma importação: cadastra ferramentas novas; não altera nem remove as existentes.
+    const confirmed = await window.App.UI.confirmAction(
+      'Importar ferramentas da planilha?',
+      `Cada linha válida de "${file.name}" será cadastrada como uma nova ferramenta. Ferramentas existentes não são alteradas nem removidas, mas o código (patrimônio) não é verificado: linhas repetidas criam ferramentas duplicadas.`,
+      'Importar planilha'
     );
     if (!confirmed) {
       event.target.value = '';
-      return;
+      return { status: 'cancelled' };
     }
+
+    if (!this._beginOperation('import-excel')) {
+      event.target.value = '';
+      return { status: 'busy' };
+    }
+
+    this._markExecuting();
 
     try {
       notifications.info('Importando arquivo Excel...');
@@ -657,10 +778,18 @@ export const AppData = {
       }
       notifications.success(msg);
 
-      // Recarrega dados
-      window.App?.Data?.init?.();
+      // Recarrega dados (com as permissões atuais: sem elas os listeners não voltam)
+      window.App?.Data?.init?.(window.App.Auth.permissions);
+      return { status: 'done', message: msg, imported, errorCount: errors.length };
+    } catch (error) {
+      const message = `Erro ao importar a planilha: ${error?.message || error}`;
+
+      console.error('Erro ao importar Excel:', error?.message);
+      notifications.error(message, { duration: 10000 });
+      return { status: 'failed', message };
     } finally {
       event.target.value = '';
+      this._endOperation();
     }
   }
 };

@@ -3,6 +3,7 @@
 @import './base.css';
 @import './shell.css';
 @import './components.css';
+@import './data-admin.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 

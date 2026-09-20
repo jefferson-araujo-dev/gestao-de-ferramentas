@@ -29,6 +29,7 @@ const ALL_FALSE = {
   canReadCollaborators: false,
   canAccessUsers: false,
   canAccessHistory: false,
+  canBackupData: false,
 };
 const PROFILES = {
   admin: {
@@ -39,6 +40,7 @@ const PROFILES = {
     canReadCollaborators: true,
     canAccessUsers: true,
     canAccessHistory: true,
+    canBackupData: true,
   },
   standard: {
     ...ALL_FALSE,
@@ -81,6 +83,7 @@ describe('modelo de navegação: consistência', () => {
     assert.deepEqual(NAV_ITEMS.map((item) => item.route).sort(), [
       'auditoria',
       'colaboradores',
+      'dados',
       'ferramentas',
       'painel',
       'scanner',
@@ -144,7 +147,7 @@ describe('modelo de navegação: visibilidade por perfil', () => {
     assert.deepEqual(getGroupedItems(ALL_FALSE), []);
   });
 
-  test('admin vê os 6 destinos; padrão não vê Auditoria/Usuários; restrito também não vê Colaboradores', () => {
+  test('admin vê os 7 destinos; padrão não vê Auditoria/Usuários; restrito também não vê Colaboradores', () => {
     assert.deepEqual(ids(getAllowedItems(PROFILES.admin)), [
       'dashboard',
       'scanner',
@@ -152,6 +155,7 @@ describe('modelo de navegação: visibilidade por perfil', () => {
       'collaborators',
       'history',
       'users',
+      'data',
     ]);
     assert.deepEqual(ids(getAllowedItems(PROFILES.standard)), [
       'dashboard',
@@ -160,6 +164,23 @@ describe('modelo de navegação: visibilidade por perfil', () => {
       'collaborators',
     ]);
     assert.deepEqual(ids(getAllowedItems(PROFILES.restricted)), ['dashboard', 'scanner', 'tools']);
+  });
+
+  test('Dados e backup: rota #/dados, grupo Administração, só com canBackupData', () => {
+    const item = getItemByRoute('dados');
+
+    assert.equal(item.id, 'data');
+    assert.equal(item.tab, 'data');
+    assert.equal(item.label, 'Dados e backup');
+    assert.equal(item.group, 'admin');
+    assert.equal(item.permission, 'canBackupData');
+    assert.equal(item.mobilePrimary, false);
+    assert.equal(isItemAllowed(item, PROFILES.admin), true);
+    assert.equal(isItemAllowed(item, PROFILES.standard), false);
+    assert.equal(isItemAllowed(item, PROFILES.restricted), false);
+    // Falha fechado: o outro flag administrativo (usuários) não basta.
+    assert.equal(isItemAllowed(item, { ...ALL_FALSE, canAccessUsers: true }), false);
+    assert.equal(isItemAllowed(item, { canBackupData: 'true' }), false);
   });
 
   test('grupos seguem a IA aprovada e grupos vazios não aparecem', () => {
@@ -171,7 +192,7 @@ describe('modelo de navegação: visibilidade por perfil', () => {
       'operation:scanner,tools',
       'people:collaborators',
       'control:history',
-      'admin:users',
+      'admin:users,data',
     ]);
     assert.deepEqual(summary(PROFILES.restricted), [
       'overview:dashboard',
@@ -188,7 +209,7 @@ describe('modelo de navegação: visibilidade por perfil', () => {
 
     assert.deepEqual(split('admin'), {
       primary: ['dashboard', 'scanner', 'tools', 'collaborators'],
-      more: ['history', 'users'],
+      more: ['history', 'users', 'data'],
     });
     assert.deepEqual(split('standard'), {
       primary: ['dashboard', 'scanner', 'tools', 'collaborators'],

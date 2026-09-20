@@ -1,0 +1,222 @@
+/* ============================================
+   TELA "DADOS E BACKUP" (Gate 1-F1)
+   ============================================
+
+   Só tokens (tokens.css): claro/escuro pelos próprios tokens, sem variante de tema ad hoc e sem
+   importância forçada. Usa os componentes do Gate 1-E (ui-card, ui-btn, ui-alert, ui-control...)
+   e acrescenta apenas o layout da tela. Breakpoint do contrato do app: 768 (mobile abaixo).
+   ============================================ */
+
+.data-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.data-intro {
+  margin: 0;
+  max-width: 44rem;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  color: var(--color-text-secondary);
+}
+
+.data-section {
+  min-width: 0;
+}
+
+.data-section__title {
+  margin: 0;
+  font-size: var(--text-heading-md);
+  line-height: 1.75rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.data-section__lead {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  color: var(--color-text-secondary);
+}
+
+.data-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.data-block + .data-block {
+  margin-block-start: var(--space-4);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.data-block__title {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.data-block__text {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  color: var(--color-text-secondary);
+}
+
+.data-list {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  color: var(--color-text-secondary);
+}
+
+.data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Resumo e diagnóstico: grade de pares rótulo/valor. */
+.data-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.data-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ui-md);
+  background: var(--color-surface-muted);
+}
+
+.data-fact__label {
+  margin: 0;
+  font-size: var(--text-label);
+  line-height: 1rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.data-fact__value {
+  margin: 0;
+  min-height: 1.75rem;
+  font-size: var(--text-heading-md);
+  line-height: 1.75rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.data-fact__value--text {
+  font-size: var(--text-body);
+  line-height: 1.75rem;
+}
+
+/* Arquivo selecionado: nome longo quebra em vez de estourar a largura. */
+.data-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ui-md);
+  background: var(--color-surface-muted);
+}
+
+.data-file__name {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.data-file__meta {
+  margin: 0;
+  font-size: var(--text-label);
+  line-height: 1rem;
+  color: var(--color-text-secondary);
+}
+
+.data-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.data-review__list {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.data-feedback:empty {
+  display: none;
+}
+
+.data-alert {
+  margin-block-end: var(--space-4);
+}
+
+/* Botão nativo do seletor de arquivo com o mesmo desenho dos controles do design system. */
+.data-screen .ui-control[type='file'] {
+  padding-block: 0.25rem;
+  color: var(--color-text-secondary);
+}
+
+.data-screen .ui-control[type='file']::file-selector-button {
+  margin-inline-end: var(--space-3);
+  padding: 0.25rem var(--space-3);
+  border: 1px solid var(--color-border-control);
+  border-radius: var(--radius-ui-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Zona de perigo: separada visualmente, e a cor nunca é o único sinal (título + ícone + texto). */
+.data-section--danger > .ui-card {
+  border-color: var(--color-danger);
+}
+
+@media (min-width: 768px) {
+  .data-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767.98px) {
+  .data-actions .ui-btn {
+    width: 100%;
+  }
+}

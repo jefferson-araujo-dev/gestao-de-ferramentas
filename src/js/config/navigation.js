@@ -93,6 +93,19 @@ export const NAV_ITEMS = Object.freeze([
     deniedMessage: 'Acesso restrito a administradores.',
     order: 60,
     mobilePrimary: false
+  },
+  {
+    id: 'data',
+    route: 'dados',
+    tab: 'data',
+    label: 'Dados e backup',
+    title: 'Dados e backup',
+    icon: 'icon-database',
+    group: 'admin',
+    permission: 'canBackupData',
+    deniedMessage: 'Acesso restrito a administradores.',
+    order: 70,
+    mobilePrimary: false
   }
 ]);
 

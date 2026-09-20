@@ -14,6 +14,7 @@ import {
 import { notifications } from './core/NotificationManager.js';
 import { AppAuth } from './modules/auth.js';
 import { AppData } from './modules/data.js';
+import { AppDataAdmin } from './modules/dataAdmin.js';
 import { AppUI } from './modules/ui.js';
 import { AppSession } from './modules/session.js';
 import { AppScanner } from './modules/scanner.js';
@@ -102,6 +103,7 @@ const App = {
   Auth: AppAuth,
   Session: AppSession,
   Data: AppData,
+  DataAdmin: AppDataAdmin,
   UI: AppUI,
   Scanner: AppScanner,
   CRUDTools: AppCRUDTools,

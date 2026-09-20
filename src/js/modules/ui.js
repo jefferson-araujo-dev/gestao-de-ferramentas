@@ -153,12 +153,6 @@ export const AppUI = {
       this.toggleDarkMode();
     } else if (action === 'logout') {
       app.Auth.logout();
-    } else if (action === 'reset') {
-      app.Data.resetAllData();
-    } else if (action === 'export-json') {
-      app.Data.exportJSON();
-    } else if (action === 'metrics') {
-      this.openMetricsModal();
     }
   },
   clearDashboardFilters: function () {
@@ -328,12 +322,6 @@ export const AppUI = {
           this._handleMenuAction(action);
         }
       });
-      document
-        .getElementById('file-import-excel')
-        ?.addEventListener('change', (e) => window.App.Data.importExcel?.(e));
-      document
-        .getElementById('file-restore-json')
-        ?.addEventListener('change', (e) => window.App.Data.importJSON(e));
     }
 
     // Ações delegadas (data-action): filtros rápidos e limpar filtros do Painel.
@@ -520,12 +508,16 @@ export const AppUI = {
   _activateTab: function (item) {
     const tab = item.tab;
 
+    // Sair da tela de dados descarta o arquivo de backup lido (pode conter dados pessoais).
+    if (this.activeTab === 'data' && tab !== 'data') {
+      window.App?.DataAdmin?.reset();
+    }
     this.activeTab = tab;
     metrics.trackNavigation(tab);
 
     // aria-current, título da topbar e document.title
     window.App?.Shell?.setActive(tab);
-    ['dashboard', 'scanner', 'management', 'users', 'collaborators', 'history'].forEach((t) =>
+    ['dashboard', 'scanner', 'management', 'users', 'collaborators', 'history', 'data'].forEach((t) =>
       document.getElementById(`tab-${t}`)?.classList.toggle('hidden', t !== tab)
     );
     window.App?.Shell?.closeOverlay({ restoreFocus: false });
@@ -592,6 +584,8 @@ export const AppUI = {
       window.App.CRUDCollaborators.render();
     } else if (this.activeTab === 'history') {
       this.renderHistory();
+    } else if (this.activeTab === 'data') {
+      window.App.DataAdmin.render();
     }
   },
   renderDashboard: function () {
@@ -1028,52 +1022,5 @@ export const AppUI = {
         return `<div class="flex gap-3 items-start animate-fade-in" style="animation-delay: ${idx * 100}ms"><div class="w-8 h-8 rounded-full bg-${meta.color}-100 dark:bg-${meta.color}-900/30 text-${meta.color}-600 dark:text-${meta.color}-400 flex items-center justify-center shrink-0"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${meta.icon}</svg></div><div class="min-w-0"><p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">${meta.label} <span class="text-${meta.color}-600 dark:text-${meta.color}-400">${meta.status}</span></p><p class="text-[10px] text-slate-500 truncate">${tool} - ${date}</p></div></div>`;
       })
       .join('');
-  },
-  openMetricsModal: function () {
-    const m = document.getElementById('metrics-modal');
-    const content = document.getElementById('metrics-modal-content');
-    if (!m || !content) {
-      return;
-    }
-
-    // Puxamos o relatório ao vivo do MetricsManager
-    const report = metrics.getReport();
-
-    content.innerHTML = `
-      <div class="grid grid-cols-2 gap-4 mb-6">
-        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm text-center">
-          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tempo Ativo (Sessão)</p>
-          <p class="text-xl font-extrabold text-sky-600 dark:text-sky-400">${report.summary.uptimeFormatted}</p>
-        </div>
-        <div class="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm text-center">
-          <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Taxa de Erros Ocultos</p>
-          <p class="text-xl font-extrabold text-rose-600 dark:text-rose-400">${report.summary.errorRate}</p>
-        </div>
-      </div>
-
-      <h4 class="font-bold text-slate-900 dark:text-white mb-3 text-sm">Atividades Rastreadas</h4>
-      <div class="space-y-2 mb-2">
-        <div class="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
-          <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Empréstimos Via Scanner</span>
-          <span class="font-mono font-bold text-slate-900 dark:text-white">${report.counters['tools.borrowed_total'] || 0}</span>
-        </div>
-        <div class="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
-          <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Devoluções Via Scanner</span>
-          <span class="font-mono font-bold text-slate-900 dark:text-white">${report.counters['tools.returned_total'] || 0}</span>
-        </div>
-        <div class="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-100 dark:border-slate-700">
-          <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Navegações ao Dashboard</span>
-          <span class="font-mono font-bold text-slate-900 dark:text-white">${report.counters['navigation.screen.dashboard'] || 0}</span>
-        </div>
-      </div>
-    `;
-
-    m.showModal();
-  },
-  closeMetricsModal: function () {
-    const m = document.getElementById('metrics-modal');
-    if (m) {
-      m.close();
-    }
   },
 };
