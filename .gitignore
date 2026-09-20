@@ -6,6 +6,7 @@ dist
 # Playwright
 playwright-report/
 test-results/
+test-results-e2e/
 
 # Capturas de tela para produção de vídeo (contêm dados pessoais)
 .reels-capturas/
