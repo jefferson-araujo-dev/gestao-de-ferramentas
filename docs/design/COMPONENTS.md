@@ -87,7 +87,13 @@ Padrão "menu button" do WAI-ARIA: `aria-haspopup="menu"`, `aria-expanded`, `ari
 Home/End, Esc fecha e devolve o foco, Tab fecha; clique fora fecha. Só declara `role="menu"` porque
 implementa esse contrato. Posiciona-se dentro da viewport (desloca, inverte para cima, limita a altura).
 Ações perigosas ficam separadas por `ui-menu__sep`. Usa **sem** Popover API/polyfill (não há polyfill
-de CDN sob o guard de rede). Adotado no **menu da conta**; itens `<label>` de arquivo são focáveis.
+de CDN sob o guard de rede). Adotado no **menu da conta** e no **menu de ações de cada ferramenta** (Gate 1-F2);
+itens `<label>` de arquivo são focáveis.
+
+Ciclo de vida (Gate 1-F2): o único listener que o Dropdown registra fora do próprio menu (clique fora, no
+`document`) é removido por `dispose()`. Menus criados a cada renderização de uma lista **devem** chamar
+`dispose()` antes de substituir o HTML, senão cada render acumula um listener. `onClose` recebe
+`{ restoreFocus }`: quem re-renderiza a lista ao fechar o menu sabe se deve devolver o foco ao gatilho novo.
 
 ## Adoção controlada nas telas
 

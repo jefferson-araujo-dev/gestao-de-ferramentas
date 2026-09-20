@@ -8,9 +8,10 @@ npm run test:e2e:auth
 ```
 
 O script sobe os emuladores (`firebase emulators:exec`), semeia o estado, inicia o Vite na porta
-3200 com `VITE_USE_FIREBASE_EMULATOR=true` e executa três projetos: `desktop` (1440x900),
-`mobile` (390x844, arquivos `*.mobile.spec.js`) e `destructive` (arquivos `*.destructive.spec.js`, roda
-**por último**: apaga documentos semeados do emulator e re-semeia ao terminar). Requer Java (emuladores) e Chromium do Playwright.
+3200 com `VITE_USE_FIREBASE_EMULATOR=true` e executa quatro projetos: `desktop` (1440x900),
+`mobile` (390x844, arquivos `*.mobile.spec.js`), `destructive` (`data-backup.destructive.spec.js`, roda
+**por último**: apaga documentos semeados do emulator e re-semeia ao terminar) e `destructive-tools`
+(`tools.destructive.spec.js`, depois do `destructive`: os dois re-semeiam e não podem rodar em paralelo). Requer Java (emuladores) e Chromium do Playwright.
 
 ## Segurança (falha fechado)
 
@@ -37,6 +38,9 @@ O script sobe os emuladores (`firebase emulators:exec`), semeia o estado, inicia
 | `auth-admin.spec.js` | login, 7 telas, dados semeados, menu da conta (Perfil, Senha, Tema, Sair), logout |
 | `data-backup.spec.js` | Gate 1-F1: tela Dados e backup (`#/dados`): rota/aria-current/reload/back-forward, autorização (admin, padrão, restrito), export v4, seleção/validação/revisão de arquivo (inválido, legado 3.0, mais antigo), ConfirmDialog (cancelar, Esc, fundo, confirmação reforçada), restore/reset protegidos com API simulada (ordem backup de segurança -> API, payload sem users, loading, duplo envio, falhas), layout 320/390/768/1024/1440 e tema escuro |
 | `data-backup.destructive.spec.js` | Gate 1-F1: limpar histórico confirmado de verdade no emulator (projeto `destructive`, por último; re-semeia) |
+| `tools.spec.js` | Gate 1-F2: tela Ferramentas (`#/ferramentas`): tabela semântica, status em texto, busca (sem acento; nome/patrimônio/categoria), filtros de status/categoria/combinados, indicação de filtro ativo e Limpar filtros, ordenação, ação principal e menu de ações por status (teclado, foco, Esc), modais existentes, exportação (planilha espiada), estados carregando/vazio/sem resultados/erro, perfis padrão e restrito (somente leitura; sem colaboradores), layout em 10 larguras (320-1536) e tema escuro |
+| `tools.mobile.spec.js` | Gate 1-F2: Ferramentas no mobile: cartões, alvos de toque de 44px, filtros/menu por toque, último item acima da barra inferior |
+| `tools.destructive.spec.js` | Gate 1-F2: troca de status pelo menu com escrita real no emulator (projeto `destructive-tools`; re-semeia) |
 | `auth-standard.spec.js` | login, telas permitidas, ausência de itens admin **e** recusa em JS (dados nem chegam ao cliente) |
 | `auth-restricted.spec.js` | idem para o perfil restrito: sem Colaboradores no menu, na navegação programática, no listener, na memória e nas regras (leitura direta negada) |
 | `restricted-loan.spec.js` | Scanner do perfil restrito: empréstimo por crachá exato (`collaboratorBadge`), recibo sem a lista, recusa genérica, sem busca por nome e devolução; controle do perfil padrão (`collaboratorId`) |
