@@ -349,11 +349,12 @@ export class Dropdown {
         this.close({ restoreFocus: false });
       }
     });
-    document.addEventListener('click', (event) => {
+    this._onDocumentClick = (event) => {
       if (this.isOpen() && !this.root.contains(event.target)) {
         this.close({ restoreFocus: false });
       }
-    });
+    };
+    document.addEventListener('click', this._onDocumentClick);
     this.root.addEventListener('focusout', (event) => {
       if (this.isOpen() && event.relatedTarget && !this.root.contains(event.relatedTarget)) {
         this.close({ restoreFocus: false });
@@ -363,6 +364,15 @@ export class Dropdown {
 
   isOpen() {
     return !this.panel.hidden;
+  }
+
+  /**
+   * Libera o único listener registrado fora do próprio menu (clique fora, no document). Necessário
+   * para menus criados a cada renderização de uma lista: sem isto cada render acumularia listeners.
+   * Os demais listeners ficam nos elementos do menu e saem com eles.
+   */
+  dispose() {
+    document.removeEventListener('click', this._onDocumentClick);
   }
 
   items() {
@@ -394,7 +404,7 @@ export class Dropdown {
     this.panel.hidden = true;
     this.panel.removeAttribute('style');
     this.trigger.setAttribute('aria-expanded', 'false');
-    this.onClose?.();
+    this.onClose?.({ restoreFocus });
 
     if (restoreFocus) {
       this.trigger.focus();
