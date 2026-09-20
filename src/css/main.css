@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@import './tokens.css';
+@import './base.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -27,7 +29,7 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
   overflow-x: hidden;
   max-width: 100%;
   margin: 0;
@@ -218,7 +220,7 @@ body,
 }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-500/20;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 ease-in-out;
 }
 .btn-primary {
   @apply bg-brand-600 hover:bg-brand-700 text-white shadow-md shadow-brand-600/20;
@@ -246,21 +248,11 @@ body,
 #users-filters .filter-btn,
 #collab-quick-filters .collab-filter-btn,
 .sort-btn {
-  background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
-  color: #475569 !important;
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-secondary) !important;
   box-shadow: none !important;
   transform: none !important;
-}
-
-.dark #quick-filters .quick-filter-btn,
-.dark #inventory-quick-filters .inv-filter-btn,
-.dark #users-filters .filter-btn,
-.dark #collab-quick-filters .collab-filter-btn,
-.dark .sort-btn {
-  background-color: #0f172a !important;
-  border-color: #334155 !important;
-  color: #cbd5e1 !important;
 }
 
 #quick-filters .quick-filter-btn:hover,
@@ -306,19 +298,10 @@ body,
 .btn[class*='bg-sky-600'],
 .btn[class*='bg-amber-600'],
 .btn[class*='bg-indigo-600'] {
-  background-color: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #475569 !important;
+  background-color: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+  color: var(--color-text-secondary) !important;
   box-shadow: none !important;
-}
-
-.dark .btn[class*='bg-emerald-600'],
-.dark .btn[class*='bg-sky-600'],
-.dark .btn[class*='bg-amber-600'],
-.dark .btn[class*='bg-indigo-600'] {
-  background-color: #0f172a !important;
-  border-color: #334155 !important;
-  color: #cbd5e1 !important;
 }
 
 .btn[class*='bg-emerald-600']:hover,

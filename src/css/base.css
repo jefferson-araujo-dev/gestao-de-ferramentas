@@ -1,0 +1,41 @@
+/* ============================================
+   BASE FOUNDATION (Gate 1-C): foco, movimento e números
+   ============================================
+
+   Regras fora de qualquer camada de propósito: precisam vencer utilitários do Tailwind
+   (`outline-none`, `focus:ring-*`, `transition-*`) sem exigir migração tela a tela.
+   Os tokens usados aqui vivem em tokens.css.
+   ============================================ */
+
+/* Foco visível para teclado: contorno sólido de 2px, sem depender de ring de baixa opacidade.
+   `outline` (e não box-shadow) continua visível em modo de alto contraste do sistema. */
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Campos de texto: o contorno acompanha a borda do campo, sem folga que estoure o layout. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 0;
+}
+
+/* Preferência do sistema por menos movimento: encerra animações e transições não essenciais.
+   `!important` é intencional (exceção documentada): precisa vencer durações declaradas em
+   regras de componente e em utilitários, e é o único ponto onde isso é feito. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Indicadores numéricos (KPIs) alinham dígitos em coluna. */
+.stat-number {
+  font-variant-numeric: tabular-nums;
+}
