@@ -56,6 +56,9 @@
   --color-warning: #b45309;
   --color-danger: #be123c;
   --color-info: #0e7490;
+  /* Texto sobre preenchimento sólido de danger (botão perigoso): branco no claro; no dark o vermelho
+     é claro (#fb7185) e exige texto escuro. */
+  --color-on-danger: #ffffff;
   --color-success-subtle: #ecfdf5;
   --color-warning-subtle: #fffbeb;
   --color-danger-subtle: #fff1f2;
@@ -130,6 +133,7 @@
   --color-warning: #fbbf24;
   --color-danger: #fb7185;
   --color-info: #22d3ee;
+  --color-on-danger: #020617;
   --color-success-subtle: #022c22;
   --color-warning-subtle: #451a03;
   --color-danger-subtle: #4c0519;

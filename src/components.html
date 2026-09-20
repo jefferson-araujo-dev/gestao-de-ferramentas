@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR" class="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Componentes (dev)</title>
+    <!--
+      Galeria de componentes do Gate 1-E. SOMENTE desenvolvimento/testes (/components.html): não é uma entrada do build
+      (o Vite só empacota src/index.html) e não é servida em produção. Renderiza cada componente
+      real de src/js/components em light/dark (?theme=dark) para testes isolados por viewport.
+    -->
+    <link rel="stylesheet" href="./css/main.css" />
+  </head>
+  <body class="bg-background text-text-primary font-sans">
+    <!-- @include partials/layout/icon-sprite.html -->
+
+    <main id="gallery" class="mx-auto max-w-4xl p-4 md:p-8 space-y-8">
+      <h1 class="text-heading-lg">Componentes fundamentais</h1>
+    </main>
+
+    <div id="toast-container" class="fixed bottom-4 right-4 left-4 md:left-auto flex flex-col gap-3 md:items-end"></div>
+
+    <script type="module" src="./dev/components-gallery.js"></script>
+  </body>
+</html>

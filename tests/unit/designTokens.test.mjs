@@ -193,6 +193,7 @@ describe('tokens semânticos: contraste (piso arquitetural)', () => {
       }
 
       assertContrast(theme, tokens, 'text-inverse', 'text-primary', 4.5);
+      assertContrast(theme, tokens, 'on-danger', 'danger', 4.5);
     });
 
     test(`${theme}: estados semânticos >= 4.5:1 sobre superfícies e sobre o próprio fundo suave`, () => {
