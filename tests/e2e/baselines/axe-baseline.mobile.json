@@ -10,6 +10,8 @@
   "screens": {
     "mobile-dashboard": {},
     "mobile-mais-aberto": {},
+    "mobile-ferramentas": {},
+    "mobile-ferramentas-menu": {},
     "mobile-dados": {},
     "mobile-dados-dialog-reset": {}
   }

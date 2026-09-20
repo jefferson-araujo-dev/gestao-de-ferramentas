@@ -15,6 +15,9 @@ const dynamicMasks = (page) => [
   page.locator('#dash-mini-timeline'),
 ];
 
+// Gate 1-F2: os dias de atraso ("Atrasada (39d)") dependem da data do dia e são mascarados.
+const toolsMasks = (page) => [...dynamicMasks(page), page.locator('#crud-list .ui-badge--danger:not(.ui-badge--status)')];
+
 test.describe('VISUAL — desktop 1440x900 (ADMIN)', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, E2E_USERS.admin);
@@ -31,7 +34,7 @@ test.describe('VISUAL — desktop 1440x900 (ADMIN)', () => {
     await openTab(page, 'management', { isAdmin: true });
     await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
     await expect(page).toHaveScreenshot('ferramentas-admin-desktop.png', {
-      mask: dynamicMasks(page),
+      mask: toolsMasks(page),
     });
   });
 
@@ -109,6 +112,55 @@ test.describe('VISUAL — desktop 1440x900 (ADMIN, tema escuro): Dados e backup'
     await openDataAt(page, '#data-h-maintenance');
     await expect(page).toHaveScreenshot('dados-admin-manutencao-desktop-dark.png', {
       mask: dataMasks(page),
+    });
+  });
+});
+
+// Gate 1-F2: tela Ferramentas (menu de ações, busca/filtros ativos, perfil padrão e tema escuro).
+test.describe('VISUAL — desktop 1440x900: Ferramentas', () => {
+  test('ferramentas: menu de ações aberto', async ({ page }) => {
+    await loginAs(page, E2E_USERS.admin);
+    await openTab(page, 'management', { isAdmin: true });
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+    await page.locator('#crud-list [data-tools-menu-trigger]').first().click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await expect(page).toHaveScreenshot('ferramentas-admin-menu-desktop.png', {
+      mask: toolsMasks(page),
+    });
+  });
+
+  test('ferramentas: busca, categoria e status ativos', async ({ page }) => {
+    await loginAs(page, E2E_USERS.admin);
+    await openTab(page, 'management', { isAdmin: true });
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+    await page.locator('#tools-filters').getByRole('button', { name: /^Emprestadas/ }).click();
+    await page.locator('#inventory-category-filter').selectOption('Elétrica');
+    await expect(page.locator('#tools-active-filters')).toHaveText('2 filtros ativos');
+    await expect(page).toHaveScreenshot('ferramentas-admin-filtros-desktop.png', {
+      mask: toolsMasks(page),
+    });
+  });
+
+  test('ferramentas: perfil padrão (somente leitura)', async ({ page }) => {
+    await loginAs(page, E2E_USERS.standard);
+    await openTab(page, 'management');
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+    await expect(page).toHaveScreenshot('ferramentas-padrao-desktop.png', {
+      mask: toolsMasks(page),
+    });
+  });
+});
+
+test.describe('VISUAL — desktop 1440x900 (ADMIN, tema escuro): Ferramentas', () => {
+  test.use({ colorScheme: 'dark' });
+
+  test('ferramentas no escuro', async ({ page }) => {
+    await loginAs(page, E2E_USERS.admin);
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await openTab(page, 'management', { isAdmin: true });
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+    await expect(page).toHaveScreenshot('ferramentas-admin-desktop-dark.png', {
+      mask: toolsMasks(page),
     });
   });
 });

@@ -28,8 +28,8 @@ test.describe.configure({ mode: 'serial' });
 const collected = {};
 let axeVersion = 'desconhecida';
 
-async function check(page, project, screen) {
-  const { violations, axeVersion: version } = await scan(page);
+async function check(page, project, screen, options) {
+  const { violations, axeVersion: version } = await scan(page, options);
 
   axeVersion = version;
   collected[screen] = violations;
@@ -44,8 +44,14 @@ async function check(page, project, screen) {
 // Gate 1-F1: a varredura de página inteira inclui o cabeçalho do shell (#network-status-text, texto
 // 10px em slate-400, contraste anterior a este gate e presente em todas as telas). Para a tela nova,
 // a varredura restrita ao seu próprio conteúdo/diálogo não pode ter NENHUMA violação.
-async function expectScopedClean(page, selector, label) {
-  const results = await new AxeBuilder({ page }).include(selector).withTags(AXE_TAGS).analyze();
+async function expectScopedClean(page, selector, label, exclude) {
+  const builder = new AxeBuilder({ page }).include(selector).withTags(AXE_TAGS);
+
+  if (exclude) {
+    builder.exclude(exclude);
+  }
+
+  const results = await builder.analyze();
 
   expect(
     results.violations.map((violation) => `${violation.id}: ${violation.nodes.length} nó(s)`),
@@ -175,6 +181,73 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
     await check(page, project, 'admin-dados-dialog-escuro');
     await expectScopedClean(page, '#confirm-dialog', 'diálogo no tema escuro');
     await page.keyboard.press('Escape');
+  });
+
+  // Gate 1-F2: estados da tela Ferramentas (a ociosa já foi verificada acima). A varredura restrita à
+  // própria tela não pode ter NENHUMA violação; a de página inteira só herda o nó do cabeçalho do shell.
+  test('FERRAMENTAS: busca e filtros, menu aberto, modal, vazio, erro e tema escuro', async ({
+    page,
+  }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'management', { isAdmin: true });
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+    await expectScopedClean(page, '#tab-management', 'ociosa');
+
+    await page.locator('#tools-filters').getByRole('button', { name: /^Disponíveis/ }).click();
+    await page.locator('#inventory-category-filter').selectOption('Elétrica');
+    await page.getByRole('searchbox').fill('furad');
+    await expect(page.locator('#tools-active-filters')).toHaveText('3 filtros ativos');
+    await check(page, project, 'admin-ferramentas-filtros');
+    await expectScopedClean(page, '#tab-management', 'busca e filtros ativos');
+
+    await page.locator('#tools-clear-filters').click();
+    await expect(page.locator('#inventory-result-count')).toHaveText('Mostrando 8 de 8 ferramentas');
+
+    await page.locator('#crud-list [data-tools-menu-trigger]').first().click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await check(page, project, 'admin-ferramentas-menu', { exclude: '#crud-list tr.tools-row ~ tr.tools-row' });
+    await expectScopedClean(page, '#tab-management', 'menu de ações aberto', '#crud-list tr.tools-row ~ tr.tools-row');
+    await page.getByRole('menuitem', { name: 'Histórico' }).click();
+    await expect(page.locator('#tool-history-modal')).toBeVisible();
+    await check(page, project, 'admin-ferramentas-modal-historico');
+    await page.keyboard.press('Escape');
+
+    await page.evaluate(() => {
+      window.App.Data.tools = [];
+      window.App.CRUDTools.render();
+    });
+    await expect(page.locator('#crud-list')).toContainText('Nenhuma ferramenta cadastrada');
+    await check(page, project, 'admin-ferramentas-vazio');
+    await expectScopedClean(page, '#tab-management', 'estado vazio');
+
+    await page.evaluate(() => {
+      window.App.Data.toolsError = true;
+      window.App.CRUDTools.render();
+    });
+    await expect(page.locator('#tools-feedback').getByRole('alert')).toBeVisible();
+    await check(page, project, 'admin-ferramentas-erro');
+    await expectScopedClean(page, '#tab-management', 'estado de erro');
+  });
+
+  test('FERRAMENTAS: tema escuro (lista e menu de ações)', async ({ page }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'management', { isAdmin: true });
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+    await check(page, project, 'admin-ferramentas-escuro');
+    await expectScopedClean(page, '#tab-management', 'tema escuro');
+
+    await page.locator('#crud-list [data-tools-menu-trigger]').first().click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await check(page, project, 'admin-ferramentas-menu-escuro', { exclude: '#crud-list tr.tools-row ~ tr.tools-row' });
+    await expectScopedClean(page, '#tab-management', 'menu no tema escuro', '#crud-list tr.tools-row ~ tr.tools-row');
   });
 
   // Gate 1-D: estados novos do shell (drawer no tablet e rail expandido sobre o conteúdo no notebook).

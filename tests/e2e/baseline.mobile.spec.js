@@ -85,6 +85,29 @@ test.describe('MOBILE 390x844 — visual (baseline do shell novo)', () => {
     await expect(page).toHaveScreenshot('dashboard-admin-mobile.png', { mask: dynamicMasks(page) });
   });
 
+  // Gate 1-F2: Ferramentas no mobile (cartões compactos; os dias de atraso dependem da data e são mascarados).
+  test('ferramentas', async ({ page }) => {
+    await openTab(page, 'management');
+    await expectActiveTab(page, 'management');
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+    await expect(page).toHaveScreenshot('ferramentas-admin-mobile.png', {
+      mask: [...dynamicMasks(page), page.locator('#crud-list .ui-badge--danger:not(.ui-badge--status)')],
+    });
+  });
+
+  test('ferramentas: menu de ações aberto', async ({ page }) => {
+    await openTab(page, 'management');
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+    const trigger = page.locator('#crud-list [data-tools-menu-trigger]').first();
+
+    await trigger.scrollIntoViewIfNeeded();
+    await trigger.click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await expect(page).toHaveScreenshot('ferramentas-admin-menu-mobile.png', {
+      mask: [...dynamicMasks(page), page.locator('#crud-list .ui-badge--danger:not(.ui-badge--status)')],
+    });
+  });
+
   // Gate 1-F1: tela Dados e backup no mobile (aberta por "Mais"; o item não cabe na barra inferior).
   test('dados e backup', async ({ page }) => {
     await openTab(page, 'data');
@@ -158,6 +181,54 @@ test.describe('MOBILE 390x844 — axe (shell novo)', () => {
           `regressões de acessibilidade em "${screen}"`
         ).toEqual([]);
       }
+    }
+  });
+
+  // Gate 1-F2: Ferramentas no mobile (lista em cartões e menu de ações aberto).
+  test('ferramentas: lista e menu de ações', async ({ page }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'management');
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+
+    for (const [screen, prepare] of [
+      ['mobile-ferramentas', async () => {}],
+      [
+        'mobile-ferramentas-menu',
+        async () => {
+          const trigger = page.locator('#crud-list [data-tools-menu-trigger]').first();
+
+          await trigger.scrollIntoViewIfNeeded();
+          await trigger.click();
+          await expect(page.getByRole('menu')).toBeVisible();
+        },
+      ],
+    ]) {
+      await prepare();
+
+      const { violations, axeVersion: version } = await scan(page);
+
+      axeVersion = version;
+      collected[screen] = violations;
+
+      if (!UPDATE_BASELINE) {
+        expect(
+          findRegressions(loadBaseline(project).screens[screen], violations),
+          `regressões de acessibilidade em "${screen}"`
+        ).toEqual([]);
+      }
+
+      const scoped = await new AxeBuilder({ page })
+        .include('#tab-management')
+        .withTags(AXE_TAGS)
+        .analyze();
+
+      expect(
+        scoped.violations.map((violation) => `${violation.id}: ${violation.nodes.length} nó(s)`),
+        `axe restrito a #tab-management (${screen})`
+      ).toEqual([]);
     }
   });
 

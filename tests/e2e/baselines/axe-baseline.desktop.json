@@ -39,10 +39,6 @@
       "color-contrast": {
         "impact": "serious",
         "nodes": 1
-      },
-      "select-name": {
-        "impact": "critical",
-        "nodes": 10
       }
     },
     "admin-auditoria": {
@@ -105,6 +101,33 @@
     },
     "admin-dados-escuro": {},
     "admin-dados-dialog-escuro": {},
+    "admin-ferramentas-filtros": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-ferramentas-menu": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-ferramentas-modal-historico": {},
+    "admin-ferramentas-vazio": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-ferramentas-erro": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-ferramentas-escuro": {},
+    "admin-ferramentas-menu-escuro": {},
     "admin-drawer-tablet": {
       "color-contrast": {
         "impact": "serious",
@@ -127,10 +150,6 @@
       "color-contrast": {
         "impact": "serious",
         "nodes": 1
-      },
-      "select-name": {
-        "impact": "critical",
-        "nodes": 2
       }
     }
   }

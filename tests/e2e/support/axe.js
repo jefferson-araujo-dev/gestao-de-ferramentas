@@ -39,10 +39,19 @@ export async function freezeMotion(page) {
   });
 }
 
-export async function scan(page) {
+// `exclude`: seletor de conteúdo a ignorar. Usado só com um menu flutuante aberto: o menu cobre alvos
+// de outras linhas e o axe (target-size) os trata como "parcialmente obstruídos"; esses alvos já são
+// verificados, sem obstrução, no estado sem menu.
+export async function scan(page, { exclude } = {}) {
   await page.waitForTimeout(150);
 
-  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
+  const builder = new AxeBuilder({ page }).withTags(AXE_TAGS);
+
+  if (exclude) {
+    builder.exclude(exclude);
+  }
+
+  const results = await builder.analyze();
   const violations = {};
 
   for (const violation of results.violations) {

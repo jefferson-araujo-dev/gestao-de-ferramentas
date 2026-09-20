@@ -50,15 +50,13 @@ test.describe('MODAIS — perfil ADMIN', () => {
     await expectOpenThenEscape(page, '#password-modal');
   });
 
-  test('histórico da ferramenta: abre pelo card (aba Ferramentas) e lista os registros', async ({
+  test('histórico da ferramenta: abre pelo menu da linha (aba Ferramentas) e lista os registros', async ({
     page,
   }) => {
     await openTab(page, 'management', { isAdmin: true });
-    await page
-      .locator('#crud-list')
-      .getByRole('button', { name: 'Histórico', exact: true })
-      .first()
-      .click();
+    // Gate 1-F2: o histórico deixou de ser um botão solto no card e passou para o menu de ações da linha.
+    await page.locator('#crud-list [data-tools-menu-trigger]').first().click();
+    await page.getByRole('menuitem', { name: 'Histórico', exact: true }).click();
     await expect(page.locator('#tool-history-name')).toHaveText(/\S/);
     await expect(page.locator('#tool-history-list')).toBeVisible();
     await expectOpenThenEscape(page, '#tool-history-modal');
@@ -95,6 +93,8 @@ test.describe('MODAIS — perfil PADRÃO', () => {
   test('histórico da ferramenta: o botão não é exibido para o perfil padrão', async ({ page }) => {
     await openTab(page, 'management');
     await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
-    await expect(page.locator('#crud-list button[aria-label="Histórico"]').first()).toBeHidden();
+    // Sem permissão de gestão a linha não tem menu de ações: nenhuma forma de abrir o histórico.
+    await expect(page.locator('#crud-list [data-tools-menu-trigger]')).toHaveCount(0);
+    await expect(page.locator('#crud-list').getByRole('menuitem', { name: 'Histórico' })).toHaveCount(0);
   });
 });

@@ -61,8 +61,16 @@ export default defineConfig({
     {
       // Fluxos que apagam dados semeados do emulator (limpar histórico): rodam por último e re-semeiam.
       name: 'destructive',
-      testMatch: /\.destructive\.spec\.js$/,
+      testMatch: /data-backup\.destructive\.spec\.js$/,
       dependencies: ['desktop', 'mobile'],
+      use: { viewport: { width: 1440, height: 900 } },
+    },
+    {
+      // Troca de status de ferramenta (escrita real no emulator). Depois de "destructive": os dois
+      // re-semeiam o emulator ao final e não podem rodar em paralelo (um apagaria a mudança do outro).
+      name: 'destructive-tools',
+      testMatch: /tools\.destructive\.spec\.js$/,
+      dependencies: ['destructive'],
       use: { viewport: { width: 1440, height: 900 } },
     },
   ],
