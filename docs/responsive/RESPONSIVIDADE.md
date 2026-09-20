@@ -340,3 +340,13 @@ fechado, com a mesma allowlist do E2E autenticado (`tests/e2e/support/env.mjs`):
   o fixture reprovar; `tests/unit/responsiveNetworkPolicy.test.mjs` cobre a política sem navegador.
 - **Evidência:** `RESPONSIVE_NETWORK_EVIDENCE_FILE=<arquivo>` grava, por teste, a contagem de requests por
   host/tipo.
+
+---
+
+## 🧭 Shell e contrato de breakpoints (Gate 1-D)
+
+O layout de navegação (sidebar/rail/drawer/barra inferior) segue o contrato **mobile < 768, tablet 768–1023,
+notebook 1024–1279, desktop ≥ 1280** (`src/js/config/breakpoints.js`, `src/css/shell.css`), descrito em
+`docs/design/APP_SHELL.md`. Os "6 breakpoints" e o `getCurrentBreakpoint()` descritos acima são o sistema
+**legado** do `ResponsiveManager`, que não decide mais o shell; a unificação global das media queries
+das telas internas segue pendente. A spec `tests/responsive/shell-layout.spec.js` valida o shell em todos os viewports.
