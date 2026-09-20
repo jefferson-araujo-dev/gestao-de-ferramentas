@@ -467,7 +467,13 @@ export const AppUI = {
       this.setMobileSidebarState(false);
     }
     if (tab !== 'scanner') {
-      window.App.Scanner.stopCamera();
+      // Ao sair da aba o Scanner volta ao modo USB: para a câmera e esconde o container,
+      // evitando reabrir a aba com o overlay preto de uma câmera já parada.
+      if (window.App.Scanner.currentMode === 'cam') {
+        window.App.Scanner.setMode('usb');
+      } else {
+        window.App.Scanner.stopCamera();
+      }
     } else {
       window.App.Scanner.focus();
     }

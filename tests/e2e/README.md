@@ -50,9 +50,13 @@ Descrevem o contrato desejado e passam enquanto o defeito existir. Quando o defe
 Playwright avisa ("expected to fail but passed"); então remova o `test.fail`.
 
 1. `auth-restricted`: perfil restrito só tem o item de menu oculto; `switchTab('collaborators')`
-   funciona e os dados de colaboradores são carregados.
-2. `scanner`: o modo câmera nunca exibe o container (`hidden-tab` com `!important`), e o Scanner
-   volta ao modo USB com o aviso "Container da câmera não está visível.". Também existe em `main`.
+   funciona e os dados de colaboradores são carregados. **Aberto**: a correção exige decidir como o
+   empréstimo no Scanner resolve o colaborador sem ler a coleção (o Scanner busca o colaborador por
+   crachá/nome em `Data.collaborators`).
+
+Corrigido (Addendum 1-B1): o modo câmera do Scanner nunca exibia o container (`hidden-tab` com
+`!important`). Agora `scanner.spec.js` cobre USB -> câmera -> USB, inicialização única, liberação da
+câmera ao sair da aba e o atalho "Emprestar" dos cards.
 
 ## Baselines
 

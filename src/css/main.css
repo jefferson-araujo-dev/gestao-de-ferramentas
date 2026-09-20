@@ -151,10 +151,6 @@ body,
   flex-shrink: 0;
 }
 
-.hidden-tab {
-  display: none !important;
-}
-
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
