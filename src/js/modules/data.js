@@ -167,7 +167,11 @@ export const AppData = {
       );
     }
 
-    if (permissions?.canReadCollaborators === true) {
+    if (permissions?.canReadCollaborators !== true) {
+      // Sem permissão (perfil restrito): nenhum listener e nenhuma sobra de sessão anterior.
+      this.collaborators = [];
+      this.collaboratorsLoaded = true;
+    } else {
       this.listeners.push(
         onSnapshot(
           collection(db, DB_BASE_PATH, COLLECTIONS.COLLABORATORS),

@@ -28,13 +28,14 @@ export const AppAuth = {
     canManageCollaborators: false,
     canManageTools: false,
   },
-  _setPermissions: function (isAdm, isAuthenticated = true) {
+  _setPermissions: function (isAdm, isAuthenticated = true, isRestricted = false) {
     const canAccessStandardModules = isAuthenticated === true;
 
     this.permissions.canAccessDashboard = canAccessStandardModules;
     this.permissions.canAccessScanner = canAccessStandardModules;
     this.permissions.canReadTools = canAccessStandardModules;
-    this.permissions.canReadCollaborators = canAccessStandardModules;
+    // Perfil restrito não lê colaboradores (nem lista, nem tela): empresta pelo crachá no servidor.
+    this.permissions.canReadCollaborators = canAccessStandardModules && isRestricted !== true;
     this.permissions.canAccessInventory = isAdm;
     this.permissions.canAccessUsers = isAdm;
     this.permissions.canAccessHistory = isAdm;
@@ -271,7 +272,7 @@ export const AppAuth = {
     this.isAdm = isAdm;
     this.isRestricted = isRestricted === true && !isAdm;
     this.uName = uName;
-    this._setPermissions(isAdm);
+    this._setPermissions(isAdm, true, this.isRestricted);
     this._updateAdministrativeActionVisibility();
     document.getElementById('user-name').textContent = uName;
     document.getElementById('user-role').textContent = isAdm ? 'Administrador' : 'Usuário';
@@ -283,14 +284,14 @@ export const AppAuth = {
     document.getElementById('admin-section').style.display = isAdm ? '' : 'none';
     document.getElementById('nav-tools').style.display = this.permissions.canReadTools && !isAdm ? '' : 'none';
     document.getElementById('nav-collaborators').style.display =
-      isRestricted && !isAdm ? 'none' : '';
+      this.permissions.canReadCollaborators ? '' : 'none';
     document.getElementById('tools-action-export').style.display = isAdm ? '' : 'none';
     document.getElementById('tools-action-import').style.display = isAdm ? '' : 'none';
     document.getElementById('tools-action-new').style.display = isAdm ? '' : 'none';
     document.getElementById('crud-import-input-tool').style.display = isAdm ? '' : 'none';
 
     const restrictedTabs = ['users', 'history'];
-    if (isRestricted && !isAdm) {
+    if (!this.permissions.canReadCollaborators) {
       restrictedTabs.push('collaborators');
     }
     if (!isAdm && restrictedTabs.includes(window.App.UI.activeTab)) {

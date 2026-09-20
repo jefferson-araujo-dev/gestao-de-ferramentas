@@ -435,6 +435,12 @@ export const AppUI = {
       this.showToast('Acesso restrito a administradores.', 'error');
       return;
     }
+    // Colaboradores: perfil restrito não alcança a tela nem por navegação programática.
+    if (tab === 'collaborators' && window.App?.Auth?.permissions?.canReadCollaborators !== true) {
+      this.switchTab('dashboard');
+      this.showToast('Acesso não permitido para o seu perfil.', 'error');
+      return;
+    }
 
     this.activeTab = tab;
     metrics.trackNavigation(tab);

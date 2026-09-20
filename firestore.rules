@@ -21,6 +21,14 @@ service cloud.firestore {
         && get(userProfilePath()).data.accessLevel == 'Administrador';
     }
 
+    // Leitura de colaboradores: qualquer perfil ativo, exceto o perfil restrito (flag
+    // isRestricted gravada só pelo Admin SDK; ausente = não restrito). Administrador nunca é
+    // restrito. O restrito empresta pela API de movimentação, que resolve o crachá no servidor.
+    function canReadCollaborators() {
+      return hasActiveProfile()
+        && (isAdmin() || get(userProfilePath()).data.get('isRestricted', false) != true);
+    }
+
     match /artifacts/gestao-de-ferramentas-3f8f1/public/data/users/{userId} {
       allow get: if signedIn()
         && (userId == request.auth.uid || isAdmin());
@@ -34,7 +42,7 @@ service cloud.firestore {
     }
 
     match /artifacts/gestao-de-ferramentas-3f8f1/public/data/collaborators/{collaboratorId} {
-      allow read: if hasActiveProfile();
+      allow read: if canReadCollaborators();
       allow write: if isAdmin();
     }
 

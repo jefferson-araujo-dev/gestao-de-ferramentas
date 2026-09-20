@@ -12,6 +12,25 @@ import { E2E_USERS } from './support/seed-data.mjs';
 
 const restricted = E2E_USERS.restricted;
 
+// Leitura direta de `collaborators` pelo navegador (mesmo SDK, mesma sessão do app): prova, de
+// ponta a ponta, o que as regras do Firestore permitem, sem passar por nenhuma tela.
+function readCollaboratorsDirectly(page) {
+  return page.evaluate(async () => {
+    const { db, DB_BASE_PATH } = await import('/js/app.js');
+    const { collection, getDocs } = await import(
+      'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js'
+    );
+
+    try {
+      const snapshot = await getDocs(collection(db, DB_BASE_PATH, 'collaborators'));
+
+      return { ok: true, size: snapshot.size };
+    } catch (error) {
+      return { ok: false, code: error?.code };
+    }
+  });
+}
+
 test.describe('RESTRITO — login, navegação e ausência de áreas administrativas', () => {
   test.beforeEach(async ({ page }) => {
     await loginAs(page, restricted);
@@ -29,6 +48,7 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
       canBackupData: false,
       canManageTools: false,
       canManageCollaborators: false,
+      canReadCollaborators: false,
     });
   });
 
@@ -73,25 +93,65 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
     }
   });
 
-  // ACHADO DO GATE 1-B (comportamento atual, pré-existente): "restrito" só esconde o item de menu.
-  // switchTab('collaborators') NÃO é bloqueado (ui.js só protege 'users' e 'history') e os dados
-  // de colaboradores são carregados para qualquer perfil ativo (canReadCollaborators = true;
-  // as regras do Firestore também permitem a leitura). O contrato desejado está descrito abaixo;
-  // test.fail() faz a suíte avisar quando o comportamento for corrigido (remover o test.fail).
-  test('contrato desejado: perfil restrito não alcança Colaboradores nem por navegação programática', async ({
+  // Antes do Addendum 1-B1 (achado do Gate 1-B) o perfil restrito só tinha o item de menu oculto:
+  // switchTab('collaborators') funcionava e os dados eram carregados. Agora a tela é recusada, o
+  // listener não inicia, a lista não existe em memória e as regras do Firestore negam a leitura.
+  test('perfil restrito não alcança Colaboradores: navegação programática recusada', async ({
     page,
   }) => {
-    test.fail(
-      true,
-      'ACHADO: perfil restrito alcança Colaboradores via switchTab (só o menu é oculto).'
-    );
+    await expect(page.locator('#nav-collaborators')).toBeHidden();
 
+    for (const attempt of [
+      () => window.App.UI.switchTab('collaborators'),
+      () => window.App.UI.switchTab('collaborators', 'nav-dashboard'),
+    ]) {
+      await page.evaluate(attempt);
+      await expect(page.locator('#topbar-title')).toHaveText('Visão Geral');
+      await expect(page.locator('#tab-collaborators')).toBeHidden();
+      await expect(page.locator('#tab-dashboard')).toBeVisible();
+    }
+
+    expect(await page.evaluate(() => window.App.UI.activeTab)).toBe('dashboard');
+  });
+
+  test('perfil restrito: coleção de colaboradores não é carregada nem escutada', async ({
+    page,
+  }) => {
+    const state = await page.evaluate(() => ({
+      collaborators: window.App.Data.collaborators.length,
+      listeners: window.App.Data.listeners.length,
+    }));
+
+    // Somente o listener de ferramentas (Scanner/devolução). Sem colaboradores, usuários ou histórico.
+    expect(state).toEqual({ collaborators: 0, listeners: 1 });
+
+    // Mesmo após tentar abrir a tela, nada é carregado.
     await page.evaluate(() => window.App.UI.switchTab('collaborators'));
-    await expect(page.locator('#tab-collaborators')).toBeHidden();
+    expect(await page.evaluate(() => window.App.Data.collaborators.length)).toBe(0);
     await expect(page.locator('#collab-list')).not.toContainText('Colaborador Alfa');
+  });
+
+  test('perfil restrito: as regras negam leitura direta da coleção pelo navegador', async ({
+    page,
+  }) => {
+    expect(await readCollaboratorsDirectly(page)).toEqual({
+      ok: false,
+      code: 'permission-denied',
+    });
   });
 
   test('logout: volta para a tela de login', async ({ page }) => {
     await logoutViaSidebar(page);
+  });
+});
+
+test.describe('PADRÃO — controle: mesma leitura direta é permitida', () => {
+  test('perfil padrão lê a coleção de colaboradores (contrato atual preservado)', async ({
+    page,
+  }) => {
+    await loginAs(page, E2E_USERS.standard);
+
+    expect(await readCollaboratorsDirectly(page)).toEqual({ ok: true, size: 5 });
+    expect(await page.evaluate(() => window.App.Data.listeners.length)).toBe(2);
   });
 });
