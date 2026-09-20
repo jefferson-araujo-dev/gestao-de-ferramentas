@@ -289,49 +289,12 @@ virtualList.setItems(allTools);
 
 
 // ========================================
-// 8. AUTO BACKUP - Backup automático
+// 8. BACKUP - (removido)
 // ========================================
 
-import { autoBackup } from './core/AutoBackupManager.js';
-
-// Exemplo: Iniciar backup automático ao logar
-function onLogin() {
-  // Código existente...
-  
-  // NOVO: Iniciar backup automático (a cada 1 hora)
-  autoBackup.start(3600000);
-}
-
-// Exemplo: Backup manual
-async function manualBackup() {
-  try {
-    await autoBackup.backup({
-      showProgress: true,
-      onProgress: (percent, message) => {
-        console.log(`${percent}%: ${message}`);
-      }
-    });
-  } catch (error) {
-    console.error('Backup failed:', error);
-  }
-}
-
-// Exemplo: Restaurar backup
-async function restoreBackup(file) {
-  try {
-    await autoBackup.restore(file, {
-      showProgress: true,
-      onProgress: (percent, message) => {
-        console.log(`${percent}%: ${message}`);
-      }
-    });
-    
-    // Recarregar dados
-    window.App.Data.init();
-  } catch (error) {
-    console.error('Restore failed:', error);
-  }
-}
+// O AutoBackupManager foi removido: nunca foi importado em runtime e o restore que ele fazia era inseguro.
+// Backup, restauracao e reset agora usam o contrato v4 (src/js/utils/backupContract.js) e as APIs
+// server-side /api/backup/restore e /api/backup/reset (ver docs/architecture/ARCHITECTURE.md).
 
 
 // ========================================
@@ -379,7 +342,6 @@ onAuthStateChanged(auth, async (user) => {
     // NOVO: Disparar eventos
     eventBus.emit('app:user:logout');
     metrics.trackFeature('auth', 'logout');
-    autoBackup.stop(); // Parar backup automático
   }
 });
 

@@ -356,55 +356,24 @@ await container.initializeAll();
 
 ---
 
-### 8. **AutoBackupManager** (`src/js/core/AutoBackupManager.js`)
+### 8. **Backup, restore e reset** (`src/js/utils/backupContract.js`, `server/backup-operations.js`, `api/backup/*`)
 
-Sistema automático de backup com agendamento e restauração.
+O antigo `AutoBackupManager` foi removido (nunca foi importado em runtime). Backup, restauração e reset
+operacionais seguem agora um único contrato e um único fluxo server-side.
 
-**Funcionalidades:**
-- ✅ Backup automático em intervalos configuráveis
-- ✅ Backup manual
-- ✅ Restauração completa
-- ✅ Validação de dados
-- ✅ Retry automático
-- ✅ Histórico de backups
-- ✅ Progresso em tempo real
-- ✅ Métricas de backup
+**Contrato v4** (`schemaVersion: "4.0"`): `data` com somente `tools`, `collaborators` e `history`;
+`reference.users` é apenas referência administrativa (sem `lastIp`/`lastDevice`) e **nunca** é restaurado;
+`summary.dataSha256` cobre o JSON canônico de `data`; Timestamps usam a forma explícita
+`{ "__type": "timestamp", "seconds", "nanoseconds" }`. O backup legado `3.0` é aceito por um adaptador
+(users saem de `data`; colaboradores sem `status` recebem `"active"`).
 
-**Exemplo de Uso:**
-```javascript
-import { autoBackup } from './core/AutoBackupManager.js';
+**Fluxo**: navegador -> `POST /api/backup/restore` ou `/api/backup/reset` (ID token + `requireActiveAdmin`)
+-> Firebase Admin SDK: validação estrita, no máximo 500 mutações em uma única `WriteBatch` atômica,
+verificação por readback (hash operacional + digest de `users`) e rollback automático em caso de falha.
+`users` e Authentication nunca são alterados. O navegador baixa um backup de segurança (`pre_restore_*` /
+`pre_reset_*`) antes de qualquer restauração ou reset.
 
-// Iniciar backup automático (a cada 1 hora)
-autoBackup.start(3600000);
-
-// Parar backup automático
-autoBackup.stop();
-
-// Backup manual
-await autoBackup.backup({
-  showProgress: true,
-  includeHistory: true,
-  compress: false,
-  onProgress: (percent, message) => {
-    console.log(`${percent}%: ${message}`);
-  }
-});
-
-// Restaurar backup
-const fileInput = document.getElementById('backup-file');
-fileInput.addEventListener('change', async (e) => {
-  await autoBackup.restore(e.target.files[0], {
-    showProgress: true,
-    onProgress: (percent, message) => {
-      console.log(`${percent}%: ${message}`);
-    }
-  });
-});
-
-// Obter histórico
-const history = autoBackup.getHistory();
-const lastBackup = autoBackup.getLastBackup();
-```
+**CLI**: `npm run backup` gera o mesmo formato v4 (falha em qualquer erro de leitura e grava fora do repositório).
 
 ---
 
@@ -720,12 +689,12 @@ src/
 │   │   ├── MetricsManager.js
 │   │   ├── ServiceContainer.js
 │   │   ├── NotificationManager.js
-│   │   ├── AutoBackupManager.js
 │   │   └── index.js
 │   ├── config/
 │   │   └── constants.js
 │   ├── utils/
-│   │   └── AdvancedUtils.js
+│   │   ├── AdvancedUtils.js
+│   │   └── backupContract.js
 │   ├── modules/
 │   │   ├── auth.js
 │   │   ├── data.js
@@ -792,7 +761,7 @@ Para contribuir com melhorias:
 
 ## 📄 Licença
 
-Sistema proprietário - COENG © 2026
+Sistema proprietário © 2026
 
 ---
 

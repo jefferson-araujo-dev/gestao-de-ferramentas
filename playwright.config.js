@@ -5,7 +5,9 @@ const externalBaseUrl = String(
   process.env.PLAYWRIGHT_BASE_URL || ''
 ).trim();
 
-const baseURL = externalBaseUrl || 'http://127.0.0.1:3000';
+const managedPort = 3100;
+const baseURL =
+  externalBaseUrl || `http://127.0.0.1:${managedPort}`;
 const isCI = Boolean(process.env.CI);
 
 const responsiveProjects = RESPONSIVE_VIEWPORTS.map(
@@ -78,10 +80,9 @@ export default defineConfig({
   webServer: externalBaseUrl
     ? undefined
     : {
-        command:
-          'npm.cmd run dev -- --host 127.0.0.1 --port 3000',
+        command: `npm.cmd run dev -- --host 127.0.0.1 --port ${managedPort} --strictPort`,
         url: baseURL,
-        reuseExistingServer: !isCI,
+        reuseExistingServer: false,
         timeout: 120_000,
         stdout: 'pipe',
         stderr: 'pipe'

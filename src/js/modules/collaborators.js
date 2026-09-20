@@ -325,7 +325,7 @@ export const AppCRUDCollaborators = {
 
     if (!window.XLSX) {
       window.App.UI.showToast('Carregando motor de planilhas...', 'info');
-      window.Utils.loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js')
+      window.Utils.loadScript('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js')
         .then(() => this.exportList())
         .catch(() => window.App.UI.showToast('Erro ao carregar motor.', 'error'));
       return;
@@ -379,7 +379,7 @@ export const AppCRUDCollaborators = {
     } else if (action === 'export') {
       if (!window.XLSX) {
         window.App.UI.showToast('Carregando motor de planilhas...', 'info');
-        window.Utils.loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js')
+        window.Utils.loadScript('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js')
           .then(() => this.bulkAction('export'))
           .catch(() => window.App.UI.showToast('Erro ao carregar motor.', 'error'));
         return;
@@ -709,7 +709,7 @@ export const AppCRUDCollaborators = {
       window.App.UI.showToast('Carregando motor de Excel...', 'info');
       try {
         await window.Utils.loadScript(
-          'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+          'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'
         );
       } catch {
         e.target.value = '';

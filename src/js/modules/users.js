@@ -1,4 +1,5 @@
 import { auth } from '../app.js';
+import { formatDateTime } from '../utils/dateFormat.js';
 
 async function requestUsersApi(endpoint, method, body) {
   const currentUser = auth.currentUser;
@@ -851,7 +852,7 @@ export const AppCRUDUsers = {
       window.App.UI.showToast('Carregando motor de Excel...', 'info');
       try {
         await window.Utils.loadScript(
-          'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+          'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'
         );
       } catch {
         window.App.UI.showToast('Erro ao carregar o motor.', 'error');
@@ -993,7 +994,7 @@ export const AppCRUDUsers = {
       window.App.UI.showToast('Carregando motor de planilhas...', 'info');
       try {
         await window.Utils.loadScript(
-          'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+          'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'
         );
       } catch {
         return window.App.UI.showToast('Erro ao carregar o motor.', 'error');
@@ -1008,11 +1009,11 @@ export const AppCRUDUsers = {
       'Nivel de Acesso': u.accessLevel || 'Usuário Padrão',
       Status: u.status || 'Ativo',
       Departamento: u.department || '-',
-      'Criado em': u.createdAt ? new Date(u.createdAt).toLocaleString('pt-BR') : '-'
+      'Criado em': formatDateTime(u.createdAt)
     }));
     const ws = window.XLSX.utils.json_to_sheet(data);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Colaboradores');
-    window.XLSX.writeFile(wb, `colaboradores_coeng_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    window.XLSX.writeFile(wb, `colaboradores_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 };

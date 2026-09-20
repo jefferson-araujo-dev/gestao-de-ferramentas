@@ -10,8 +10,6 @@
  * @property {number} DEBOUNCE_DELAY - Delay padrão para debounce em ms
  * @property {boolean} ENABLE_METRICS - Habilitar sistema de métricas
  * @property {boolean} ENABLE_CACHE - Habilitar sistema de cache
- * @property {boolean} ENABLE_AUTO_BACKUP - Habilitar backup automático
- * @property {number} AUTO_BACKUP_INTERVAL - Intervalo de backup em ms
  * @property {'debug'|'info'|'warn'|'error'} LOG_LEVEL - Nível de log
  */
 
@@ -19,7 +17,7 @@
  * @type {AppConfig}
  */
 export const CONFIG = Object.freeze({
-  APP_ID: 'gestao-ferramentas-coeng-2026',
+  APP_ID: 'gestao-de-ferramentas-3f8f1',
   TIMEOUT_MS: 8000,
   SESSION_LIMIT_MS: 1209600000, // 14 dias
   IMAGE_QUALITY: 0.6,
@@ -29,8 +27,6 @@ export const CONFIG = Object.freeze({
   DEBOUNCE_DELAY: 300,
   ENABLE_METRICS: true,
   ENABLE_CACHE: true,
-  ENABLE_AUTO_BACKUP: false,
-  AUTO_BACKUP_INTERVAL: 3600000, // 1 hora
   LOG_LEVEL: 'info'
 });
 
@@ -48,12 +44,12 @@ export const CONFIG = Object.freeze({
  * @type {FirebaseConfig}
  */
 export const FIREBASE_CONFIG = Object.freeze({
-  apiKey: 'AIzaSyBABhQgRW4CELN62ITlLxRBSrT1AfQ2fPI',
-  authDomain: 'gestao-ferramentas-coeng-2026.firebaseapp.com',
-  projectId: 'gestao-ferramentas-coeng-2026',
-  storageBucket: 'gestao-ferramentas-coeng-2026.firebasestorage.app',
-  messagingSenderId: '498524753209',
-  appId: '1:498524753209:web:6068df61e9b35a9b4cece8'
+  apiKey: 'AIzaSyDfwvy6xS1kmN7hqbf26OUZFxHvOyrkUGQ',
+  authDomain: 'gestao-de-ferramentas-3f8f1.firebaseapp.com',
+  projectId: 'gestao-de-ferramentas-3f8f1',
+  storageBucket: 'gestao-de-ferramentas-3f8f1.firebasestorage.app',
+  messagingSenderId: '972907514604',
+  appId: '1:972907514604:web:dc80495f6413604f5bf3c9'
 });
 
 /**
@@ -86,7 +82,7 @@ export const COLLECTIONS = Object.freeze({
  * @type {CDNResources}
  */
 export const CDN_URLS = Object.freeze({
-  XLSX: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  XLSX: 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js',
   JSPDF: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   QR_CODE: 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js',
   CHART_JS: 'https://cdn.jsdelivr.net/npm/chart.js'

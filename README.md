@@ -1,6 +1,6 @@
-# Gestão de Ferramentas — COENG
+# Gestão de Ferramentas
 
-Sistema web para controle de ferramentas, colaboradores, empréstimos, devoluções, usuários e auditoria da COENG.
+Sistema web para controle de ferramentas, colaboradores, empréstimos, devoluções, usuários e auditoria.
 
 **Versão atual:** `v3.1.0`
 
@@ -95,8 +95,8 @@ firestore.rules
 Clone o repositório e instale as dependências:
 
 ```bash
-git clone https://github.com/smithnaguxi90/gestao-de-ferramentas-v3.git
-cd gestao-de-ferramentas-v3
+git clone https://github.com/jefferson-araujo-dev/gestao-de-ferramentas.git
+cd gestao-de-ferramentas
 npm install
 ```
 
@@ -143,7 +143,7 @@ npm run lint:fix
 npm run format
 npm run format:check
 npm run backup
-npm run export
+npm run test:unit
 ```
 
 ## Variáveis de ambiente
@@ -210,16 +210,23 @@ users
 history
 ```
 
-## Backup e exportação
+## Backup, restauração e reset
 
-O repositório contém scripts para backup e exportação:
+O botão **Backup JSON** (administradores) e o comando `npm run backup` geram o mesmo formato canônico
+(`schemaVersion: "4.0"`): `data` com `tools`, `collaborators` e `history`, mais `reference.users` (somente
+referência, sem IP/dispositivo e nunca restaurável) e o hash SHA-256 dos dados.
 
-```bash
-npm run backup
-npm run export
-```
+- `npm run backup` exige um administrador ativo em `FIREBASE_EMAIL`/`FIREBASE_PASSWORD` (`.env`), falha se
+  qualquer leitura falhar e grava fora do repositório (`BACKUP_OUTPUT_DIR`, senão Downloads, senão a pasta do usuário).
+- **Restaurar JSON** aceita o formato v4 e o backup legado 3.0 (adaptado). A restauração roda no servidor
+  (`/api/backup/restore`): validação estrita, no máximo 500 mutações em uma única batch atômica, verificação
+  por readback e rollback automático. Usuários e Authentication nunca são alterados.
+- **Resetar dados operacionais** (`/api/backup/reset`) apaga apenas ferramentas, colaboradores e histórico.
+- Antes de restaurar ou resetar, o navegador baixa um backup de segurança (`pre_restore_*` / `pre_reset_*`).
+- Restaurações que exigiriam mais de 500 mutações são recusadas (exigem procedimento administrativo específico).
 
-Arquivos de backup podem conter dados operacionais e não devem ser adicionados ao repositório sem revisão.
+Arquivos de backup contêm dados pessoais e operacionais: os padrões usuais já estão no `.gitignore` e
+eles não devem ser adicionados ao repositório.
 
 ## Homologação da versão 3.0.0
 
@@ -284,17 +291,17 @@ A versão `v3.1.0` foi validada com:
 O repositório também contém:
 
 ```text
-ARCHITECTURE.md
-AUDIT-REPORT.md
-CHANGELOG.md
-CHANGELOG-ADVANCED.md
-OVERVIEW.md
-README-IMPROVEMENTS.md
-RESPONSIVIDADE.md
+docs/architecture/ARCHITECTURE.md
+docs/audits/AUDIT-REPORT-2026-04-13.md
+docs/archive/CHANGELOG-layout-2026-04-13.md
+docs/archive/CHANGELOG-ADVANCED.md
+docs/archive/OVERVIEW.md
+docs/archive/README-IMPROVEMENTS.md
+docs/responsive/RESPONSIVIDADE.md
 ```
 
 Esses documentos podem registrar decisões técnicas, auditorias e melhorias históricas do projeto.
 
 ## Licença e uso
 
-Projeto destinado à gestão interna de ferramentas da COENG. Defina formalmente a licença antes de distribuir ou reutilizar o código fora do contexto autorizado.
+Projeto destinado à gestão interna de ferramentas. Defina formalmente a licença antes de distribuir ou reutilizar o código fora do contexto autorizado.

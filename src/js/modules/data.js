@@ -2,15 +2,92 @@ import {
   collection,
   onSnapshot,
   doc,
-  setDoc,
   updateDoc,
   deleteDoc,
   addDoc,
   getDocs,
   query
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-import { db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
+import { db, auth, DB_BASE_PATH, COLLECTIONS } from '../app.js';
 import { notifications } from '../core/NotificationManager.js';
+import { buildBackupV4, normalizeBackup, verifyBackupDataHash } from '../utils/backupContract.js';
+
+const BACKUP_FILENAME_BASE = 'backup_gestao_ferramentas_v4';
+const SAFETY_BACKUP_PREFIXES = Object.freeze(['pre_restore', 'pre_reset']);
+const RESTORE_CONFIRMATION = 'RESTORE_OPERATIONAL_DATA';
+const RESET_CONFIRMATION = 'RESET_OPERATIONAL_DATA';
+const MAX_RESTORE_FILE_BYTES = 4000000;
+
+async function readCollectionForBackup(collectionName) {
+  const snapshot = await getDocs(collection(db, DB_BASE_PATH, collectionName));
+
+  return snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
+}
+
+async function requestBackupApi(endpoint, body) {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error('Sua sessão expirou. Entre novamente.');
+  }
+
+  const token = await currentUser.getIdToken();
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store'
+  });
+
+  let payload;
+
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('A API retornou uma resposta inválida.');
+  }
+
+  if (!response.ok || payload?.success !== true) {
+    const error = new Error(payload?.message || 'Não foi possível concluir a operação.');
+    error.details = payload;
+    throw error;
+  }
+
+  return payload;
+}
+
+function notifyBackupApiError(error, actionLabel) {
+  console.error(`Erro na ${actionLabel}:`, error?.message);
+  const details = error?.details;
+
+  if (details?.incident === true) {
+    notifications.error(
+      `INCIDENTE na ${actionLabel}: o servidor não conseguiu reverter ao estado anterior. Não repita a operação, guarde o backup de segurança baixado e avise um administrador do sistema.`,
+      { duration: 20000 }
+    );
+    return;
+  }
+
+  if (details?.rolledBack === true) {
+    notifications.error(
+      `A ${actionLabel} falhou na verificação e o estado anterior foi restaurado automaticamente. Nenhum dado foi perdido.`,
+      { duration: 10000 }
+    );
+    return;
+  }
+
+  if (details?.applied === false) {
+    notifications.error(`A ${actionLabel} não foi aplicada. Nenhum dado foi alterado.`, {
+      duration: 10000
+    });
+    return;
+  }
+
+  notifications.error(`Erro na ${actionLabel}: ${error?.message || error}`, { duration: 10000 });
+}
 
 export const AppData = {
   tools: [],
@@ -223,167 +300,221 @@ export const AppData = {
     notifications.success(`${del} registros antigos excluidos.`);
   },
   resetAllData: async function () {
-    const confirmText =
-      'ATENÇÃO: Isso irá apagar TODOS os dados do sistema!\n\n- Ferramentas\n- Usuários\n- Colaboradores\n- Histórico\n\nTem certeza que deseja continuar?';
-    if (!confirm(confirmText)) {
-      return;
-    }
-
-    const secondConfirm = confirm(
-      'ÚLTIMA CHANCE! Digite OK para confirmar o reset completo dos dados.'
-    );
-    if (secondConfirm !== true) {
-      return;
-    }
-
-    notifications.info('Resetando dados...');
-
-    const collections = [
-      COLLECTIONS.TOOLS,
-      COLLECTIONS.USERS,
-      COLLECTIONS.COLLABORATORS,
-      COLLECTIONS.HISTORY
-    ];
-
-    for (const colName of collections) {
-      const snapshot = await getDocs(collection(db, DB_BASE_PATH, colName));
-      const deletePromises = [];
-      snapshot.forEach((d) => {
-        deletePromises.push(deleteDoc(doc(db, DB_BASE_PATH, colName, d.id)));
-      });
-      await Promise.all(deletePromises);
-      console.info(`Coleção ${colName} limpa.`);
-    }
-
-    window.AudioSys.playBeep('success');
-    notifications.success('Todos os dados foram resetados com sucesso!');
-  },
-  exportJSON: async function () {
     if (window.App?.Auth?.permissions?.canBackupData !== true) {
       notifications.error('Acesso restrito a administradores.');
       return;
     }
 
-    notifications.info('Gerando backup...');
-
-    const collections = [
-      COLLECTIONS.TOOLS,
-      COLLECTIONS.USERS,
-      COLLECTIONS.COLLABORATORS,
-      COLLECTIONS.HISTORY
-    ];
-
-    const backupData = {
-      exportDate: new Date().toISOString(),
-      version: '3.0',
-      data: {}
-    };
-
-    for (const colName of collections) {
-      const snapshot = await getDocs(collection(db, DB_BASE_PATH, colName));
-      backupData.data[colName] = [];
-      snapshot.forEach((d) => {
-        backupData.data[colName].push({
-          id: d.id,
-          ...d.data()
-        });
-      });
-      console.info(`Coleção ${colName} exportada: ${backupData.data[colName].length} registros.`);
+    const confirmText =
+      'RESETAR DADOS OPERACIONAIS\n\n- As ferramentas serão apagadas\n- Os colaboradores serão apagados\n- O histórico será apagado\n- Usuários e contas de acesso serão PRESERVADOS\n\nUm backup de segurança será baixado antes.\n\nTem certeza que deseja continuar?';
+    if (!confirm(confirmText)) {
+      return;
     }
 
-    const jsonString = JSON.stringify(backupData, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `backup_coeng_${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (!confirm('ÚLTIMA CHANCE! Confirme para apagar os dados operacionais.')) {
+      return;
+    }
 
-    window.AudioSys.playBeep('success');
-    notifications.success(
-      `Backup exportado com sucesso! ${Object.values(backupData.data).reduce((acc, arr) => acc + arr.length, 0)} registros.`
-    );
+    try {
+      const safetyBackup = await this.exportJSON({ filenamePrefix: 'pre_reset' });
+      if (!safetyBackup) {
+        notifications.error('Não foi possível gerar o backup de segurança. Reset cancelado.');
+        return;
+      }
+
+      notifications.info('Resetando dados operacionais...');
+      const response = await requestBackupApi('/api/backup/reset', {
+        confirmation: RESET_CONFIRMATION
+      });
+
+      window.AudioSys?.playBeep?.('success');
+      notifications.success(
+        `Dados operacionais resetados e verificados (${response.data?.totalDeleted ?? 0} registros). Usuários preservados.`
+      );
+      window.App.Data.init(window.App.Auth.permissions);
+    } catch (error) {
+      notifyBackupApiError(error, 'reset');
+    }
+  },
+  exportJSON: async function (options) {
+    if (window.App?.Auth?.permissions?.canBackupData !== true) {
+      notifications.error('Acesso restrito a administradores.');
+      return null;
+    }
+
+    const safetyPrefix = SAFETY_BACKUP_PREFIXES.includes(options?.filenamePrefix)
+      ? options.filenamePrefix
+      : '';
+
+    notifications.info(safetyPrefix ? 'Gerando backup de segurança...' : 'Gerando backup...');
+
+    try {
+      const [tools, collaborators, history, users] = await Promise.all(
+        [COLLECTIONS.TOOLS, COLLECTIONS.COLLABORATORS, COLLECTIONS.HISTORY, COLLECTIONS.USERS].map(
+          readCollectionForBackup
+        )
+      );
+      const backup = await buildBackupV4({ tools, collaborators, history, users });
+      const validation = normalizeBackup(backup);
+
+      const now = new Date().toISOString();
+      const suffix = safetyPrefix ? `_${now.slice(11, 19).replace(/:/g, '')}` : '';
+      const filename = `${safetyPrefix ? `${safetyPrefix}_` : ''}${BACKUP_FILENAME_BASE}_${now.slice(0, 10)}${suffix}.json`;
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      window.AudioSys?.playBeep?.('success');
+      notifications.success(
+        `Backup exportado com sucesso! ${backup.summary.totalRecords} registros operacionais.`
+      );
+
+      if (!validation.ok) {
+        notifications.warning(
+          `Atenção: este backup não passaria na validação de restauração (${validation.errorCount} problema(s) nos dados atuais).`,
+          { duration: 8000 }
+        );
+      }
+
+      return backup;
+    } catch (error) {
+      console.error('Erro ao gerar backup:', error);
+      notifications.error(`Erro ao gerar backup: ${error.message || error}`);
+      return null;
+    }
+  },
+  latestKnownActivity: function () {
+    const dates = [
+      ...(this.allHistoryLogs || []).map((log) => log.date),
+      ...this.tools.map((tool) => tool.lastAction)
+    ]
+      .map((value) => (typeof value === 'string' ? Date.parse(value) : NaN))
+      .filter((value) => !Number.isNaN(value));
+
+    return dates.length > 0 ? Math.max(...dates) : null;
   },
   importJSON: async function (event) {
-    const file = event.target.files[0];
+    const input = event?.target;
+    const file = input?.files?.[0];
+    const clearInput = () => {
+      if (input) {
+        input.value = '';
+      }
+    };
+
+    if (window.App?.Auth?.permissions?.canBackupData !== true) {
+      notifications.error('Acesso restrito a administradores.');
+      clearInput();
+      return;
+    }
+
     if (!file) {
       return;
     }
 
-    if (!file.name.endsWith('.json')) {
+    if (!file.name.toLowerCase().endsWith('.json')) {
       notifications.error('Por favor, selecione um arquivo JSON válido.');
-      event.target.value = '';
+      clearInput();
       return;
     }
 
-    const confirmRestore = confirm(
-      'ATENÇÃO: Isso irá substituir TODOS os dados atuais pelos dados do backup!\n\nTem certeza que deseja continuar?'
-    );
-    if (!confirmRestore) {
-      event.target.value = '';
+    if (file.size > MAX_RESTORE_FILE_BYTES) {
+      notifications.error('O arquivo excede o tamanho máximo aceito para restauração.');
+      clearInput();
       return;
     }
 
     try {
       notifications.info('Lendo arquivo de backup...');
 
-      const text = await file.text();
-      const backupData = JSON.parse(text);
-
-      if (!backupData.data) {
-        throw new Error('Formato de backup inválido.');
+      let parsed;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch {
+        throw new Error('O arquivo não é um JSON válido.');
       }
 
-      notifications.info('Restaurando dados...');
+      const validation = normalizeBackup(parsed, { requireNonEmpty: true });
+      if (!validation.ok) {
+        const codes = [...new Set(validation.errors.map((error) => error.code))].join(', ');
+        notifications.error(
+          `Backup inválido (${validation.errorCount} problema(s): ${codes}). Nenhum dado foi alterado.`,
+          { duration: 10000 }
+        );
+        return;
+      }
 
-      const collections = [
-        COLLECTIONS.TOOLS,
-        COLLECTIONS.USERS,
-        COLLECTIONS.COLLABORATORS,
-        COLLECTIONS.HISTORY
+      const { meta } = validation;
+      if (!meta.legacy && !(await verifyBackupDataHash(validation.backup)).ok) {
+        notifications.error('O hash do backup não confere. Nenhum dado foi alterado.');
+        return;
+      }
+
+      const summary = [
+        'RESTAURAR DADOS OPERACIONAIS',
+        '',
+        `Formato: ${meta.sourceSchema} | Exportado em: ${new Date(meta.exportedAt).toLocaleString('pt-BR')}`,
+        `Ferramentas: ${meta.counts.tools} | Colaboradores: ${meta.counts.collaborators} | Histórico: ${meta.counts.history}`
       ];
 
-      let totalRestored = 0;
-
-      for (const colName of collections) {
-        if (!backupData.data[colName]) {
-          continue;
-        }
-
-        const colRef = collection(db, DB_BASE_PATH, colName);
-
-        // Limpar coleção atual
-        const existingSnapshot = await getDocs(colRef);
-        const deletePromises = [];
-        existingSnapshot.forEach((d) => {
-          deletePromises.push(deleteDoc(doc(db, DB_BASE_PATH, colName, d.id)));
-        });
-        await Promise.all(deletePromises);
-
-        // Restaurar dados do backup
-        const restorePromises = [];
-        backupData.data[colName].forEach((item) => {
-          const { id, ...data } = item;
-          restorePromises.push(setDoc(doc(db, DB_BASE_PATH, colName, id), data));
-        });
-        await Promise.all(restorePromises);
-
-        totalRestored += backupData.data[colName].length;
-        console.info(
-          `Coleção ${colName} restaurada: ${backupData.data[colName].length} registros.`
+      if (meta.legacy) {
+        summary.push(
+          '',
+          `ATENÇÃO: backup LEGADO 3.0 será adaptado. ${meta.statusDefaulted} colaborador(es) sem status receberão "active".`
         );
       }
 
-      window.AudioSys.playBeep('success');
-      notifications.success(`Backup restaurado com sucesso! ${totalRestored} registros.`);
+      summary.push(
+        '',
+        'Ferramentas, colaboradores e histórico atuais serão SUBSTITUÍDOS pelo conteúdo do arquivo.',
+        'Usuários e contas de acesso serão PRESERVADOS (usuários do backup não são restaurados).',
+        'Um backup de segurança será baixado antes.',
+        '',
+        'Deseja continuar?'
+      );
 
-      // Recarregar dados
-      window.App.Data.init();
+      if (!confirm(summary.join('\n'))) {
+        return;
+      }
+
+      const latestActivity = this.latestKnownActivity();
+      if (latestActivity !== null && latestActivity > Date.parse(meta.exportedAt)) {
+        const staleConfirmed = confirm(
+          'ATENÇÃO: este backup é MAIS ANTIGO que a atividade mais recente registrada no sistema.\n\nRestaurá-lo apagará essa atividade posterior.\n\nDeseja realmente continuar?'
+        );
+        if (!staleConfirmed) {
+          return;
+        }
+      }
+
+      const safetyBackup = await this.exportJSON({ filenamePrefix: 'pre_restore' });
+      if (!safetyBackup) {
+        notifications.error('Não foi possível gerar o backup de segurança. Restauração cancelada.');
+        return;
+      }
+
+      notifications.info('Restaurando dados no servidor...');
+      const response = await requestBackupApi('/api/backup/restore', {
+        backup: parsed,
+        confirmation: RESTORE_CONFIRMATION
+      });
+
+      window.AudioSys?.playBeep?.('success');
+      notifications.success(
+        `Backup restaurado e verificado: ${response.data?.totalRecords ?? meta.totalRecords} registros. Usuários preservados.`
+      );
+      window.App.Data.init(window.App.Auth.permissions);
+    } catch (error) {
+      notifyBackupApiError(error, 'restauração');
     } finally {
-      event.target.value = '';
+      clearInput();
     }
   },
   exportExcel: async function () {
@@ -396,7 +527,7 @@ export const AppData = {
       notifications.info('Carregando motor de planilhas...');
       try {
         await window.Utils.loadScript(
-          'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+          'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'
         );
       } catch {
         return notifications.error('Erro ao carregar o motor.');
@@ -418,7 +549,7 @@ export const AppData = {
     const ws = window.XLSX.utils.json_to_sheet(data);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
-    window.XLSX.writeFile(wb, `inventario_coeng_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    window.XLSX.writeFile(wb, `inventario_ferramentas_${new Date().toISOString().slice(0, 10)}.xlsx`);
   },
 
   /**
@@ -454,7 +585,7 @@ export const AppData = {
       // Carrega biblioteca XLSX se necessário
       if (!window.XLSX) {
         await window.Utils?.loadScript?.(
-          'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+          'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'
         );
       }
 

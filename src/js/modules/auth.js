@@ -13,6 +13,7 @@ import { metrics } from '../core/MetricsManager.js';
 export const AppAuth = {
   _initialized: false,
   isAdm: false,
+  uName: null,
   permissions: {
     canAccessDashboard: false,
     canAccessScanner: false,
@@ -266,6 +267,7 @@ export const AppAuth = {
   },
   _updateUIForUser(uName, isAdm, isRestricted) {
     this.isAdm = isAdm;
+    this.uName = uName;
     this._setPermissions(isAdm);
     this._updateAdministrativeActionVisibility();
     document.getElementById('user-name').textContent = uName;
@@ -317,8 +319,8 @@ export const AppAuth = {
   openProfileModal: function () {
     const m = document.getElementById('profile-modal');
     if (m) {
-      const name = document.getElementById('user-name')?.textContent || 'Usuário';
-      const role = document.getElementById('user-role')?.textContent || 'Usuário';
+      const name = this.uName || 'Usuário';
+      const role = this.isAdm ? 'Administrador' : 'Usuário';
       const email = auth.currentUser?.email || 'Sem e-mail';
       const ip = window.App.Session.currentIp || 'Desconhecido';
       const device = window.App.Session.currentDevice || 'Desconhecido';

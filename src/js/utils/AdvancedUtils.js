@@ -3,6 +3,7 @@
  */
 
 import { CONFIG } from '../config/constants.js';
+import { formatDateTime } from './dateFormat.js';
 
 /**
  * Debounce avançado com cancelamento e leading edge
@@ -685,18 +686,10 @@ export function getErrorMessage(err) {
 }
 
 /**
- * Formata ISO para Data/Hora local
+ * Formata Firestore Timestamp, Date, ISO ou milissegundos para Data/Hora local
  */
-export function formatDate(iso) {
-  return !iso
-    ? 'Sem registro'
-    : new Date(iso).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+export function formatDate(value) {
+  return formatDateTime(value, { fallback: 'Sem registro', includeSeconds: false });
 }
 
 /**

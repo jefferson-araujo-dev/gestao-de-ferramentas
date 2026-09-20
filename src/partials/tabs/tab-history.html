@@ -1,0 +1,64 @@
+<section id="tab-history" aria-labelledby="topbar-title" class="tab-content hidden space-y-6">
+  <div class="panel-card panel-content">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+      <h3 class="text-2xl font-extrabold text-slate-900 dark:text-white">
+        Auditoria de Sistema
+      </h3>
+      <p class="text-slate-500 dark:text-slate-400 mt-1">
+        Registro de movimentações e logs do sistema.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2 items-center justify-end">
+      <select
+        id="history-time-filter"
+        class="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 text-sm"
+      >
+        <option value="all">Sempre</option>
+        <option value="today">Hoje</option>
+        <option value="7days">Últimos 7 Dias</option>
+        <option value="30days">Este Mês</option>
+      </select>
+      <button
+        type="button"
+        onclick="App.Data.cleanOldLogs()"
+        class="btn btn-secondary px-4 py-2 text-sm"
+      >
+        Limpar Antigos
+      </button>
+    </div>
+  </div>
+  <div class="relative">
+    <svg
+      class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+    <input
+      id="history-search"
+      type="text"
+      placeholder="Buscar no histórico..."
+      class="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-2xl outline-none text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all shadow-sm"
+    />
+  </div>
+  <div id="history-list" class="grid grid-cols-1 gap-4"></div>
+  <div id="history-load-more-container" class="hidden">
+    <button
+      id="history-load-more"
+      type="button"
+      onclick="App.Data.loadMoreHistory()"
+      class="w-full py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+    >
+      Carregar Mais
+    </button>
+  </div>
+  </div>
+</section>

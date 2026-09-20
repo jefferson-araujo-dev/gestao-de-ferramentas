@@ -2,7 +2,7 @@
 
 ## Projeto e escopo
 
-Este repositório contém o sistema Gestão de Ferramentas | COENG, composto por aplicação web Vite/PWA, Firebase cliente e funções serverless da Vercel com Firebase Admin.
+Este repositório contém o sistema Gestão de Ferramentas, composto por aplicação web Vite/PWA, Firebase cliente e funções serverless da Vercel com Firebase Admin.
 
 As alterações devem permanecer estritamente dentro do escopo solicitado.
 

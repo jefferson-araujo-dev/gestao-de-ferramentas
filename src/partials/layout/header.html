@@ -1,0 +1,417 @@
+<header
+  class="bg-white/80 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 h-16 flex items-center justify-between px-4 xl:px-8 z-30"
+>
+  <div class="flex items-center gap-4">
+    <button
+      type="button"
+      onclick="App.UI.toggleSidebar()"
+      class="p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors xl:hidden"
+    >
+      <svg
+        class="w-6 h-6 shrink-0"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M4 5h16"></path>
+        <path d="M4 12h16"></path>
+        <path d="M4 19h16"></path>
+      </svg>
+    </button>
+    <button
+      type="button"
+      onclick="App.UI.toggleSidebar()"
+      class="hidden xl:block p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none"
+      title="Recolher/Expandir Menu Lateral"
+    >
+      <svg
+        class="w-6 h-6 shrink-0"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M4 5h16"></path>
+        <path d="M4 12h16"></path>
+        <path d="M4 19h16"></path>
+      </svg>
+    </button>
+    <h2
+      id="topbar-title"
+      class="text-lg font-bold text-slate-900 dark:text-white tracking-tight"
+    >
+      Visão Geral
+    </h2>
+    <div
+      class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-brand-50 border border-brand-100 rounded-lg text-[11px] font-bold text-brand-700 uppercase tracking-wider ml-2"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="lucide lucide-building-2 w-3.5 h-3.5"
+      >
+        <path d="M10 12h4"></path>
+        <path d="M10 8h4"></path>
+        <path d="M14 21v-3a2 2 0 0 0-4 0v3"></path>
+        <path
+          d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"
+        ></path>
+        <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"></path>
+      </svg>
+      <span id="tenant-name">Gestão de Ferramentas</span>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <div class="flex items-center justify-center gap-2 mr-4">
+      <div
+        id="network-status-dot"
+        class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"
+      ></div>
+      <span
+        id="network-status-text"
+        class="text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden md:block"
+        >Sistema Online</span
+      >
+    </div>
+    <div class="relative" id="user-menu-container">
+      <button
+        type="button"
+        onclick="App.UI.toggleUserMenu(event)"
+        class="flex items-center gap-3 p-1 pr-3 rounded-full border border-slate-200/60 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all bg-white dark:bg-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+      >
+        <div
+          class="w-8 h-8 rounded-full bg-brand-50 dark:bg-brand-900/30 border border-brand-100 dark:border-brand-800 flex items-center justify-center overflow-hidden text-brand-600"
+          id="user-avatar"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-full h-full p-1.5 fill-current"
+          >
+            <path
+              d="M15.71,12.71a6,6,0,1,0-7.42,0,10,10,0,0,0-6.22,8.18,1,1,0,0,0,2,.22,8,8,0,0,1,15.9,0,1,1,0,0,0,1,.89h.11a1,1,0,0,0,.88-1.1A10,10,0,0,0,15.71,12.71ZM12,12a4,4,0,1,1,4-4A4,4,0,0,1,12,12Z"
+            ></path>
+          </svg>
+        </div>
+        <div class="text-left hidden md:block">
+          <p
+            class="text-xs font-bold text-slate-900 dark:text-white leading-none"
+            id="user-name"
+          >
+            Jefferson
+          </p>
+          <p
+            class="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider"
+            id="user-role"
+          >
+            Administrador
+          </p>
+        </div>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="lucide lucide-chevron-down w-4 h-4 text-slate-400 ml-1"
+        >
+          <path d="m6 9 6 6 6-6"></path>
+        </svg>
+      </button>
+
+      <div
+        id="user-dropdown-menu"
+        class="absolute right-0 top-full mt-2 w-64 opacity-0 invisible transition-all duration-200 transform origin-top-right z-50"
+      >
+        <div
+          class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 p-2"
+        >
+          <div id="admin-tools">
+            <button
+              id="btn-user-mgmt"
+              type="button"
+              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              onclick="App.UI.switchTab('users')"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-user-cog w-4 h-4 text-brand-500"
+              >
+                <path d="M10 15H6a4 4 0 0 0-4 4v2"></path>
+                <path d="m14.305 16.53.923-.382"></path>
+                <path d="m15.228 13.852-.923-.383"></path>
+                <path d="m16.852 12.228-.383-.923"></path>
+                <path d="m16.852 17.772-.383.924"></path>
+                <path d="m19.148 12.228.383-.923"></path>
+                <path d="m19.53 18.696-.382-.924"></path>
+                <path d="m20.772 13.852.924-.383"></path>
+                <path d="m20.772 16.148.924.383"></path>
+                <circle cx="18" cy="15" r="3"></circle>
+                <circle cx="9" cy="7" r="4"></circle>
+              </svg>
+              Gerenciar Usuários
+            </button>
+            <label
+              class="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-file-spreadsheet w-4 h-4 text-brand-500"
+              >
+                <path
+                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                ></path>
+                <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+                <path d="M8 13h2"></path>
+                <path d="M14 13h2"></path>
+                <path d="M8 17h2"></path>
+                <path d="M14 17h2"></path>
+              </svg>
+              Importar Excel
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                id="file-import-excel"
+                class="hidden"
+                onchange="App.Data.importExcel?.(event)"
+              />
+            </label>
+            <button
+              id="btn-reset-data"
+              type="button"
+              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+              onclick="App.Data.resetAllData()"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-trash-2 w-4 h-4"
+              >
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                <path d="M3 6h18"></path>
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Resetar dados operacionais
+            </button>
+            <button
+              id="btn-export-json"
+              type="button"
+              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors"
+              onclick="App.Data.exportJSON()"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-database w-4 h-4"
+              >
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M3 5V19A9 3 0 0 0 21 19V5"></path>
+                <path d="M3 12A9 3 0 0 0 21 12"></path>
+              </svg>
+              Backup JSON
+            </button>
+            <label
+              class="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl cursor-pointer transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-upload-cloud w-4 h-4 text-amber-500"
+              >
+                <path d="M12 13v8"></path>
+                <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+                <path d="m8 17 4-4 4 4"></path>
+              </svg>
+              Restaurar JSON
+              <input
+                type="file"
+                accept=".json"
+                id="file-restore-json"
+                class="hidden"
+                onchange="App.Data.importJSON(event)"
+              />
+            </label>
+            <button
+              id="btn-metrics-report"
+              type="button"
+              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-xl transition-colors"
+              onclick="App.UI.openMetricsModal()"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-bar-chart-2 w-4 h-4"
+              >
+                <line x1="18" x2="18" y1="20" y2="10"></line>
+                <line x1="12" x2="12" y1="20" y2="4"></line>
+                <line x1="6" x2="6" y1="20" y2="14"></line>
+              </svg>
+              Métricas do Sistema
+            </button>
+            <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+          </div>
+          <button
+            id="btn-profile-modal"
+            type="button"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+            onclick="App.Auth.openProfileModal()"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-user w-4 h-4 text-slate-400"
+            >
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            Meu Perfil
+          </button>
+          <button
+            id="btn-password-modal"
+            type="button"
+            onclick="App.Auth.openPasswordModal()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-lock w-4 h-4 text-slate-400"
+            >
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            Alterar Senha
+          </button>
+          <button
+            id="btn-dark-mode"
+            type="button"
+            onclick="App.UI.toggleDarkMode()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              id="dark-mode-icon"
+              class="lucide lucide-moon w-4 h-4 text-slate-400"
+            >
+              <path
+                d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"
+              ></path>
+            </svg>
+            <span id="dark-mode-text">Modo Noturno</span>
+          </button>
+          <button
+            id="btn-logout-header"
+            type="button"
+            onclick="App.Auth.logout()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors mt-1"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-log-out w-4 h-4"
+            >
+              <path d="m16 17 5-5-5-5"></path>
+              <path d="M21 12H9"></path>
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            </svg>
+            Sair do Sistema
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>

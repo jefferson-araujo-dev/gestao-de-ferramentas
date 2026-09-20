@@ -1,9 +1,5 @@
 # Ignora pastas e arquivos que não são necessários para o build na Vercel.
 
-# Pasta de build do Electron (provável causa do erro de tamanho)
-
-release/
-
 # Pasta de dependências que a Vercel instala na nuvem
 
 node_modules/
