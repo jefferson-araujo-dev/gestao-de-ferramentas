@@ -1,0 +1,124 @@
+{
+  "axeCore": "4.13.0",
+  "tags": [
+    "wcag2a",
+    "wcag2aa",
+    "wcag21a",
+    "wcag21aa",
+    "wcag22aa"
+  ],
+  "screens": {
+    "login": {
+      "button-name": {
+        "impact": "critical",
+        "nodes": 1
+      }
+    },
+    "admin-dashboard": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 6
+      },
+      "select-name": {
+        "impact": "critical",
+        "nodes": 2
+      }
+    },
+    "admin-scanner": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 5
+      },
+      "label": {
+        "impact": "critical",
+        "nodes": 1
+      }
+    },
+    "admin-colaboradores": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 4
+      },
+      "select-name": {
+        "impact": "critical",
+        "nodes": 3
+      }
+    },
+    "admin-ferramentas": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 4
+      },
+      "select-name": {
+        "impact": "critical",
+        "nodes": 10
+      }
+    },
+    "admin-auditoria": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 4
+      },
+      "select-name": {
+        "impact": "critical",
+        "nodes": 1
+      }
+    },
+    "admin-controle-acesso": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 6
+      }
+    },
+    "admin-menu-avatar": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 8
+      }
+    },
+    "admin-modal-perfil": {
+      "button-name": {
+        "impact": "critical",
+        "nodes": 1
+      },
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 6
+      }
+    },
+    "admin-modal-ferramenta": {
+      "button-name": {
+        "impact": "critical",
+        "nodes": 1
+      },
+      "label": {
+        "impact": "critical",
+        "nodes": 2
+      },
+      "select-name": {
+        "impact": "critical",
+        "nodes": 1
+      }
+    },
+    "padrao-dashboard": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 5
+      },
+      "select-name": {
+        "impact": "critical",
+        "nodes": 2
+      }
+    },
+    "padrao-ferramentas": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 3
+      },
+      "select-name": {
+        "impact": "critical",
+        "nodes": 2
+      }
+    }
+  }
+}
