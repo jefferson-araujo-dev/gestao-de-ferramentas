@@ -193,6 +193,7 @@ export function confirmDialog(options = {}) {
 function openConfirm({
   title = 'Confirmar ação',
   description = '',
+  details = [],
   warning = '',
   confirmLabel = 'Confirmar',
   cancelLabel = 'Cancelar',
@@ -202,11 +203,14 @@ function openConfirm({
 } = {}) {
   const dialog = ensureConfirmElement();
   const danger = variant === 'danger';
+  const detailsHtml = details.length
+    ? `<ul class="ui-modal__list">${details.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>`
+    : '';
   const warningHtml = warning
     ? Alert({ tone: danger ? 'danger' : 'warning', message: warning, className: 'ui-modal__alert' })
     : '';
 
-  dialog.innerHTML = `<form method="dialog" class="ui-modal__form" novalidate><div class="ui-modal__header"><h2 class="ui-modal__title" id="confirm-dialog-title">${esc(title)}</h2></div><div class="ui-modal__body"><p class="ui-modal__description" id="confirm-dialog-desc">${esc(description)}</p>${
+  dialog.innerHTML = `<form method="dialog" class="ui-modal__form" novalidate><div class="ui-modal__header"><h2 class="ui-modal__title" id="confirm-dialog-title">${esc(title)}</h2></div><div class="ui-modal__body"><p class="ui-modal__description" id="confirm-dialog-desc">${esc(description)}</p>${detailsHtml}${
     warningHtml
   }${
     requireText
