@@ -1,30 +1,21 @@
 import { notifications } from '../core/NotificationManager.js';
 import { metrics } from '../core/MetricsManager.js';
+import { Router } from '../core/Router.js';
+import {
+  DEFAULT_ROUTE,
+  getItemByRoute,
+  getItemByTab,
+  isItemAllowed
+} from '../config/navigation.js';
 
 export const AppUI = {
   activeTab: 'dashboard',
   domCache: {},
 
+  // Sidebar/drawer/rail agora são do App.Shell; estes métodos ficam como fachada de compatibilidade
+  // para os chamadores existentes (ResponsiveManager, app.js).
   setMobileSidebarState: function (isOpen) {
-    const sidebar = document.getElementById('main-sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
-    if (!sidebar) {
-      return;
-    }
-
-    sidebar.classList.toggle('-translate-x-full', !isOpen);
-    sidebar.classList.toggle('translate-x-0', isOpen);
-    if (overlay) {
-      overlay.classList.toggle('hidden', !isOpen);
-    }
-
-    // Guardar estado em sessionStorage para persistência
-    sessionStorage.setItem('sidebar-state', isOpen ? 'open' : 'closed');
-
-    // Fechar menu do usuário ao abrir o sidebar
-    if (isOpen) {
-      this.closeUserMenu();
-    }
+    window.App?.Shell?.setOverlayOpen(isOpen);
   },
 
   closeUserMenu: function () {
@@ -36,50 +27,10 @@ export const AppUI = {
   },
 
   syncResponsiveLayout: function () {
-    const sidebar = document.getElementById('main-sidebar');
-    const overlay = document.getElementById('sidebar-overlay');
-    if (!sidebar) {
-      return;
-    }
-
-    // Se for Desktop (>= 1024px)
-    if (window.innerWidth >= 1024) {
-      sidebar.classList.remove('-translate-x-full');
-      sidebar.classList.add('translate-x-0');
-      if (overlay) {
-        overlay.classList.add('hidden');
-      }
-      return;
-    }
-
-    // Mobile/Tablet (< 1024px) - restaurar estado anterior ou fechar
-    const savedState = sessionStorage.getItem('sidebar-state');
-    const shouldBeOpen = savedState === 'open';
-    this.setMobileSidebarState(shouldBeOpen);
+    window.App?.Shell?.sync();
   },
   toggleSidebar: function () {
-    const sidebar = document.getElementById('main-sidebar');
-    if (!sidebar) {
-      return;
-    }
-
-    // Fechar o menu do usuário sempre que o sidebar for alterado
-    this.closeUserMenu();
-
-    // Mobile/Tablet behavior (< 1024px) - toggle visibilidade
-    if (window.innerWidth < 1024) {
-      const isOpen = !sidebar.classList.contains('-translate-x-full');
-      this.setMobileSidebarState(!isOpen);
-    } else {
-      // Desktop behavior - toggle entre expanded e collapsed
-      if (sidebar.classList.contains('lg:w-72')) {
-        sidebar.classList.remove('lg:w-72');
-        sidebar.classList.add('lg:w-20');
-      } else {
-        sidebar.classList.remove('lg:w-20');
-        sidebar.classList.add('lg:w-72');
-      }
-    }
+    window.App?.Shell?.toggleSidebar();
   },
   toggleDarkMode: function () {
     const html = document.documentElement;
@@ -152,9 +103,9 @@ export const AppUI = {
       menu.classList.toggle('opacity-0');
       menu.classList.toggle('invisible');
 
-      // Fechar o sidebar (no mobile/tablet) se o menu de usuário for aberto
-      if (!menu.classList.contains('opacity-0') && window.innerWidth < 1024) {
-        this.setMobileSidebarState(false);
+      // Fechar o drawer / rail expandido se o menu de usuário for aberto
+      if (!menu.classList.contains('opacity-0')) {
+        window.App?.Shell?.closeOverlay({ restoreFocus: false });
       }
     }
   },
@@ -241,16 +192,6 @@ export const AppUI = {
       });
     }
 
-    // Fechar sidebar no mobile/tablet ao clicar na máscara escura (overlay)
-    const sidebarOverlay = document.getElementById('sidebar-overlay');
-    if (sidebarOverlay) {
-      sidebarOverlay.addEventListener('click', () => {
-        if (window.innerWidth < 1024) {
-          this.setMobileSidebarState(false);
-        }
-      });
-    }
-
     this.domCache = {
       dashList: document.getElementById('dash-list'),
       historyList: document.getElementById('history-list'),
@@ -304,15 +245,7 @@ export const AppUI = {
         window.App.CRUDCollaborators.render();
       });
 
-      // Navegação do Sidebar
-      document.querySelectorAll('.nav-btn').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          const tab = e.currentTarget.getAttribute('data-tab');
-          if (tab) {
-            this.switchTab(tab, e.currentTarget.id);
-          }
-        });
-      });
+      // A navegação (links #/rota) é do App.Shell + hash router: ver startRouting().
 
       // ============================================
       // LISTENERS RESPONSIVOS (Novos!)
@@ -340,15 +273,7 @@ export const AppUI = {
         });
       }
 
-      // Listener para mudança de orientação no mobile
-      window.addEventListener('orientationchange', () => {
-        setTimeout(() => {
-          this.syncResponsiveLayout();
-          if (window.innerWidth < 1024) {
-            this.setMobileSidebarState(false);
-          }
-        }, 200);
-      });
+      // Mudança de orientação: o shell reage aos limites de breakpoint via matchMedia (App.Shell).
     }
 
     // Inventory sort
@@ -422,56 +347,47 @@ export const AppUI = {
       });
     });
   },
-  switchTab: function (tab, sourceNavId = null) {
-    const adminTabPermissions = {
-      users: 'canAccessUsers',
-      history: 'canAccessHistory',
-    };
-    const requiredPermission = adminTabPermissions[tab];
-    if (requiredPermission && window.App?.Auth?.permissions?.[requiredPermission] !== true) {
+  // Ponto de entrada ÚNICO para trocar de tela: links #/rota, back/forward e chamadas programáticas
+  // (onclick inline, scanner, cards). Aplica as guardas de autorização (a UI só esconde itens; esta
+  // guarda continua recusando rotas/telas proibidas), atualiza a URL e executa o lifecycle da tela.
+  switchTab: function (tab, { replace = false } = {}) {
+    const item = getItemByTab(tab);
+
+    if (!item) {
       if (tab !== 'dashboard') {
-        this.switchTab('dashboard');
+        this.switchTab('dashboard', { replace: true });
       }
-      this.showToast('Acesso restrito a administradores.', 'error');
       return;
     }
-    // Colaboradores: perfil restrito não alcança a tela nem por navegação programática.
-    if (tab === 'collaborators' && window.App?.Auth?.permissions?.canReadCollaborators !== true) {
-      this.switchTab('dashboard');
-      this.showToast('Acesso não permitido para o seu perfil.', 'error');
+
+    if (!isItemAllowed(item, window.App?.Auth?.permissions)) {
+      // Tela do perfil não autorizado (admin-only, colaboradores do perfil restrito): volta ao Painel.
+      if (item.tab !== 'dashboard') {
+        this.switchTab('dashboard', { replace: true });
+        this.showToast(item.deniedMessage || 'Acesso não permitido para o seu perfil.', 'error');
+      }
       return;
     }
+
+    if (this._routingActive) {
+      Router.write(item.route, { replace });
+    }
+    this._activateTab(item);
+  },
+  // Lifecycle da tela (inalterado em relação ao switchTab anterior): containers das telas e domCache
+  // são preservados; apenas alternamos visibilidade e chamamos os mesmos hooks (Scanner, renderAll).
+  _activateTab: function (item) {
+    const tab = item.tab;
 
     this.activeTab = tab;
     metrics.trackNavigation(tab);
 
-    document.querySelectorAll('.nav-btn').forEach((b) => {
-      b.classList.remove('bg-brand-600', 'text-white', 'shadow-md', 'shadow-brand-600/20');
-      b.classList.add('text-slate-400', 'hover:bg-slate-800', 'hover:text-white');
-    });
-    const a = document.getElementById(sourceNavId || `nav-${tab}`);
-    if (a) {
-      a.classList.remove('text-slate-400', 'hover:bg-slate-800', 'hover:text-white');
-      a.classList.add('bg-brand-600', 'text-white', 'shadow-md', 'shadow-brand-600/20');
-    }
-    const titleMap = {
-      dashboard: 'Visão Geral',
-      scanner: 'Leitor / Scanner',
-      management: 'Ferramentas',
-      users: 'Controle de Acesso',
-      collaborators: 'Colaboradores',
-      history: 'Auditoria de Sistema',
-    };
-    const tt = document.getElementById('topbar-title');
-    if (tt) {
-      tt.textContent = titleMap[tab] || 'Gestão de Ferramentas';
-    }
+    // aria-current, título da topbar e document.title
+    window.App?.Shell?.setActive(tab);
     ['dashboard', 'scanner', 'management', 'users', 'collaborators', 'history'].forEach((t) =>
       document.getElementById(`tab-${t}`)?.classList.toggle('hidden', t !== tab)
     );
-    if (window.innerWidth < 1024) {
-      this.setMobileSidebarState(false);
-    }
+    window.App?.Shell?.closeOverlay({ restoreFocus: false });
     if (tab !== 'scanner') {
       // Ao sair da aba o Scanner volta ao modo USB: para a câmera e esconde o container,
       // evitando reabrir a aba com o overlay preto de uma câmera já parada.
@@ -493,6 +409,36 @@ export const AppUI = {
     window.scrollTo(0, 0);
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+  },
+  // Inicia o roteamento por hash depois da autenticação (perfil e permissões já aplicados).
+  startRouting: function () {
+    this._routingActive = true;
+    Router.start((route) => this.applyRoute(route));
+    this.applyRoute(Router.current());
+  },
+  // Encerra o roteamento (logout): limpa a URL e o estado ativo da navegação.
+  stopRouting: function () {
+    // Antes do login não há roteamento ativo: um deep link (#/auditoria) sobrevive até a autenticação.
+    if (!this._routingActive) {
+      return;
+    }
+    this._routingActive = false;
+    Router.stop();
+    Router.clear();
+    window.App?.Shell?.setActive(null);
+    window.App?.Shell?.resetTitle();
+  },
+  // Aplica uma rota vinda da URL. Rota vazia/desconhecida cai no Painel sem criar entrada de
+  // histórico; rota conhecida mas não autorizada é recusada por switchTab (Painel + aviso).
+  applyRoute: function (route) {
+    const item = getItemByRoute(route);
+
+    if (!item) {
+      this.switchTab(getItemByRoute(DEFAULT_ROUTE).tab, { replace: true });
+      return;
+    }
+
+    this.switchTab(item.tab);
   },
   renderAll: function () {
     if (this.activeTab === 'dashboard') {

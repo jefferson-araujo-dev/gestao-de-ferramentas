@@ -1,0 +1,517 @@
+/* ============================================
+   APP SHELL (Gate 1-D)
+   ============================================
+
+   Contrato de breakpoints (mesmos valores de src/js/config/breakpoints.js e de md/lg/xl do
+   Tailwind; conferido por tests/unit/breakpointsContract.test.mjs):
+
+     mobile   < 768        barra inferior + "Mais"
+     tablet   768-1023     drawer com overlay
+     notebook 1024-1279    rail de 72px (expande sobre o conteúdo)
+     desktop  >= 1280      sidebar de 256px (recolhe para 72px)
+
+   Este arquivo só usa tokens (tokens.css): claro/escuro sem variante `dark:`. O estado interativo
+   (data-state do aside, data-sidebar-collapsed no <html>) é mantido por src/js/modules/shell.js.
+   Os limites "<768" são escritos como 767.98px, o complemento de min-width: 768px.
+   ============================================ */
+
+:root {
+  --shell-sidebar-w: 16rem; /* 256px */
+  --shell-rail-w: 4.5rem; /* 72px */
+  --shell-bottom-nav-h: 4rem; /* 64px */
+}
+
+/* ---------- Sidebar (tablet+) ---------- */
+
+.shell-sidebar {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 50;
+  display: none;
+  flex-direction: column;
+  width: var(--shell-sidebar-w);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border-inline-end: 1px solid var(--color-border);
+  transition:
+    transform var(--motion-duration-base) var(--motion-ease-standard),
+    width var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+@media (min-width: 768px) {
+  .shell-sidebar {
+    display: flex;
+  }
+}
+
+/* Drawer fechado (tablet): fora da tela e fora da ordem de foco depois da animação. */
+.shell-sidebar[data-state='closed'] {
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition:
+    transform var(--motion-duration-base) var(--motion-ease-standard),
+    visibility 0s linear var(--motion-duration-base);
+}
+
+.shell-sidebar[data-state='expanded'],
+.shell-sidebar[data-state='open'] {
+  width: var(--shell-sidebar-w);
+}
+
+.shell-sidebar[data-state='open'] {
+  box-shadow: var(--shadow-ui-lg);
+}
+
+.shell-sidebar[data-state='collapsed'] {
+  width: var(--shell-rail-w);
+}
+
+.shell-sidebar .hidden {
+  display: none;
+}
+
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 4rem;
+  flex: none;
+  padding-inline: 1rem;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.shell-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-ui-lg);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.shell-brand-name {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.shell-brand-tagline {
+  margin: 0.125rem 0 0;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.shell-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.75rem;
+}
+
+.shell-nav-group + .shell-nav-group {
+  margin-block-start: 0.75rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--color-border);
+}
+
+.shell-nav-group-label {
+  margin: 0 0 0.25rem;
+  padding-inline: 0.75rem;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.shell-nav-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.shell-nav-item,
+.shell-footer-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: var(--radius-ui-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.shell-nav-item:hover,
+.shell-footer-item:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+
+.shell-nav-item[aria-current='page'] {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+  font-weight: 600;
+}
+
+/* Itens dentro de área rolável: o contorno de foco fica por dentro para não ser cortado. */
+.shell-nav-item:focus-visible,
+.shell-footer-item:focus-visible {
+  outline-offset: -2px;
+}
+
+.shell-nav-icon {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.shell-nav-label {
+  min-width: 0;
+}
+
+.shell-sidebar-footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.75rem;
+  border-block-start: 1px solid var(--color-border);
+}
+
+.shell-footer-danger {
+  color: var(--color-danger);
+}
+
+.shell-footer-danger:hover {
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
+}
+
+/* Rail (72px): só ícones, mas os rótulos continuam no DOM (nome acessível), fora da tela. */
+.shell-sidebar[data-state='collapsed'] .shell-nav-label,
+.shell-sidebar[data-state='collapsed'] .shell-brand-text,
+.shell-sidebar[data-state='collapsed'] .shell-nav-group-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.shell-sidebar[data-state='collapsed'] .shell-brand {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.shell-sidebar[data-state='collapsed'] .shell-nav-item,
+.shell-sidebar[data-state='collapsed'] .shell-footer-item {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+/* Espaço que a sidebar fixa ocupa no layout: 0 (mobile/tablet), 72px (notebook), 256/72px (desktop). */
+.shell-spacer {
+  flex: none;
+  width: 0;
+  transition: width var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+@media (min-width: 1024px) {
+  .shell-spacer {
+    width: var(--shell-rail-w);
+  }
+}
+
+@media (min-width: 1280px) {
+  .shell-spacer {
+    width: var(--shell-sidebar-w);
+  }
+
+  html[data-sidebar-collapsed='true'] .shell-spacer {
+    width: var(--shell-rail-w);
+  }
+}
+
+.shell-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgb(0 0 0 / 0.5);
+}
+
+/* ---------- Topbar ---------- */
+
+.shell-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-inline-start: -0.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-ui-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.shell-toggle:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+
+@media (min-width: 768px) {
+  .shell-toggle {
+    display: inline-flex;
+  }
+}
+
+/* ---------- Barra inferior (mobile) ---------- */
+
+.shell-bottom-nav {
+  display: none;
+}
+
+.shell-bottom-list {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shell-bottom-list > li {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.shell-bnav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  width: 100%;
+  min-height: var(--shell-bottom-nav-h);
+  padding: 0.25rem 0.125rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.shell-bnav-item:hover {
+  background: var(--color-surface-muted);
+}
+
+.shell-bnav-item[aria-current='page'],
+.shell-bnav-item[data-active='true'] {
+  color: var(--color-accent-text);
+  font-weight: 700;
+  box-shadow: inset 0 2px 0 var(--color-accent);
+}
+
+.shell-bnav-item:focus-visible {
+  outline-offset: -3px;
+}
+
+.shell-bnav-icon {
+  flex: none;
+  width: 1.375rem;
+  height: 1.375rem;
+}
+
+@media (max-width: 767.98px) {
+  .shell-bottom-nav {
+    display: block;
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 40;
+    background: var(--color-surface);
+    border-block-start: 1px solid var(--color-border);
+    padding-block-end: env(safe-area-inset-bottom);
+  }
+
+  /* O conteúdo nunca fica escondido sob a barra inferior. */
+  .main-content-wrapper {
+    padding-bottom: calc(var(--shell-bottom-nav-h) + env(safe-area-inset-bottom) + 1rem);
+  }
+
+  #back-to-top {
+    bottom: calc(var(--shell-bottom-nav-h) + env(safe-area-inset-bottom) + 1rem);
+  }
+
+  #toast-container {
+    bottom: calc(var(--shell-bottom-nav-h) + env(safe-area-inset-bottom) + 0.5rem);
+  }
+}
+
+/* ---------- "Mais" (bottom sheet) ---------- */
+
+.shell-more-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: min(32rem, calc(100dvh - 3rem));
+  padding: 0 0 env(safe-area-inset-bottom);
+  overflow-y: auto;
+  border: 0;
+  border-block-start: 1px solid var(--color-border);
+  border-radius: var(--radius-ui-lg) var(--radius-ui-lg) 0 0;
+  background: var(--color-surface-elevated);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-ui-lg);
+}
+
+.shell-more-sheet::backdrop {
+  background: rgb(0 0 0 / 0.5);
+}
+
+.shell-more-sheet .hidden {
+  display: none;
+}
+
+.shell-more-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem 0.25rem 1rem;
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+}
+
+.shell-more-title {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 700;
+}
+
+.shell-more-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-ui-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.shell-more-body {
+  padding-block-end: 0.5rem;
+}
+
+.shell-more-label {
+  margin: 0;
+  padding: 0.75rem 1rem 0.25rem;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.shell-more-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shell-more-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 1rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.shell-more-item:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+
+.shell-more-item[aria-current='page'] {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+  font-weight: 600;
+}
+
+.shell-more-item:focus-visible,
+.shell-more-close:focus-visible {
+  outline-offset: -2px;
+}
+
+.shell-more-danger {
+  color: var(--color-danger);
+}
+
+.shell-more-danger:hover {
+  background: var(--color-danger-subtle);
+  color: var(--color-danger);
+}
+
+.shell-more-icon {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}

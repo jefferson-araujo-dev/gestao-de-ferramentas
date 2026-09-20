@@ -1,0 +1,63 @@
+<!-- "Mais" (mobile < 768px): destinos autorizados que não couberam na barra inferior + ações de conta.
+     Os destinos (#more-nav) são gerados por App.Shell; as ações de conta são estáticas. -->
+<dialog id="more-sheet" class="shell-more-sheet" aria-labelledby="more-sheet-title">
+  <div class="shell-more-header">
+    <h2 id="more-sheet-title" class="shell-more-title">Mais</h2>
+    <button type="button" class="shell-more-close" data-more-close aria-label="Fechar">
+      <svg class="w-5 h-5" aria-hidden="true" focusable="false"><use href="#icon-close"></use></svg>
+    </button>
+  </div>
+
+  <div class="shell-more-body">
+    <div id="more-nav"></div>
+
+    <p class="shell-more-label">Conta</p>
+    <ul class="shell-more-list">
+      <li>
+        <button type="button" class="shell-more-item" data-more-action="profile">
+          <svg class="shell-more-icon" aria-hidden="true" focusable="false">
+            <use href="#icon-user"></use>
+          </svg>
+          <span class="shell-more-text">Meu perfil</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="shell-more-item" data-more-action="password">
+          <svg class="shell-more-icon" aria-hidden="true" focusable="false">
+            <use href="#icon-lock"></use>
+          </svg>
+          <span class="shell-more-text">Alterar senha</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="shell-more-item" data-more-action="theme">
+          <svg class="shell-more-icon" aria-hidden="true" focusable="false">
+            <use href="#icon-theme"></use>
+          </svg>
+          <span class="shell-more-text">Alternar tema</span>
+        </button>
+      </li>
+      <li>
+        <button
+          id="btn-install-pwa-mobile"
+          type="button"
+          class="hidden shell-more-item"
+          data-pwa-install
+        >
+          <svg class="shell-more-icon" aria-hidden="true" focusable="false">
+            <use href="#icon-download"></use>
+          </svg>
+          <span class="shell-more-text">Instalar app</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="shell-more-item shell-more-danger" data-more-action="logout">
+          <svg class="shell-more-icon" aria-hidden="true" focusable="false">
+            <use href="#icon-logout"></use>
+          </svg>
+          <span class="shell-more-text">Sair</span>
+        </button>
+      </li>
+    </ul>
+  </div>
+</dialog>

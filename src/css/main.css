@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import './tokens.css';
 @import './base.css';
+@import './shell.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -60,10 +61,6 @@ body,
   height: var(--app-height);
 }
 
-#main-sidebar {
-  min-height: var(--app-height);
-}
-
 /* Main app container - ocupa toda a tela */
 #main-app {
   width: 100vw;
@@ -75,10 +72,6 @@ body,
 
 #main-app:not(.hidden) {
   display: flex;
-}
-
-#main-app > aside {
-  flex-shrink: 0;
 }
 
 #main-app > main {
@@ -191,32 +184,6 @@ body,
   border-radius: 1rem;
   object-fit: contain;
   background-color: #000;
-}
-
-/* Overrides - usados apenas para sidebar colapsada */
-#main-sidebar .text-slate-400 {
-  color: #94a3b8 !important;
-}
-#main-sidebar .text-slate-500 {
-  color: #64748b !important;
-}
-
-#main-sidebar.lg\:w-20 .nav-btn,
-#main-sidebar.lg\:w-20 #btn-logout-sidebar,
-#main-sidebar.lg\:w-20 #btn-install-pwa {
-  justify-content: center !important;
-}
-#main-sidebar.lg\:w-20 .h-20 {
-  justify-content: center !important;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-}
-#main-sidebar.lg\:w-20 .nav-btn span,
-#main-sidebar.lg\:w-20 #btn-logout-sidebar span,
-#main-sidebar.lg\:w-20 #btn-install-pwa span,
-#main-sidebar.lg\:w-20 p.uppercase,
-#main-sidebar.lg\:w-20 #sidebar-logo-text {
-  display: none !important;
 }
 
 .btn {
@@ -479,19 +446,6 @@ body,
 
 /* MEDIUM - Tablet Small (480px - 767px) */
 @media (min-width: 480px) and (max-width: 767px) {
-  #main-sidebar .nav-btn,
-  #main-sidebar #btn-logout-sidebar {
-    justify-content: center !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  #main-sidebar .h-20 {
-    justify-content: center !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
   .dashboard-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -642,21 +596,6 @@ body,
    ORIENTATION-SPECIFIC STYLES
    ============================================ */
 
-/* Landscape mode optimizations */
-@media (orientation: landscape) and (max-height: 500px) {
-  #main-sidebar {
-    width: auto;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-  .nav-btn span {
-    display: none;
-  }
-  #main-sidebar.lg\:w-72 {
-    width: 5rem;
-  }
-}
-
 /* Portrait mode optimizations */
 @media (orientation: portrait) {
   body {
@@ -668,6 +607,7 @@ body,
 /* Print styles */
 @media print {
   #main-sidebar,
+  #bottom-nav,
   .header-controls,
   #toast-container {
     display: none !important;

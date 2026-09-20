@@ -1,21 +1,10 @@
-<!-- Sidebar Overlay (Mobile) -->
-<div
-  id="sidebar-overlay"
-  class="fixed inset-0 bg-black/50 z-40 hidden lg:hidden"
-  onclick="App.UI.toggleSidebar()"
-></div>
+<!-- Overlay do drawer (tablet) e do rail expandido (notebook). Controlado por App.Shell. -->
+<div id="sidebar-overlay" class="shell-overlay hidden" aria-hidden="true"></div>
 
-<!-- Sidebar -->
-<aside
-  id="main-sidebar"
-  class="w-16 sm:w-20 md:w-72 lg:w-72 bg-slate-900 text-slate-300 flex flex-col transition-all duration-300 z-50 border-r border-slate-800 fixed inset-y-0 left-0 lg:relative -translate-x-full lg:translate-x-0 shadow-2xl lg:shadow-none"
->
-  <div
-    class="h-20 flex items-center justify-center md:justify-start px-0 md:px-6 border-b border-slate-800 shrink-0"
-  >
-    <div
-      class="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-lg shadow-brand-600/20"
-    >
+<!-- Sidebar: fixa; o espaço no layout é reservado por #sidebar-spacer. Estados via data-state. -->
+<aside id="main-sidebar" class="shell-sidebar" data-state="expanded">
+  <div class="shell-brand">
+    <div class="shell-brand-mark" aria-hidden="true">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         class="w-5 h-5"
@@ -31,129 +20,43 @@
         />
       </svg>
     </div>
-    <div id="sidebar-logo-text" class="hidden md:block ml-3">
-      <h1 class="text-white font-bold text-lg leading-none">Ferramentas</h1>
-      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
-        Gestão de Ativos
-      </p>
+    <div id="sidebar-logo-text" class="shell-brand-text">
+      <p class="shell-brand-name">Ferramentas</p>
+      <p class="shell-brand-tagline">Gestão de ativos</p>
     </div>
   </div>
 
-  <nav class="flex-1 py-6 flex flex-col gap-2 overflow-y-auto px-3">
-    <p
-      class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 hidden md:block"
-    >
-      Principal
-    </p>
-    <button
-      id="nav-dashboard"
-      type="button"
-      class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
-      data-tab="dashboard"
-    >
-      <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-dashboard"></use></svg>
-      <span class="hidden md:block font-bold text-sm">Painel</span>
-    </button>
-    <button
-      id="nav-scanner"
-      type="button"
-      class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
-      data-tab="scanner"
-    >
-      <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-scanner"></use></svg>
-      <span class="hidden md:block font-bold text-sm">Leitor / Scanner</span>
-    </button>
-    <button
-      id="nav-collaborators"
-      type="button"
-      class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
-      data-tab="collaborators"
-    >
-      <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-users"></use></svg>
-      <span class="hidden md:block font-bold text-sm">Colaboradores</span>
-    </button>
+  <!-- Itens gerados por App.Shell a partir de src/js/config/navigation.js -->
+  <nav id="sidebar-nav" class="shell-nav" aria-label="Navegação principal"></nav>
 
-    <button
-      id="nav-tools"
-      type="button"
-      class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
-      data-tab="management"
-    >
-      <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-inventory"></use></svg>
-      <span class="hidden md:block font-bold text-sm">Ferramentas</span>
-    </button>
-
-    <div id="admin-section">
-      <div class="my-4 border-t border-slate-800"></div>
-      <p
-        class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 hidden md:block"
-      >
-        Administração
-      </p>
-
-      <button
-        id="nav-management"
-        type="button"
-        class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
-        data-tab="management"
-      >
-        <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-inventory"></use></svg>
-        <span class="hidden md:block font-bold text-sm">Inventário</span>
-      </button>
-      <button
-        id="nav-users"
-        type="button"
-        class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
-        data-tab="users"
-      >
-        <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-users"></use></svg>
-        <span class="hidden md:block font-bold text-sm">Controle de Acesso</span>
-      </button>
-      <button
-        id="nav-history"
-        type="button"
-        class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ease-in-out hover:bg-slate-800/50 hover:text-white hover:scale-[1.02] justify-center md:justify-start"
-        data-tab="history"
-      >
-        <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-history"></use></svg>
-        <span class="hidden md:block font-bold text-sm">Auditoria</span>
-      </button>
-    </div>
-  </nav>
-
-  <div class="px-3 pb-4 mt-auto">
+  <div class="shell-sidebar-footer">
     <button
       id="btn-install-pwa"
       type="button"
-      class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-sky-400 hover:bg-slate-800/50 hover:text-sky-300 transition-all duration-200 mb-2"
+      data-pwa-install
+      class="hidden shell-footer-item"
       title="Instalar o Sistema no Dispositivo"
     >
-      <svg class="w-5 h-5 shrink-0" aria-hidden="true"><use href="#icon-download"></use></svg>
-      <span class="hidden md:inline sidebar-text whitespace-nowrap">Instalar App</span>
+      <svg class="shell-nav-icon" aria-hidden="true" focusable="false">
+        <use href="#icon-download"></use>
+      </svg>
+      <span class="shell-nav-label">Instalar App</span>
     </button>
 
     <button
       id="btn-logout-sidebar"
       type="button"
       onclick="App.Auth.logout()"
-      class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-400 hover:bg-slate-800/50 hover:text-rose-300 transition-all duration-200"
+      class="shell-footer-item shell-footer-danger"
       title="Sair do Sistema"
     >
-      <svg
-        class="w-5 h-5 shrink-0"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="m16 17 5-5-5-5"></path>
-        <path d="M21 12H9"></path>
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+      <svg class="shell-nav-icon" aria-hidden="true" focusable="false">
+        <use href="#icon-logout"></use>
       </svg>
-      <span class="hidden md:inline sidebar-text whitespace-nowrap">Sair da Conta</span>
+      <span class="shell-nav-label">Sair da Conta</span>
     </button>
   </div>
 </aside>
+
+<!-- Reserva, no fluxo, a largura ocupada pela sidebar fixa (256/72px; 0 em tablet/mobile). -->
+<div id="sidebar-spacer" class="shell-spacer" aria-hidden="true"></div>

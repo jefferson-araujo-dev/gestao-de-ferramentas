@@ -118,6 +118,8 @@ export const AppAuth = {
       document.getElementById('main-app')?.classList.remove('hidden');
       window.App.Data.init(this.permissions);
       window.App.Session.init();
+      // Roteamento por hash só depois de perfil e permissões aplicados (deep link/reload preservados).
+      window.App.UI.startRouting();
 
       const loginPasswordField = document.getElementById('login-password');
       if (loginPasswordField) {
@@ -139,7 +141,8 @@ export const AppAuth = {
     this.isRestricted = false;
     this._setPermissions(false, false);
     this._updateAdministrativeActionVisibility();
-    document.getElementById('admin-section').style.display = 'none';
+    window.App.Shell?.applyPermissions(null);
+    window.App.UI?.stopRouting();
     document.getElementById('login-screen')?.classList.remove('hidden');
     document.getElementById('main-app')?.classList.add('hidden');
     window.App.Session.cleanup();
@@ -281,22 +284,12 @@ export const AppAuth = {
       : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-brand-600"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
 
     document.getElementById('admin-tools').style.display = isAdm ? 'block' : 'none';
-    document.getElementById('admin-section').style.display = isAdm ? '' : 'none';
-    document.getElementById('nav-tools').style.display = this.permissions.canReadTools && !isAdm ? '' : 'none';
-    document.getElementById('nav-collaborators').style.display =
-      this.permissions.canReadCollaborators ? '' : 'none';
+    // Navegação (sidebar, barra inferior, "Mais"): itens derivados do modelo central + permissões.
+    window.App.Shell.applyPermissions(this.permissions);
     document.getElementById('tools-action-export').style.display = isAdm ? '' : 'none';
     document.getElementById('tools-action-import').style.display = isAdm ? '' : 'none';
     document.getElementById('tools-action-new').style.display = isAdm ? '' : 'none';
     document.getElementById('crud-import-input-tool').style.display = isAdm ? '' : 'none';
-
-    const restrictedTabs = ['users', 'history'];
-    if (!this.permissions.canReadCollaborators) {
-      restrictedTabs.push('collaborators');
-    }
-    if (!isAdm && restrictedTabs.includes(window.App.UI.activeTab)) {
-      window.App.UI.switchTab('dashboard');
-    }
   },
   logout: function (force = false) {
     if (force === true) {

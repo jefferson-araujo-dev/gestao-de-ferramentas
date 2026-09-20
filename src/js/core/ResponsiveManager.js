@@ -127,11 +127,9 @@ export const ResponsiveManager = {
     // O swipe da esquerda para a direita foi removido porque o scroll vertical
     // no iPhone deriva horizontalmente e satisfazia o limite, abrindo a sidebar
     // sem o usuário pedir.
-    if (diffX > threshold && window.innerWidth < this.breakpoints.lg) {
-      // Swipe da direita para esquerda (fechar sidebar)
-      if (window.App?.UI) {
-        window.App.UI.setMobileSidebarState(false);
-      }
+    if (diffX > threshold) {
+      // Swipe da direita para esquerda: fecha o drawer/rail expandido (no-op se já estiver fechado).
+      window.App?.Shell?.closeOverlay({ restoreFocus: false });
     }
   },
 
@@ -173,7 +171,6 @@ export const ResponsiveManager = {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
         this.detectDevice();
-        this.handleResize();
 
         // Disparar evento de resize customizado
         window.dispatchEvent(
@@ -188,35 +185,8 @@ export const ResponsiveManager = {
     window.addEventListener('orientationchange', () => {
       setTimeout(() => {
         this.detectDevice();
-        this.handleResize();
       }, 100);
     });
-  },
-
-  /**
-   * Manipula resize de layout
-   */
-  handleResize: function () {
-    if (!window.App?.UI) {
-      return;
-    }
-
-    // Sincronizar sidebar com novo breakpoint
-    window.App.UI.syncResponsiveLayout();
-
-    // Se mudou de mobile para desktop ou vice-versa
-    if (window.innerWidth >= this.breakpoints.lg) {
-      // Desktop - mostrar sidebar
-      const sidebar = document.getElementById('main-sidebar');
-      if (sidebar) {
-        sidebar.classList.remove('-translate-x-full');
-        sidebar.classList.add('translate-x-0');
-      }
-      const overlay = document.getElementById('sidebar-overlay');
-      if (overlay) {
-        overlay.classList.add('hidden');
-      }
-    }
   },
 
   /**

@@ -18,6 +18,8 @@ import { AppUI } from './modules/ui.js';
 import { AppSession } from './modules/session.js';
 import { AppScanner } from './modules/scanner.js';
 import { ResponsiveManager } from './core/ResponsiveManager.js';
+import { Router } from './core/Router.js';
+import { AppShell } from './modules/shell.js';
 import {
   debounce,
   withTimeout,
@@ -106,9 +108,12 @@ const App = {
   CRUDUsers: AppCRUDUsers,
   CRUDCollaborators: AppCRUDCollaborators,
   Responsive: ResponsiveManager,
+  Router: Router,
+  Shell: AppShell,
   PDF: AppPDF,
   init: function () {
     this.Responsive.init(); // Inicializar ResponsiveManager primeiro
+    this.Shell.init(); // Navegação/shell antes da autenticação (itens nascem sem permissões)
     this.Auth.init();
     this.UI.init();
     this.Scanner.init();
@@ -145,20 +150,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Lógica de Instalação do PWA
   let deferredPrompt;
-  const installBtn = document.getElementById('btn-install-pwa');
+  // Botão de instalar: sidebar (tablet+) e "Mais" (mobile) usam o mesmo fluxo.
+  const installButtons = [...document.querySelectorAll('[data-pwa-install]')];
+  const setInstallVisible = (visible) =>
+    installButtons.forEach((button) => button.classList.toggle('hidden', !visible));
 
   window.addEventListener('beforeinstallprompt', (e) => {
     // Previne que o mini-infobar apareça no mobile (opcional)
     e.preventDefault();
     deferredPrompt = e;
     // Mostra o botão
-    if (installBtn) {
-      installBtn.classList.remove('hidden');
-    }
+    setInstallVisible(true);
   });
 
-  if (installBtn) {
-    installBtn.addEventListener('click', async () => {
+  installButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
       if (!deferredPrompt) {
         return;
       }
@@ -166,25 +172,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const { outcome } = await deferredPrompt.userChoice;
       window.Logger.info(`PWA Instalação: ${outcome}`);
       deferredPrompt = null;
-      installBtn.classList.add('hidden');
+      setInstallVisible(false);
     });
-  }
+  });
 
   window.addEventListener('appinstalled', () => {
-    if (installBtn) {
-      installBtn.classList.add('hidden');
-    }
+    setInstallVisible(false);
     deferredPrompt = null;
     window.Logger.info('PWA instalado com sucesso!');
   });
 
   // Inicializar App
   App.init();
-
-  // Event listener para mudanças de breakpoint
-  window.addEventListener('breakpointChange', () => {
-    App.UI.syncResponsiveLayout();
-  });
 
   // Event listener para resize responsivo
   window.addEventListener('responsiveResize', () => {

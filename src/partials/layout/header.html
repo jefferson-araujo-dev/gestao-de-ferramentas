@@ -3,52 +3,24 @@
 >
   <div class="flex items-center gap-4">
     <button
+      id="btn-sidebar-toggle"
       type="button"
-      onclick="App.UI.toggleSidebar()"
-      class="p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors xl:hidden"
+      class="shell-toggle"
+      aria-label="Menu de navegação"
+      aria-controls="main-sidebar"
+      aria-expanded="false"
+      title="Recolher menu lateral"
     >
-      <svg
-        class="w-6 h-6 shrink-0"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M4 5h16"></path>
-        <path d="M4 12h16"></path>
-        <path d="M4 19h16"></path>
+      <svg class="w-6 h-6 shrink-0" aria-hidden="true" focusable="false">
+        <use href="#icon-menu"></use>
       </svg>
     </button>
-    <button
-      type="button"
-      onclick="App.UI.toggleSidebar()"
-      class="hidden xl:block p-2 -ml-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none"
-      title="Recolher/Expandir Menu Lateral"
-    >
-      <svg
-        class="w-6 h-6 shrink-0"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M4 5h16"></path>
-        <path d="M4 12h16"></path>
-        <path d="M4 19h16"></path>
-      </svg>
-    </button>
-    <h2
+    <h1
       id="topbar-title"
       class="text-lg font-bold text-slate-900 dark:text-white tracking-tight"
     >
-      Visão Geral
-    </h2>
+      Painel
+    </h1>
     <div
       class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-brand-50 border border-brand-100 rounded-lg text-[11px] font-bold text-brand-700 uppercase tracking-wider ml-2"
     >
@@ -146,39 +118,84 @@
         <div
           class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 p-2"
         >
-          <div id="admin-tools">
-            <button
-              id="btn-user-mgmt"
-              type="button"
-              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-              onclick="App.UI.switchTab('users')"
+          <button
+            id="btn-profile-modal"
+            type="button"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+            onclick="App.Auth.openProfileModal()"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-user w-4 h-4 text-slate-400"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-user-cog w-4 h-4 text-brand-500"
-              >
-                <path d="M10 15H6a4 4 0 0 0-4 4v2"></path>
-                <path d="m14.305 16.53.923-.382"></path>
-                <path d="m15.228 13.852-.923-.383"></path>
-                <path d="m16.852 12.228-.383-.923"></path>
-                <path d="m16.852 17.772-.383.924"></path>
-                <path d="m19.148 12.228.383-.923"></path>
-                <path d="m19.53 18.696-.382-.924"></path>
-                <path d="m20.772 13.852.924-.383"></path>
-                <path d="m20.772 16.148.924.383"></path>
-                <circle cx="18" cy="15" r="3"></circle>
-                <circle cx="9" cy="7" r="4"></circle>
-              </svg>
-              Gerenciar Usuários
-            </button>
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            Meu Perfil
+          </button>
+          <button
+            id="btn-password-modal"
+            type="button"
+            onclick="App.Auth.openPasswordModal()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="lucide lucide-lock w-4 h-4 text-slate-400"
+            >
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            Alterar Senha
+          </button>
+          <button
+            id="btn-dark-mode"
+            type="button"
+            onclick="App.UI.toggleDarkMode()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              id="dark-mode-icon"
+              class="lucide lucide-moon w-4 h-4 text-slate-400"
+            >
+              <path
+                d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"
+              ></path>
+            </svg>
+            <span id="dark-mode-text">Modo Noturno</span>
+          </button>
+          <div id="admin-tools">
+            <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
+            <p
+              class="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+            >
+              Dados (transitório)
+            </p>
             <label
               class="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl cursor-pointer transition-colors"
             >
@@ -314,84 +331,13 @@
               </svg>
               Métricas do Sistema
             </button>
-            <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
           </div>
-          <button
-            id="btn-profile-modal"
-            type="button"
-            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-            onclick="App.Auth.openProfileModal()"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="lucide lucide-user w-4 h-4 text-slate-400"
-            >
-              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
-            </svg>
-            Meu Perfil
-          </button>
-          <button
-            id="btn-password-modal"
-            type="button"
-            onclick="App.Auth.openPasswordModal()"
-            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="lucide lucide-lock w-4 h-4 text-slate-400"
-            >
-              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-            Alterar Senha
-          </button>
-          <button
-            id="btn-dark-mode"
-            type="button"
-            onclick="App.UI.toggleDarkMode()"
-            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              id="dark-mode-icon"
-              class="lucide lucide-moon w-4 h-4 text-slate-400"
-            >
-              <path
-                d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"
-              ></path>
-            </svg>
-            <span id="dark-mode-text">Modo Noturno</span>
-          </button>
+          <div class="border-t border-slate-100 dark:border-slate-800 my-1"></div>
           <button
             id="btn-logout-header"
             type="button"
             onclick="App.Auth.logout()"
-            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors mt-1"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

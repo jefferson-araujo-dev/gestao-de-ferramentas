@@ -64,6 +64,14 @@
   /* ---- Foco ---- */
   --color-focus-ring: #1d4ed8;
 
+  /* ---- Breakpoints (contrato do app shell, Gate 1-D) ----
+     tablet >= 768 (md), notebook >= 1024 (lg), desktop >= 1280 (xl). Valores idênticos aos padrões
+     do Tailwind, declarados aqui para serem a referência conferida por teste contra
+     src/js/config/breakpoints.js e src/css/shell.css. */
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+
   /* ---- Tipografia ----
      Escala semântica (tamanho/altura de linha, peso quando definido). Utilitários:
      text-display, text-heading-lg, text-heading-md, text-body, text-label, text-caption.
