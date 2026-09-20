@@ -38,13 +38,12 @@ test.describe('menu da conta (Dropdown)', () => {
     await expect(trigger).toBeFocused();
   });
 
-  test('ações perigosas (reset/sair) ficam separadas; clicar fora fecha; item abre o modal', async ({
+  test('ação perigosa (sair) fica separada; clicar fora fecha; item abre o modal', async ({
     page,
   }) => {
     await page.locator('#user-menu-trigger').click();
-    await expect(page.locator('#btn-reset-data')).toHaveClass(/ui-menu__item--danger/);
     await expect(page.locator('#btn-logout-header')).toHaveClass(/ui-menu__item--danger/);
-    await expect(page.locator('#user-dropdown-menu .ui-menu__sep')).toHaveCount(2);
+    await expect(page.locator('#user-dropdown-menu .ui-menu__sep')).toHaveCount(1);
 
     await page.mouse.click(400, 500);
     await expect(page.locator('#user-dropdown-menu')).toBeHidden();
@@ -55,17 +54,16 @@ test.describe('menu da conta (Dropdown)', () => {
     await expect(page.locator('#user-dropdown-menu')).toBeHidden();
   });
 
-  test('itens de arquivo (Importar/Restaurar) são focáveis por teclado; nenhuma ação destrutiva roda', async ({
+  test('itens do menu são focáveis por teclado; nenhuma ação de dados roda a partir do menu', async ({
     page,
     guard,
   }) => {
     await page.locator('#user-menu-trigger').click();
 
-    const importItem = page.getByRole('menuitem', { name: 'Importar Excel' });
+    const item = page.getByRole('menuitem', { name: 'Alterar Senha' });
 
-    await expect(importItem).toHaveAttribute('tabindex', '-1');
-    await importItem.focus();
-    await expect(importItem).toBeFocused();
+    await item.focus();
+    await expect(item).toBeFocused();
     expect(guard.apiCalls).toEqual([expect.stringContaining('/api/session/last-login')]);
   });
 

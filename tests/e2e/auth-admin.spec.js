@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-
-import { verifyBackupDataHash } from '../../src/js/utils/backupContract.js';
 import {
   expect,
   expectActiveTab,
@@ -49,8 +46,8 @@ test.describe('ADMIN — login, navegação e contrato visível de autorização
     await expect(page.locator('#dash-list')).toContainText('Furadeira de Impacto');
   });
 
-  test('navegação: as 6 telas abrem com título, painel e item ativo corretos', async ({ page }) => {
-    for (const tab of ['scanner', 'collaborators', 'management', 'history', 'users', 'dashboard']) {
+  test('navegação: as 7 telas abrem com título, painel e item ativo corretos', async ({ page }) => {
+    for (const tab of ['scanner', 'collaborators', 'management', 'history', 'users', 'data', 'dashboard']) {
       await openTab(page, tab, asAdmin);
       await expectActiveTab(page, tab, asAdmin);
     }
@@ -85,7 +82,7 @@ test.describe('ADMIN — login, navegação e contrato visível de autorização
     await expect(page.locator('#btn-collaborators-export')).toBeVisible();
   });
 
-  test('menu administrativo: itens presentes e habilitados (sem executar destrutivos)', async ({
+  test('menu da conta: só Perfil, Senha, Tema e Sair; ações de dados vivem em Dados e backup', async ({
     page,
     guard,
   }) => {
@@ -93,72 +90,21 @@ test.describe('ADMIN — login, navegação e contrato visível de autorização
 
     const menu = page.locator('#user-dropdown-menu');
 
-    for (const name of [
-      'Resetar dados operacionais',
-      'Backup JSON',
-      'Métricas do Sistema',
-      'Meu Perfil',
-      'Alterar Senha',
-      'Sair do Sistema',
-    ]) {
-      await expect(menu.getByRole('menuitem', { name })).toBeVisible();
+    await expect(menu.getByRole('menuitem')).toHaveText([
+      /Meu Perfil/,
+      /Alterar Senha/,
+      /Modo Noturno/,
+      /Sair do Sistema/,
+    ]);
+
+    for (const name of ['Meu Perfil', 'Alterar Senha', 'Modo Noturno', 'Sair do Sistema']) {
       await expect(menu.getByRole('menuitem', { name })).toBeEnabled();
     }
 
-    await expect(menu.getByText('Importar Excel')).toBeVisible();
-    await expect(menu.getByText('Restaurar JSON')).toBeVisible();
-    await expect(page.locator('#file-restore-json')).toBeAttached();
-
-    // Nenhum item destrutivo foi acionado e nenhuma API de backup foi tocada.
+    // Sem seção transitória: nada de reset, backup, restauração, Excel ou métricas no menu.
+    await expect(page.locator('#admin-tools')).toHaveCount(0);
+    await expect(menu.getByText(/Resetar|Backup|Restaurar|Importar Excel|Métricas/)).toHaveCount(0);
     expect(guard.apiCalls.filter((call) => call.includes('/api/backup'))).toEqual([]);
-  });
-
-  test('guard seguro: restore de arquivo inválido é recusado localmente, sem API', async ({
-    page,
-    guard,
-  }) => {
-    await openUserMenu(page);
-    await page.locator('#file-restore-json').setInputFiles({
-      name: 'e2e-invalid-backup.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify({ schemaVersion: '999.0' })),
-    });
-
-    await expect(page.locator('.toast-item').filter({ hasText: 'Backup inválido' })).toBeVisible();
-    await expect(
-      page.locator('.toast-item').filter({ hasText: 'Nenhum dado foi alterado' })
-    ).toBeVisible();
-    expect(guard.apiCalls.filter((call) => call.includes('/api/backup'))).toEqual([]);
-    expect(guard.dialogs).toEqual([]);
-  });
-
-  test('exportação (somente leitura): Backup JSON gera o schema v4 com hash válido', async ({
-    page,
-  }) => {
-    await openUserMenu(page);
-
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByRole('menuitem', { name: 'Backup JSON' }).click(),
-    ]);
-
-    expect(download.suggestedFilename()).toMatch(
-      /^backup_gestao_ferramentas_v4_\d{4}-\d{2}-\d{2}.*\.json$/
-    );
-
-    const backup = JSON.parse(readFileSync(await download.path(), 'utf8'));
-
-    expect(backup.schemaVersion).toBe('4.0');
-    expect(Object.keys(backup.data).sort()).toEqual(['collaborators', 'history', 'tools']);
-    expect(backup.data.users).toBeUndefined();
-    expect(backup.summary.collections).toEqual({
-      tools: E2E_EXPECTED_COUNTS.tools,
-      collaborators: E2E_EXPECTED_COUNTS.collaborators,
-      history: E2E_EXPECTED_COUNTS.history,
-    });
-    expect(backup.summary.usersReferenceCount).toBe(E2E_EXPECTED_COUNTS.users);
-    expect(backup.reference.users.some((u) => 'lastIp' in u || 'lastDevice' in u)).toBe(false);
-    expect((await verifyBackupDataHash(backup)).ok).toBe(true);
   });
 
   test('logout: confirma no modal e volta para a tela de login', async ({ page }) => {

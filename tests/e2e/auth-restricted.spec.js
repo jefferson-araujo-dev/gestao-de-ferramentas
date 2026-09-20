@@ -67,12 +67,12 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
   test('ausência das áreas administrativas (nav, menu e ações)', async ({ page }) => {
     const sidebar = page.locator('#main-sidebar');
 
-    for (const name of ['Auditoria', 'Usuários e acessos']) {
+    for (const name of ['Auditoria', 'Usuários e acessos', 'Dados e backup']) {
       await expect(sidebar.getByRole('link', { name, exact: true })).toHaveCount(0);
     }
 
     await openUserMenu(page);
-    await expect(page.locator('#admin-tools')).toBeHidden();
+    await expect(page.locator('#admin-tools')).toHaveCount(0);
     await page.keyboard.press('Escape');
 
     await openTab(page, 'management');
@@ -82,7 +82,7 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
   test('não apenas oculto: telas administrativas recusam navegação programática', async ({
     page,
   }) => {
-    for (const tab of ['users', 'history']) {
+    for (const tab of ['users', 'history', 'data']) {
       await page.evaluate((target) => window.App.UI.switchTab(target), tab);
       await expect(page.locator('#topbar-title')).toHaveText('Painel');
       await expect(page.locator(`#tab-${tab}`)).toBeHidden();

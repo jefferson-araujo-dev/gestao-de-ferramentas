@@ -64,13 +64,6 @@ test.describe('MODAIS — perfil ADMIN', () => {
     await expectOpenThenEscape(page, '#tool-history-modal');
   });
 
-  test('métricas do sistema: abre e fecha com Esc', async ({ page }) => {
-    await openUserMenu(page);
-    await page.getByRole('menuitem', { name: 'Métricas do Sistema' }).click();
-    await expect(page.locator('#metrics-modal-content')).toBeVisible();
-    await expectOpenThenEscape(page, '#metrics-modal');
-  });
-
   test('logout: cancelar mantém a sessão', async ({ page }) => {
     await page.locator('#btn-logout-sidebar').click();
 

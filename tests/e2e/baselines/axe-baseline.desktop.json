@@ -61,10 +61,16 @@
         "nodes": 3
       }
     },
+    "admin-dados": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
     "admin-menu-avatar": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 3
+        "nodes": 1
       }
     },
     "admin-modal-perfil": {
@@ -83,6 +89,22 @@
         "nodes": 1
       }
     },
+    "admin-dados-arquivo-valido": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-dados-dialog-restaurar": {},
+    "admin-dados-dialog-reset": {},
+    "admin-dados-erro": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-dados-escuro": {},
+    "admin-dados-dialog-escuro": {},
     "admin-drawer-tablet": {
       "color-contrast": {
         "impact": "serious",

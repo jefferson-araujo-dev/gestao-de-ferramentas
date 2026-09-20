@@ -55,7 +55,7 @@ test.describe('PADRÃO — login, navegação e limites de autorização da UI',
   test('ausência visual: itens de navegação, menu e ações administrativas', async ({ page }) => {
     const sidebar = page.locator('#main-sidebar');
 
-    for (const name of ['Auditoria', 'Usuários e acessos', 'Inventário']) {
+    for (const name of ['Auditoria', 'Usuários e acessos', 'Dados e backup', 'Inventário']) {
       await expect(sidebar.getByRole('link', { name, exact: true })).toHaveCount(0);
     }
     await expect(page.locator('#btn-export-dashboard')).toBeHidden();
@@ -64,14 +64,14 @@ test.describe('PADRÃO — login, navegação e limites de autorização da UI',
 
     const menu = page.locator('#user-dropdown-menu');
 
-    await expect(page.locator('#admin-tools')).toBeHidden();
+    await expect(page.locator('#admin-tools')).toHaveCount(0);
 
     for (const name of [
       'Resetar dados operacionais',
       'Backup JSON',
       'Métricas do Sistema',
     ]) {
-      await expect(menu.getByRole('menuitem', { name })).toBeHidden();
+      await expect(menu.getByRole('menuitem', { name })).toHaveCount(0);
     }
 
     for (const name of ['Meu Perfil', 'Alterar Senha', 'Sair do Sistema']) {
@@ -126,10 +126,11 @@ test.describe('PADRÃO — login, navegação e limites de autorização da UI',
 
     const result = await page.evaluate(async () => ({
       exported: await window.App.Data.exportJSON(),
-      reset: (await window.App.Data.resetAllData()) ?? null,
+      reset: await window.App.Data.resetAllData(),
     }));
 
-    expect(result).toEqual({ exported: null, reset: null });
+    // Desde o 1-F1 a recusa é explícita: resetAllData devolve { status: 'denied' } (antes, undefined).
+    expect(result).toEqual({ exported: null, reset: { status: 'denied' } });
     await expect(
       page.locator('.toast-item').filter({ hasText: 'Acesso restrito' }).first()
     ).toBeVisible();

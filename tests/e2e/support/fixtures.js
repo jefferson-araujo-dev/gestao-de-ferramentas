@@ -30,6 +30,12 @@ function createGuardState() {
     requestFailures: [],
     badResponses: [],
     known: [],
+    allowed: [],
+    // Falha SIMULADA de propósito por um teste (ex.: API de backup respondendo 500): declarada por teste,
+    // com justificativa, e válida só para ele. Qualquer outro erro continua falhando o teste.
+    allow(pattern, reason) {
+      this.allowed.push({ pattern, reason });
+    },
   };
 }
 
@@ -132,7 +138,7 @@ export const test = base.extend({
 
       for (const [label, messages] of Object.entries(groups)) {
         for (const message of messages) {
-          const known = isKnown(message);
+          const known = isKnown(message) ?? state.allowed.find((item) => item.pattern.test(message));
 
           if (known) {
             testInfo.annotations.push({ type: 'known-baseline', description: known.reason });
@@ -229,6 +235,14 @@ export const TABS = {
     label: 'Auditoria',
     title: 'Auditoria',
     panel: '#tab-history',
+  },
+  data: {
+    id: 'data',
+    route: 'dados',
+    nav: '#nav-data',
+    label: 'Dados e backup',
+    title: 'Dados e backup',
+    panel: '#tab-data',
   },
 };
 

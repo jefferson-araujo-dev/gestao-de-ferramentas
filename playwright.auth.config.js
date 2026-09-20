@@ -50,13 +50,20 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
-      testIgnore: /\.mobile\.spec\.js$/,
+      testIgnore: /\.(mobile|destructive)\.spec\.js$/,
       use: { viewport: { width: 1440, height: 900 } },
     },
     {
       name: 'mobile',
       testMatch: /\.mobile\.spec\.js$/,
       use: { viewport: { width: 390, height: 844 }, hasTouch: true },
+    },
+    {
+      // Fluxos que apagam dados semeados do emulator (limpar histórico): rodam por último e re-semeiam.
+      name: 'destructive',
+      testMatch: /\.destructive\.spec\.js$/,
+      dependencies: ['desktop', 'mobile'],
+      use: { viewport: { width: 1440, height: 900 } },
     },
   ],
 

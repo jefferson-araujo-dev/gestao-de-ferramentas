@@ -9,6 +9,8 @@
   ],
   "screens": {
     "mobile-dashboard": {},
-    "mobile-mais-aberto": {}
+    "mobile-mais-aberto": {},
+    "mobile-dados": {},
+    "mobile-dados-dialog-reset": {}
   }
 }

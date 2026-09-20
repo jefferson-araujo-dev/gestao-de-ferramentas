@@ -31,7 +31,7 @@ test.describe('ADMIN — rotas, histórico e título', () => {
   test('as 6 telas: URL, título da topbar, document.title e item ativo acompanham a rota', async ({
     page,
   }) => {
-    for (const tab of ['scanner', 'collaborators', 'management', 'history', 'users', 'dashboard']) {
+    for (const tab of ['scanner', 'collaborators', 'management', 'history', 'users', 'data', 'dashboard']) {
       await openTab(page, tab);
       await expectActiveTab(page, tab);
     }
@@ -115,7 +115,7 @@ test.describe('ADMIN — rotas, histórico e título', () => {
     }
   });
 
-  test('a IA aprovada: grupos e itens da sidebar; sem "Dados e backup" (não implementado)', async ({
+  test('a IA aprovada: grupos e itens da sidebar, com "Dados e backup" em Administração (1-F1)', async ({
     page,
   }) => {
     const sidebar = page.locator('#main-sidebar');
@@ -135,12 +135,13 @@ test.describe('ADMIN — rotas, histórico e título', () => {
       'Colaboradores',
       'Auditoria',
       'Usuários e acessos',
+      'Dados e backup',
     ]);
-    await expect(sidebar.getByRole('link', { name: /Dados e backup/ })).toHaveCount(0);
+    await expect(sidebar.getByRole('link', { name: /Dados e backup/ })).toHaveCount(1);
     await expect(sidebar.getByRole('link', { name: /Invent/ })).toHaveCount(0);
   });
 
-  test('menu da conta: Perfil, Senha, Tema e Sair; dados administrativos numa seção transitória', async ({
+  test('menu da conta: só Perfil, Senha, Tema e Sair (dados administrativos migraram para Dados e backup)', async ({
     page,
   }) => {
     await openUserMenu(page);
@@ -151,8 +152,9 @@ test.describe('ADMIN — rotas, histórico e título', () => {
       await expect(menu.getByRole('menuitem', { name })).toBeVisible();
     }
 
-    await expect(menu.getByText('Dados (transitório)')).toBeVisible();
-    await expect(menu.getByRole('menuitem', { name: 'Resetar dados operacionais' })).toBeVisible();
+    await expect(menu.getByRole('menuitem')).toHaveCount(4);
+    await expect(menu.getByText('Dados (transitório)')).toHaveCount(0);
+    await expect(menu.getByRole('menuitem', { name: 'Resetar dados operacionais' })).toHaveCount(0);
     await expect(menu.getByRole('menuitem', { name: 'Gerenciar Usuários' })).toHaveCount(0);
   });
 
@@ -204,6 +206,7 @@ test.describe('PADRÃO — rotas permitidas e recusa das administrativas', () =>
   for (const [route, tab] of [
     ['auditoria', 'history'],
     ['usuarios', 'users'],
+    ['dados', 'data'],
   ]) {
     test(`deep link #/${route} é recusado: Painel + aviso, sem carregar a tela`, async ({
       page,
@@ -263,7 +266,7 @@ test.describe('RESTRITO — Colaboradores e áreas administrativas inacessíveis
       'Ferramentas',
     ]);
     // Em nenhum lugar do DOM (sidebar, barra inferior ou "Mais").
-    for (const id of ['collaborators', 'history', 'users']) {
+    for (const id of ['collaborators', 'history', 'users', 'data']) {
       await expect(page.locator(`[data-nav-id="${id}"]`)).toHaveCount(0);
     }
 

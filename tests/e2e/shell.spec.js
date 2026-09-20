@@ -197,7 +197,7 @@ test.describe('TABLET 768-1023 — drawer', () => {
       await expect(page.locator('#sidebar-overlay')).toBeVisible();
       expect(await sidebarWidth(page)).toBe(SIDEBAR_EXPANDED);
       // Rótulos visíveis (não só ícones, como na implementação antiga).
-      for (const id of ['dashboard', 'scanner', 'tools', 'collaborators', 'history', 'users']) {
+      for (const id of ['dashboard', 'scanner', 'tools', 'collaborators', 'history', 'users', 'data']) {
         const label = page.locator(`#nav-${id} .shell-nav-label`);
 
         await expect(label).toBeVisible();
@@ -381,7 +381,7 @@ test.describe('MOBILE < 768 — barra inferior + "Mais"', () => {
     expect(gap.lastBottom).toBeLessThanOrEqual(gap.navTop);
   });
 
-  test('ADMIN: "Mais" lista só Auditoria e Usuários e acessos + ações de conta; Esc fecha', async ({
+  test('ADMIN: "Mais" lista só Auditoria, Usuários e acessos e Dados e backup + ações de conta; Esc fecha', async ({
     page,
   }) => {
     await resize(page, 390, 800);
@@ -399,6 +399,7 @@ test.describe('MOBILE < 768 — barra inferior + "Mais"', () => {
     await expect(sheet.locator('#more-nav [data-nav-id]')).toHaveText([
       'Auditoria',
       'Usuários e acessos',
+      'Dados e backup',
     ]);
     for (const name of ['Meu perfil', 'Alterar senha', 'Alternar tema', 'Sair']) {
       await expect(sheet.getByRole('button', { name, exact: true })).toBeVisible();
@@ -452,7 +453,7 @@ test.describe('MOBILE < 768 — barra inferior + "Mais"', () => {
     await page.locator('#bnav-more').click();
     await expect(page.locator('#more-nav [data-nav-id]')).toHaveCount(0);
 
-    for (const id of ['collaborators', 'history', 'users']) {
+    for (const id of ['collaborators', 'history', 'users', 'data']) {
       await expect(page.locator(`[data-nav-id="${id}"]`)).toHaveCount(0);
     }
   });

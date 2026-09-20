@@ -1,4 +1,5 @@
 import {
+  AXE_TAGS,
   UPDATE_BASELINE,
   findRegressions,
   freezeMotion,
@@ -7,7 +8,9 @@ import {
   scan,
   summarize,
 } from './support/axe.js';
-import { expect, expectActiveTab, loginAs, test } from './support/fixtures.js';
+import AxeBuilder from '@axe-core/playwright';
+
+import { expect, expectActiveTab, loginAs, openTab, test } from './support/fixtures.js';
 import { E2E_USERS } from './support/seed-data.mjs';
 
 // MOBILE 390x844 (Gate 1-D): barra inferior com 4 destinos + "Mais" (o drawer antigo, só com ícones,
@@ -61,11 +64,14 @@ test.describe('MOBILE 390x844 — navegação (barra inferior)', () => {
     await expect(nav.getByRole('button', { name: 'Mais', exact: true })).toBeVisible();
   });
 
-  test('avatar: menu abre e mostra as ações do perfil admin', async ({ page }) => {
+  test('avatar: menu abre e mostra as ações da conta (Perfil, Senha, Tema, Sair)', async ({ page }) => {
     await page.getByTestId('user-menu-trigger').click();
     await expect(page.locator('#user-dropdown-menu')).toBeVisible();
+    await expect(page.locator('#btn-profile-modal')).toBeVisible();
+    await expect(page.locator('#btn-password-modal')).toBeVisible();
+    await expect(page.locator('#btn-dark-mode')).toBeVisible();
     await expect(page.locator('#btn-logout-header')).toBeVisible();
-    await expect(page.locator('#btn-reset-data')).toBeVisible();
+    await expect(page.locator('#btn-reset-data')).toHaveCount(0);
   });
 });
 
@@ -77,6 +83,30 @@ test.describe('MOBILE 390x844 — visual (baseline do shell novo)', () => {
   test('dashboard', async ({ page }) => {
     await expect(page.locator('#dash-list')).toContainText('Furadeira de Impacto');
     await expect(page).toHaveScreenshot('dashboard-admin-mobile.png', { mask: dynamicMasks(page) });
+  });
+
+  // Gate 1-F1: tela Dados e backup no mobile (aberta por "Mais"; o item não cabe na barra inferior).
+  test('dados e backup', async ({ page }) => {
+    await openTab(page, 'data');
+    await expectActiveTab(page, 'data');
+    await expect(page.locator('#data-restore-file')).toBeVisible();
+    await page.addStyleTag({ content: '[data-fact="uptime"] .data-fact__value{visibility:hidden}' });
+    await expect(page).toHaveScreenshot('dados-admin-mobile.png', {
+      mask: dynamicMasks(page),
+    });
+  });
+
+  test('dados e backup: diálogo de reset (confirmação reforçada)', async ({ page }) => {
+    await openTab(page, 'data');
+    await expectActiveTab(page, 'data');
+    await page.addStyleTag({ content: '[data-fact="uptime"] .data-fact__value{visibility:hidden}' });
+    await page.locator('#data-reset').scrollIntoViewIfNeeded();
+    await page.locator('#data-reset').click();
+    await expect(page.locator('#confirm-dialog')).toBeVisible();
+    await page.locator('#confirm-dialog-input').fill('RESET');
+    await expect(page).toHaveScreenshot('dados-dialogo-reset-mobile.png', {
+      mask: dynamicMasks(page),
+    });
   });
 
   test('navegação: "Mais" aberto', async ({ page }) => {
@@ -128,6 +158,50 @@ test.describe('MOBILE 390x844 — axe (shell novo)', () => {
           `regressões de acessibilidade em "${screen}"`
         ).toEqual([]);
       }
+    }
+  });
+
+  // Gate 1-F1: Dados e backup no mobile (ociosa e com o diálogo destrutivo aberto).
+  test('dados e backup: tela e diálogo destrutivo', async ({ page }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'data');
+    await expect(page.locator('#data-restore-file')).toBeVisible();
+
+    for (const [screen, selector, prepare] of [
+      ['mobile-dados', '#data-screen', async () => {}],
+      [
+        'mobile-dados-dialog-reset',
+        '#confirm-dialog',
+        async () => {
+          await page.locator('#data-reset').scrollIntoViewIfNeeded();
+          await page.locator('#data-reset').click();
+          await expect(page.locator('#confirm-dialog')).toBeVisible();
+        },
+      ],
+    ]) {
+      await prepare();
+
+      const { violations, axeVersion: version } = await scan(page);
+
+      axeVersion = version;
+      collected[screen] = violations;
+
+      if (!UPDATE_BASELINE) {
+        expect(
+          findRegressions(loadBaseline(project).screens[screen], violations),
+          `regressões de acessibilidade em "${screen}"`
+        ).toEqual([]);
+      }
+
+      const scoped = await new AxeBuilder({ page }).include(selector).withTags(AXE_TAGS).analyze();
+
+      expect(
+        scoped.violations.map((violation) => violation.id),
+        `axe restrito a ${selector}`
+      ).toEqual([]);
     }
   });
 });

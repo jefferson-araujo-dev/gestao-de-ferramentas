@@ -1,4 +1,7 @@
+import AxeBuilder from '@axe-core/playwright';
+
 import {
+  AXE_TAGS,
   UPDATE_BASELINE,
   findRegressions,
   freezeMotion,
@@ -38,6 +41,18 @@ async function check(page, project, screen) {
   }
 }
 
+// Gate 1-F1: a varredura de página inteira inclui o cabeçalho do shell (#network-status-text, texto
+// 10px em slate-400, contraste anterior a este gate e presente em todas as telas). Para a tela nova,
+// a varredura restrita ao seu próprio conteúdo/diálogo não pode ter NENHUMA violação.
+async function expectScopedClean(page, selector, label) {
+  const results = await new AxeBuilder({ page }).include(selector).withTags(AXE_TAGS).analyze();
+
+  expect(
+    results.violations.map((violation) => `${violation.id}: ${violation.nodes.length} nó(s)`),
+    `axe restrito a ${selector} (${label})`
+  ).toEqual([]);
+}
+
 test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D para o shell novo)', () => {
   test.afterAll(async ({}, testInfo) => {
     if (UPDATE_BASELINE) {
@@ -59,7 +74,7 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
     await check(page, testInfo.project.name, 'login');
   });
 
-  test('ADMIN: as 6 telas, menu do avatar e modais', async ({ page }, testInfo) => {
+  test('ADMIN: as 7 telas, menu do avatar e modais', async ({ page }, testInfo) => {
     const project = testInfo.project.name;
 
     await loginAs(page, E2E_USERS.admin);
@@ -73,6 +88,7 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
       ['management', 'admin-ferramentas', '#crud-list'],
       ['history', 'admin-auditoria', '#history-list'],
       ['users', 'admin-controle-acesso', '#user-management-body'],
+      ['data', 'admin-dados', '#data-restore-file'],
     ]) {
       await openTab(page, tab, { isAdmin: true });
       await expect(page.locator(ready)).toBeVisible();
@@ -90,6 +106,74 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
     await page.locator('#tools-action-new').click();
     await expect(page.locator('#crud-modal')).toBeVisible();
     await check(page, project, 'admin-modal-ferramenta');
+    await page.keyboard.press('Escape');
+  });
+
+  // Gate 1-F1: estados da tela Dados e backup (ociosa já acima; arquivo, diálogo destrutivo e erro).
+  test('DADOS: arquivo selecionado, diálogo destrutivo aberto e estado de erro', async ({
+    page,
+  }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'data');
+    await expect(page.locator('#data-restore-file')).toBeVisible();
+    await expectScopedClean(page, '#data-screen', 'ociosa');
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('#data-export-backup').click(),
+    ]);
+    const file = testInfo.outputPath('backup-axe.json');
+
+    await download.saveAs(file);
+    await page.locator('#data-restore-file').setInputFiles(file);
+    await expect(page.locator('#data-restore-review')).toContainText('Arquivo válido');
+    await check(page, project, 'admin-dados-arquivo-valido');
+    await expectScopedClean(page, '#data-screen', 'arquivo válido');
+
+    await page.locator('#data-restore-run').click();
+    await expect(page.locator('#confirm-dialog')).toBeVisible();
+    await check(page, project, 'admin-dados-dialog-restaurar');
+    await expectScopedClean(page, '#confirm-dialog', 'diálogo de restauração');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#confirm-dialog')).toBeHidden();
+
+    await page.locator('#data-reset').click();
+    await expect(page.locator('#confirm-dialog')).toBeVisible();
+    await check(page, project, 'admin-dados-dialog-reset');
+    await expectScopedClean(page, '#confirm-dialog', 'diálogo de reset');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#confirm-dialog')).toBeHidden();
+
+    await page.locator('#data-restore-file').setInputFiles({
+      name: 'invalido.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from('{ nao e json'),
+    });
+    await expect(page.locator('#data-restore-review').getByRole('alert')).toBeVisible();
+    await check(page, project, 'admin-dados-erro');
+    await expectScopedClean(page, '#data-screen', 'erro de arquivo');
+  });
+
+  // Gate 1-F1: a tela também é verificada no tema escuro (mesmos tokens, sem dark: ad hoc).
+  test('DADOS: tema escuro (tela e diálogo destrutivo)', async ({ page }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'data');
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await expect(page.locator('#data-restore-file')).toBeVisible();
+    await check(page, project, 'admin-dados-escuro');
+    await expectScopedClean(page, '#data-screen', 'tema escuro');
+
+    await page.locator('#data-reset').click();
+    await expect(page.locator('#confirm-dialog')).toBeVisible();
+    await check(page, project, 'admin-dados-dialog-escuro');
+    await expectScopedClean(page, '#confirm-dialog', 'diálogo no tema escuro');
     await page.keyboard.press('Escape');
   });
 
