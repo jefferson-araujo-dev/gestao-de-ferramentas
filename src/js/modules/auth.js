@@ -13,6 +13,7 @@ import { metrics } from '../core/MetricsManager.js';
 export const AppAuth = {
   _initialized: false,
   isAdm: false,
+  isRestricted: false,
   uName: null,
   permissions: {
     canAccessDashboard: false,
@@ -134,6 +135,7 @@ export const AppAuth = {
   },
   _handleUnauthenticatedUser() {
     this.isAdm = false;
+    this.isRestricted = false;
     this._setPermissions(false, false);
     this._updateAdministrativeActionVisibility();
     document.getElementById('admin-section').style.display = 'none';
@@ -267,6 +269,7 @@ export const AppAuth = {
   },
   _updateUIForUser(uName, isAdm, isRestricted) {
     this.isAdm = isAdm;
+    this.isRestricted = isRestricted === true && !isAdm;
     this.uName = uName;
     this._setPermissions(isAdm);
     this._updateAdministrativeActionVisibility();

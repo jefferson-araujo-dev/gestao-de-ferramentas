@@ -1,5 +1,7 @@
 export const AppPDF = {
-  generateReceipt: async function (tool, userName) {
+  // `collaboratorDetails` ({ badge, role }) vem da própria movimentação autorizada (perfil restrito,
+  // que não carrega a lista de colaboradores); sem ele o termo consulta Data.collaborators.
+  generateReceipt: async function (tool, userName, collaboratorDetails = null) {
     if (!window.jspdf) {
       window.App.UI.showToast('Motor PDF...', 'info');
       try {
@@ -25,7 +27,10 @@ export const AppPDF = {
         .toString()
         .padStart(4, '0');
     const dF = `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR')}`;
-    const uObj = window.App.Data.collaborators.find((u) => u.name === userName) || {};
+    const uObj =
+      collaboratorDetails ||
+      window.App.Data.collaborators.find((u) => u.name === userName) ||
+      {};
 
     doc.setFillColor(30, 58, 138);
     doc.rect(0, 0, 210, 35, 'F');

@@ -8,7 +8,10 @@ async function requestToolMovement(body) {
     throw new Error('Sua sessão expirou. Entre novamente.');
   }
 
-  if (!body?.toolId || (body.action === 'loan' && !body.collaboratorId)) {
+  if (
+    !body?.toolId ||
+    (body.action === 'loan' && !body.collaboratorId && !body.collaboratorBadge)
+  ) {
     throw new Error('Dados da movimentação incompletos.');
   }
 
@@ -33,13 +36,18 @@ async function requestToolMovement(body) {
   }
 
   if (!response.ok || payload?.success !== true) {
-    throw new Error(
+    const error = new Error(
       payload?.message || 'Não foi possível registrar a movimentação.'
     );
+    error.code = payload?.code;
+    throw error;
   }
 
-  return payload.data?.tool || null;
+  return payload.data || null;
 }
+
+// Código devolvido pela API quando o perfil restrito informa um crachá que não pode ser usado.
+const LOAN_NOT_AUTHORIZED = 'LOAN_NOT_AUTHORIZED';
 export const AppScanner = {
   currentTool: null,
   buffer: '',
@@ -533,6 +541,10 @@ export const AppScanner = {
 
       if (bi) {
         bi.value = '';
+        bi.placeholder =
+          window.App.Auth.isRestricted === true
+            ? 'Crachá do colaborador'
+            : 'Crachá ou Nome do Colaborador';
         setTimeout(() => bi.focus(), 100);
       }
     } else {
@@ -585,32 +597,37 @@ export const AppScanner = {
     }, 500);
   },
   processCheckout: function () {
-    const bV = window.Utils.removeAccents(
-      document.getElementById('checkout-user-badge')?.value.trim() || ''
-    ).toLowerCase();
+    const typedValue = document.getElementById('checkout-user-badge')?.value.trim() || '';
+    const bV = window.Utils.removeAccents(typedValue).toLowerCase();
     if (!bV || !this.currentTool) {
       return;
     }
-    const u = window.App.Data.collaborators.find(
-      (x) =>
-        ((x.badge !== null &&
-          x.badge !== undefined &&
-          window.Utils.removeAccents(x.badge).toLowerCase() === bV) ||
-          window.Utils.removeAccents(x.name).toLowerCase() === bV)
-    );
-    if (!u) {
-      window.AudioSys.playBeep('error');
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([200, 100, 200]);
+    // Perfil restrito: não tem a lista de colaboradores. Envia só o crachá exato digitado e o
+    // servidor resolve o colaborador; não há busca por nome nem por aproximação.
+    const restricted = window.App.Auth.isRestricted === true;
+    let u = null;
+    if (!restricted) {
+      u = window.App.Data.collaborators.find(
+        (x) =>
+          ((x.badge !== null &&
+            x.badge !== undefined &&
+            window.Utils.removeAccents(x.badge).toLowerCase() === bV) ||
+            window.Utils.removeAccents(x.name).toLowerCase() === bV)
+      );
+      if (!u) {
+        window.AudioSys.playBeep('error');
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+        return window.App.UI.showToast('Colaborador não localizado.', 'error');
       }
-      return window.App.UI.showToast('Colaborador não localizado.', 'error');
-    }
-    if (u.status === 'inactive') {
-      window.AudioSys.playBeep('error');
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([200, 100, 200]);
+      if (u.status === 'inactive') {
+        window.AudioSys.playBeep('error');
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+        return window.App.UI.showToast('Colaborador bloqueado/inativo.', 'error');
       }
-      return window.App.UI.showToast('Colaborador bloqueado/inativo.', 'error');
     }
     ['scanner-checkout', 'scanner-status-box'].forEach((id) =>
       document.getElementById(id)?.classList.add('hidden')
@@ -618,23 +635,31 @@ export const AppScanner = {
     document.getElementById('scanner-processing')?.classList.remove('hidden');
     setTimeout(async () => {
       try {
-        await requestToolMovement({
+        const movement = await requestToolMovement({
           action: 'loan',
           toolId: this.currentTool.firebaseId,
-          collaboratorId: u.firebaseId,
+          ...(restricted
+            ? { collaboratorBadge: typedValue }
+            : { collaboratorId: u.firebaseId }),
           device:
             window.App.Session.currentDevice ||
             window.navigator.userAgent ||
             'Navegador'
         });
+        // Restrito: nome e função vêm da resposta da própria movimentação autorizada.
+        const borrower = restricted ? movement.collaborator : u;
         window.AudioSys.playBeep('success');
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate(100);
         }
-        window.App.UI.showToast(`Autorizada para ${u.name}`, 'success');
+        window.App.UI.showToast(`Autorizada para ${borrower.name}`, 'success');
 
         if (window.App.PDF && typeof window.App.PDF.generateReceipt === 'function') {
-          window.App.PDF.generateReceipt(this.currentTool, u.name);
+          window.App.PDF.generateReceipt(
+            this.currentTool,
+            borrower.name,
+            restricted ? { badge: typedValue, role: borrower.role } : undefined
+          );
         } else {
           window.Logger.warn('Módulo PDF ausente. O recibo não foi gerado.');
         }
@@ -649,11 +674,22 @@ export const AppScanner = {
         }
         const ssb = document.getElementById('scanner-status-box');
         if (ssb) {
-          ssb.innerHTML = `<div class="text-amber-900 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 p-6 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-sm text-center"><p class="font-black text-xl tracking-tight">Responsabilidade Transferida</p><p class="text-sm font-bold mt-2 opacity-80">Guarda: ${window.Utils.escapeHTML(u.name)}</p></div>`;
+          ssb.innerHTML = `<div class="text-amber-900 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 p-6 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-sm text-center"><p class="font-black text-xl tracking-tight">Responsabilidade Transferida</p><p class="text-sm font-bold mt-2 opacity-80">Guarda: ${window.Utils.escapeHTML(borrower.name)}</p></div>`;
           ssb.classList.remove('hidden');
         }
         setTimeout(() => this.reset(), 3000);
       } catch (err) {
+        if (err.code === LOAN_NOT_AUTHORIZED) {
+          // Resposta genérica do servidor (crachá desconhecido, inválido ou inativo): sem detalhes.
+          window.AudioSys.playBeep('error');
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate([200, 100, 200]);
+          }
+          window.App.UI.showToast(err.message, 'error');
+          document.getElementById('scanner-processing')?.classList.add('hidden');
+          document.getElementById('scanner-checkout')?.classList.remove('hidden');
+          return;
+        }
         window.Logger.error('Erro no processCheckout:', err);
         window.App.UI.showToast('Falha de comunicação com o banco. Tente novamente.', 'error');
         document.getElementById('scanner-processing')?.classList.add('hidden');

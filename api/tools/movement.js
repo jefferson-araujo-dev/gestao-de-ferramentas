@@ -11,14 +11,34 @@ const COLLABORATORS_COLLECTION_PATH = `${DB_BASE_PATH}/collaborators`;
 const HISTORY_COLLECTION_PATH = `${DB_BASE_PATH}/history`;
 const MAX_DOCUMENT_ID_LENGTH = 128;
 const MAX_DEVICE_LENGTH = 160;
+const MAX_BADGE_LENGTH = 50;
 const MAX_IP_LENGTH = 128;
 const UNKNOWN_IP = 'IP Desconhecido';
 const INVALID_MOVEMENT_MESSAGE = 'Dados da movimentação inválidos.';
+const LOAN_NOT_AUTHORIZED_REASON = 'LOAN_NOT_AUTHORIZED';
+// Única resposta para crachá inexistente, inválido, duplicado ou colaborador inativo (perfil
+// restrito): não permite distinguir esses casos e não devolve nenhum dado do colaborador.
+const LOAN_NOT_AUTHORIZED_MESSAGE =
+  'Não foi possível autorizar a retirada. Confira o crachá informado.';
+const RESTRICTED_BADGE_REQUIRED_MESSAGE =
+  'Perfil restrito deve informar o crachá do colaborador.';
 
 function createHttpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+function createLoanNotAuthorizedError() {
+  const error = createHttpError(422, LOAN_NOT_AUTHORIZED_MESSAGE);
+  error.reason = LOAN_NOT_AUTHORIZED_REASON;
+  return error;
+}
+
+// Perfil restrito = flag gravada no perfil (Firestore, somente via Admin SDK; as regras negam
+// escrita em users). Nunca é derivado do corpo da requisição.
+function isRestrictedOperator(profile) {
+  return profile.isRestricted === true && profile.accessLevel !== 'Administrador';
 }
 
 function parseRequiredString(value, maxLength) {
@@ -66,7 +86,21 @@ function hasExactKeys(keys, expectedKeys) {
   );
 }
 
-function parseMovement(req) {
+function parseBadge(value) {
+  if (typeof value !== 'string') {
+    throw createLoanNotAuthorizedError();
+  }
+
+  const badge = value.trim();
+
+  if (!badge || badge.length > MAX_BADGE_LENGTH) {
+    throw createLoanNotAuthorizedError();
+  }
+
+  return badge;
+}
+
+function parseMovement(req, restricted) {
   const body = req.body;
 
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -77,10 +111,23 @@ function parseMovement(req) {
     throw createHttpError(400, INVALID_MOVEMENT_MESSAGE);
   }
 
-  const expectedKeys =
-    body.action === 'loan'
-      ? ['action', 'toolId', 'collaboratorId', 'device']
-      : ['action', 'toolId', 'device'];
+  const restrictedLoan = restricted && body.action === 'loan';
+
+  // O perfil restrito nunca escolhe o colaborador por ID: recusa antes de qualquer leitura.
+  if (restrictedLoan && Object.hasOwn(body, 'collaboratorId')) {
+    throw createHttpError(403, RESTRICTED_BADGE_REQUIRED_MESSAGE);
+  }
+
+  let expectedKeys = ['action', 'toolId', 'device'];
+
+  if (body.action === 'loan') {
+    expectedKeys = [
+      'action',
+      'toolId',
+      restrictedLoan ? 'collaboratorBadge' : 'collaboratorId',
+      'device'
+    ];
+  }
 
   if (!hasExactKeys(Object.keys(body), expectedKeys)) {
     throw createHttpError(400, INVALID_MOVEMENT_MESSAGE);
@@ -92,7 +139,9 @@ function parseMovement(req) {
     device: parseRequiredString(body.device, MAX_DEVICE_LENGTH)
   };
 
-  if (movement.action === 'loan') {
+  if (restrictedLoan) {
+    movement.collaboratorBadge = parseBadge(body.collaboratorBadge);
+  } else if (movement.action === 'loan') {
     movement.collaboratorId = parseDocumentId(body.collaboratorId);
   }
 
@@ -184,6 +233,66 @@ function isTransactionConflict(error) {
   return code === '10' || code === 'aborted';
 }
 
+function assertToolAvailableForLoan(tool, now) {
+  if (tool.status !== 'available') {
+    throw createHttpError(409, 'Ferramenta indisponível para empréstimo.');
+  }
+
+  const maintenanceDate = getMaintenanceDate(tool.nextMaintenance);
+
+  if (maintenanceDate && maintenanceDate < now) {
+    throw createHttpError(409, 'Ferramenta com manutenção vencida.');
+  }
+}
+
+function recordLoan(transaction, details) {
+  const {
+    toolRef,
+    historyRef,
+    toolSnapshot,
+    toolCode,
+    toolName,
+    collaboratorId,
+    collaboratorName,
+    movement,
+    authorization,
+    ip,
+    now
+  } = details;
+  const lastAction = now.toISOString();
+  const currentUser = collaboratorName;
+  const updatedTool = {
+    id: toolSnapshot.id,
+    status: 'borrowed',
+    currentUser,
+    currentCollaboratorId: collaboratorId,
+    lastAction
+  };
+
+  transaction.update(toolRef, {
+    status: updatedTool.status,
+    currentUser: updatedTool.currentUser,
+    currentCollaboratorId: updatedTool.currentCollaboratorId,
+    lastAction: updatedTool.lastAction
+  });
+
+  transaction.create(historyRef, {
+    date: lastAction,
+    toolCode,
+    toolName,
+    type: 'out',
+    user: currentUser,
+    ip,
+    device: movement.device,
+    toolId: movement.toolId,
+    collaboratorId,
+    operatorUid: authorization.uid,
+    operatorEmail: authorization.email
+  });
+
+  return updatedTool;
+}
+
 async function registerLoan(movement, authorization, ip) {
   const toolRef = adminDb.doc(`${TOOLS_COLLECTION_PATH}/${movement.toolId}`);
   const collaboratorRef = adminDb.doc(
@@ -216,49 +325,85 @@ async function registerLoan(movement, authorization, ip) {
       throw createHttpError(409, 'Colaborador inativo.');
     }
 
-    if (tool.status !== 'available') {
-      throw createHttpError(409, 'Ferramenta indisponível para empréstimo.');
-    }
-
     const now = new Date();
-    const maintenanceDate = getMaintenanceDate(tool.nextMaintenance);
 
-    if (maintenanceDate && maintenanceDate < now) {
-      throw createHttpError(409, 'Ferramenta com manutenção vencida.');
-    }
+    assertToolAvailableForLoan(tool, now);
 
-    const lastAction = now.toISOString();
-    const currentUser = collaboratorName;
-    const updatedTool = {
-      id: toolSnapshot.id,
-      status: 'borrowed',
-      currentUser,
-      currentCollaboratorId: movement.collaboratorId,
-      lastAction
-    };
-
-    transaction.update(toolRef, {
-      status: updatedTool.status,
-      currentUser: updatedTool.currentUser,
-      currentCollaboratorId: updatedTool.currentCollaboratorId,
-      lastAction: updatedTool.lastAction
-    });
-
-    transaction.create(historyRef, {
-      date: lastAction,
+    return recordLoan(transaction, {
+      toolRef,
+      historyRef,
+      toolSnapshot,
       toolCode,
       toolName,
-      type: 'out',
-      user: currentUser,
-      ip,
-      device: movement.device,
-      toolId: movement.toolId,
       collaboratorId: movement.collaboratorId,
-      operatorUid: authorization.uid,
-      operatorEmail: authorization.email
+      collaboratorName,
+      movement,
+      authorization,
+      ip,
+      now
+    });
+  });
+}
+
+// Empréstimo do perfil restrito: o crachá exato é resolvido aqui, dentro da mesma transação
+// da movimentação (Admin SDK), então o cliente nunca lê a coleção de colaboradores. As falhas
+// de ferramenta independem do crachá e vêm primeiro; toda falha do colaborador é genérica.
+async function registerRestrictedLoan(movement, authorization, ip) {
+  const toolRef = adminDb.doc(`${TOOLS_COLLECTION_PATH}/${movement.toolId}`);
+  const badgeQuery = adminDb
+    .collection(COLLABORATORS_COLLECTION_PATH)
+    .where('badge', '==', movement.collaboratorBadge)
+    .limit(2);
+  const historyRef = adminDb.collection(HISTORY_COLLECTION_PATH).doc();
+
+  return adminDb.runTransaction(async (transaction) => {
+    const toolSnapshot = await transaction.get(toolRef);
+    const badgeSnapshot = await transaction.get(badgeQuery);
+
+    if (!toolSnapshot.exists) {
+      throw createHttpError(404, 'Ferramenta não encontrada.');
+    }
+
+    const tool = toolSnapshot.data();
+    const toolCode = parseStoredRequiredString(tool.code, 'tool.code');
+    const toolName = parseStoredRequiredString(tool.name, 'tool.name');
+    const now = new Date();
+
+    assertToolAvailableForLoan(tool, now);
+
+    // Zero resultados = crachá desconhecido; dois = crachá duplicado (ambíguo): ambos falham fechado.
+    const collaboratorSnapshot = badgeSnapshot.size === 1 ? badgeSnapshot.docs[0] : null;
+    const collaborator = collaboratorSnapshot?.data();
+    const collaboratorName =
+      typeof collaborator?.name === 'string' ? collaborator.name.trim() : '';
+
+    if (!collaboratorSnapshot || collaborator.status !== 'active' || !collaboratorName) {
+      throw createLoanNotAuthorizedError();
+    }
+
+    const updatedTool = recordLoan(transaction, {
+      toolRef,
+      historyRef,
+      toolSnapshot,
+      toolCode,
+      toolName,
+      collaboratorId: collaboratorSnapshot.id,
+      collaboratorName,
+      movement,
+      authorization,
+      ip,
+      now
     });
 
-    return updatedTool;
+    // Somente o necessário para confirmação e recibo: o nome (toast, cartão e termo) e a função
+    // (termo). O crachá o cliente já possui (foi ele quem o digitou; a busca é exata).
+    return {
+      tool: updatedTool,
+      collaborator: {
+        name: collaboratorName,
+        role: typeof collaborator.role === 'string' ? collaborator.role.trim() : ''
+      }
+    };
   });
 }
 
@@ -331,8 +476,27 @@ export default async function handler(req, res) {
 
   try {
     const authorization = await requireActiveUser(req);
-    const movement = parseMovement(req);
+    const movement = parseMovement(req, isRestrictedOperator(authorization.profile));
     const ip = getRequestIp(req);
+
+    if (movement.collaboratorBadge !== undefined) {
+      const { tool, collaborator } = await registerRestrictedLoan(
+        movement,
+        authorization,
+        ip
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Empréstimo registrado.',
+        data: {
+          action: movement.action,
+          tool,
+          collaborator
+        }
+      });
+    }
+
     const tool =
       movement.action === 'loan'
         ? await registerLoan(movement, authorization, ip)
@@ -362,7 +526,10 @@ export default async function handler(req, res) {
     if (statusCode < 500) {
       return res.status(statusCode).json({
         success: false,
-        message: error.message
+        message: error.message,
+        ...(error.reason === LOAN_NOT_AUTHORIZED_REASON
+          ? { code: LOAN_NOT_AUTHORIZED_REASON }
+          : {})
       });
     }
 
