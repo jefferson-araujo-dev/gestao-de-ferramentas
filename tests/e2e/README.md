@@ -39,6 +39,7 @@ O script sobe os emuladores (`firebase emulators:exec`), semeia o estado, inicia
 | `navigation-baseline.spec.js` | comportamento ATUAL da navegação (pré-router por hash) |
 | `a11y-baseline.spec.js` | baseline axe (desktop, tema claro) |
 | `visual-baseline.spec.js` | 4 capturas desktop |
+| `foundation.spec.js` | Gate 1-C: tokens LIGHT/DARK no navegador, `:focus-visible`, movimento reduzido e equivalência das regras legadas migradas para tokens (`docs/design/DESIGN_FOUNDATION.md`) |
 | `baseline.mobile.spec.js` | navegação mobile atual, 2 capturas e axe mobile |
 
 `support/fixtures.js` centraliza login, mapa de abas e a definição de "item ativo". Quando a
