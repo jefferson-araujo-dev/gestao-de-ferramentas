@@ -25,10 +25,12 @@ OPERAÇÃO      Retirar/Devolver                      #/scanner
 PESSOAS       Colaboradores   (não restrito)        #/colaboradores
 CONTROLE      Auditoria       (admin)               #/auditoria
 ADMINISTRAÇÃO Usuários e acessos (admin)            #/usuarios
+              Dados e backup (admin)                #/dados   (Gate 1-F1)
 CONTA         Perfil · Senha · Tema · Sair          (menu do avatar; no mobile, também em "Mais")
 ```
 
-- "Dados e backup" **não** foi criado: exige migrar as ações do menu antigo (ver "Dívida transitória").
+- "Dados e backup" foi criado no Gate 1-F1 (`docs/design/DATA_BACKUP_SCREEN.md`): permissão `canBackupData`,
+  as ações do menu antigo foram migradas **juntas** e a dívida transitória abaixo foi quitada.
 - "Inventário" deixou de existir como item separado: admin e demais perfis usam **Ferramentas**
   (mesma tela `#tab-management`; as ações de admin continuam controladas por permissão).
 - A UI **só esconde** itens. A autorização funcional continua nas guardas de `switchTab` (permissões de
@@ -37,14 +39,14 @@ CONTA         Perfil · Senha · Tema · Sair          (menu do avatar; no mobil
 ## Modelo único de navegação
 
 Cada item declara `permission`, o nome de um flag de `App.Auth.permissions` (`canAccessDashboard`,
-`canAccessScanner`, `canReadTools`, `canReadCollaborators`, `canAccessHistory`, `canAccessUsers`).
+`canAccessScanner`, `canReadTools`, `canReadCollaborators`, `canAccessHistory`, `canAccessUsers`, `canBackupData`).
 Não há regra de perfil duplicada: `ui.js` não conhece perfis e `isItemAllowed` é fail-closed (só
 `=== true` autoriza). `tests/unit/navigationModel.test.mjs` cobre consistência, visibilidade por perfil
 (admin / padrão / restrito), o limite de 4 destinos primários e o não-drift com `AppAuth._setPermissions`.
 
 ## Roteamento por hash
 
-- Rotas: `#/painel`, `#/scanner`, `#/ferramentas`, `#/colaboradores`, `#/auditoria`, `#/usuarios`.
+- Rotas: `#/painel`, `#/scanner`, `#/ferramentas`, `#/colaboradores`, `#/auditoria`, `#/usuarios`, `#/dados`.
 - **Ponto único**: `App.UI.switchTab(tab)` (usado também pelos `onclick` inline e pelo Scanner) valida
   a permissão, escreve a rota e executa o lifecycle. Links da navegação são `<a href="#/rota">`; o
   `hashchange` (clique, back/forward, edição manual) chega a `applyRoute` → `switchTab`.
@@ -128,9 +130,9 @@ sem nome) está resolvido; ver `tests/e2e/baseline.mobile.spec.js`.
 | CSS `#main-sidebar.lg:w-20`, `.nav-btn`, overrides `!important` da sidebar, bloco landscape | REMOVE_AFTER_MIGRATION | Removidos de `main.css` (substituídos por `shell.css`) |
 | `#back-to-top`, `#toast-container` | ADAPT | Sobem acima da barra inferior no mobile |
 
-## Dívida transitória (não movida "pela metade")
+## Dívida transitória (QUITADA no Gate 1-F1)
 
-O menu do avatar continua abrigando, sob o título "Dados (transitório)" e só para admin, as ações
-**Importar Excel, Resetar dados operacionais, Backup JSON, Restaurar JSON e Métricas do Sistema**,
-com IDs e handlers exatamente como antes. A futura tela "Dados e backup" deve migrá-las **juntas**
-(ação destrutiva incluída) em um gate próprio. Não há ação nova nem ação movida.
+Até o Gate 1-E o menu do avatar abrigava, sob "Dados (transitório)" e só para admin, as ações
+**Importar Excel, Resetar dados operacionais, Backup JSON, Restaurar JSON e Métricas do Sistema**.
+O Gate 1-F1 as migrou **juntas** para a tela "Dados e backup" (`#/dados`) e só então as removeu do menu,
+que agora tem apenas Meu Perfil, Alterar Senha, Modo Noturno e Sair. Nenhuma ação ficou em dois lugares.

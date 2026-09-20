@@ -60,13 +60,15 @@ sem `onclick` inline.
 `App.UI.confirm(options)` → `Promise<boolean>`; atalhos `confirmDanger(título, descrição)` e
 `confirmAction(título, descrição, rótulo)`. Um único `<dialog>` compartilhado; chamadas simultâneas são
 **enfileiradas**. Variante `danger`: foco inicial em **Cancelar**, botão perigoso e `Alert` "Esta ação não
-pode ser desfeita.". `requireText` = confirmação reforçada (digitar o texto exato). `onConfirm` assíncrono:
+pode ser desfeita.". `requireText` = confirmação reforçada (digitar o texto exato). `details` (Gate 1-F1) = lista de efeitos
+concretos (cada linha escapada). `onConfirm` assíncrono:
 botão em `loading`; se falhar, o diálogo fica aberto com o erro. Esc cancela; o fundo **não** cancela.
 
 Migrados (8 `confirm()` + 1 `alert()`): excluir colaborador (1 e em lote), excluir ferramenta (1 e em lote),
 alterar status e mover categoria em lote, excluir usuário (1 e em lote); e a expiração de sessão, que era um
-`alert()` bloqueante e agora é um Toast persistente. **Não migrados** (6 `confirm()` em `data.js`: limpar
-histórico, reset, restaurar/importar backup): aguardam a tela "Dados e backup".
+`alert()` bloqueante e agora é um Toast persistente. Os 6 `confirm()` restantes de `data.js` (limpar
+histórico, reset, restaurar/importar) foram migrados no Gate 1-F1 para a tela "Dados e backup" (ver
+`DATA_BACKUP_SCREEN.md`): **`confirm()`/`alert()` nativos em `src/`: 0**.
 
 ## Toast (H-07) e Alert
 
@@ -113,7 +115,7 @@ de CDN sob o guard de rede). Adotado no **menu da conta**; itens `<label>` de ar
 | Card | `.panel-card`, `tool-card` | **KEEP** (telas de dados); StatCard novo |
 | `.stat-card` + regras `!important` | 26 regras | **REMOVIDAS** (StatCard) |
 | Dialogs | 12 `<dialog>` | **KEEP** nativo, **REFINE** (`initModals`) |
-| `confirm()`/`alert()` | 15 | 9 **REPLACE**; 6 em `data.js` **pendentes** |
+| `confirm()`/`alert()` | 15 | 9 **REPLACE** (1-E) + 6 em `data.js` **REPLACE** (1-F1) = 0 nativos |
 | Toast / `.toast-item` | cores fixas, sem live region | **REPLACE**; CSS legado removido |
 | Alert | inexistente | novo (usado no ConfirmDialog) |
 | Empty state / skeleton | helpers com cores fixas | **REPLACE** por delegação |
