@@ -8,20 +8,7 @@
     "wcag22aa"
   ],
   "screens": {
-    "mobile-dashboard": {
-      "button-name": {
-        "impact": "critical",
-        "nodes": 2
-      },
-      "color-contrast": {
-        "impact": "serious",
-        "nodes": 1
-      },
-      "select-name": {
-        "impact": "critical",
-        "nodes": 2
-      }
-    },
+    "mobile-dashboard": {},
     "mobile-mais-aberto": {}
   }
 }

@@ -36,7 +36,7 @@ test.describe('MODAIS — perfil ADMIN', () => {
 
   test('perfil: mostra e-mail e função da conta e fecha com Esc', async ({ page }) => {
     await openUserMenu(page);
-    await page.getByRole('button', { name: 'Meu Perfil' }).click();
+    await page.getByRole('menuitem', { name: 'Meu Perfil' }).click();
     await expect(page.locator('#profile-modal-email')).toHaveText(E2E_USERS.admin.email);
     await expect(page.locator('#profile-modal-role')).toContainText('Administrador');
     await expectOpenThenEscape(page, '#profile-modal');
@@ -44,7 +44,7 @@ test.describe('MODAIS — perfil ADMIN', () => {
 
   test('senha: abre o formulário sem enviar e fecha com Esc', async ({ page }) => {
     await openUserMenu(page);
-    await page.getByRole('button', { name: 'Alterar Senha' }).click();
+    await page.getByRole('menuitem', { name: 'Alterar Senha' }).click();
     await expect(page.locator('#password-form')).toBeVisible();
     await expect(page.locator('#new-password')).toBeVisible();
     await expectOpenThenEscape(page, '#password-modal');
@@ -66,7 +66,7 @@ test.describe('MODAIS — perfil ADMIN', () => {
 
   test('métricas do sistema: abre e fecha com Esc', async ({ page }) => {
     await openUserMenu(page);
-    await page.getByRole('button', { name: 'Métricas do Sistema' }).click();
+    await page.getByRole('menuitem', { name: 'Métricas do Sistema' }).click();
     await expect(page.locator('#metrics-modal-content')).toBeVisible();
     await expectOpenThenEscape(page, '#metrics-modal');
   });
@@ -90,12 +90,12 @@ test.describe('MODAIS — perfil PADRÃO', () => {
 
   test('perfil e senha abrem e fecham; sem modais de gestão', async ({ page }) => {
     await openUserMenu(page);
-    await page.getByRole('button', { name: 'Meu Perfil' }).click();
+    await page.getByRole('menuitem', { name: 'Meu Perfil' }).click();
     await expect(page.locator('#profile-modal-email')).toHaveText(E2E_USERS.standard.email);
     await expectOpenThenEscape(page, '#profile-modal');
 
     await openUserMenu(page);
-    await page.getByRole('button', { name: 'Alterar Senha' }).click();
+    await page.getByRole('menuitem', { name: 'Alterar Senha' }).click();
     await expectOpenThenEscape(page, '#password-modal');
   });
 

@@ -81,7 +81,7 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
 
     await openUserMenu(page);
     await check(page, project, 'admin-menu-avatar');
-    await page.getByRole('button', { name: 'Meu Perfil' }).click();
+    await page.getByRole('menuitem', { name: 'Meu Perfil' }).click();
     await expect(page.locator('#profile-modal')).toBeVisible();
     await check(page, project, 'admin-modal-perfil');
     await page.keyboard.press('Escape');

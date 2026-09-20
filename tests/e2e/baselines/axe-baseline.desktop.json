@@ -8,19 +8,10 @@
     "wcag22aa"
   ],
   "screens": {
-    "login": {
-      "button-name": {
-        "impact": "critical",
-        "nodes": 1
-      }
-    },
+    "login": {},
     "admin-dashboard": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 3
-      },
-      "select-name": {
-        "impact": "critical",
         "nodes": 2
       }
     },
@@ -73,24 +64,16 @@
     "admin-menu-avatar": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 5
+        "nodes": 3
       }
     },
     "admin-modal-perfil": {
-      "button-name": {
-        "impact": "critical",
-        "nodes": 1
-      },
       "color-contrast": {
         "impact": "serious",
         "nodes": 6
       }
     },
     "admin-modal-ferramenta": {
-      "button-name": {
-        "impact": "critical",
-        "nodes": 1
-      },
       "label": {
         "impact": "critical",
         "nodes": 2
@@ -103,30 +86,18 @@
     "admin-drawer-tablet": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 2
-      },
-      "select-name": {
-        "impact": "critical",
-        "nodes": 2
+        "nodes": 1
       }
     },
     "admin-rail-expandido-notebook": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 3
-      },
-      "select-name": {
-        "impact": "critical",
         "nodes": 2
       }
     },
     "padrao-dashboard": {
       "color-contrast": {
         "impact": "serious",
-        "nodes": 3
-      },
-      "select-name": {
-        "impact": "critical",
         "nodes": 2
       }
     },

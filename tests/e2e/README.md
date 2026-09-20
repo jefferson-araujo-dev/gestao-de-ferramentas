@@ -37,6 +37,8 @@ O script sobe os emuladores (`firebase emulators:exec`), semeia o estado, inicia
 | `modals.spec.js` | ferramenta, colaborador, perfil, senha, histórico, métricas, logout (sem salvar nada) |
 | `scanner.spec.js` | ciclo de vida do Scanner com câmera falsa |
 | `navigation.spec.js` | rotas por hash (`#/painel`…), back/forward, reload, deep link, rota desconhecida, recusa das rotas não autorizadas (padrão/restrito), `aria-current`, `document.title` |
+| `components.spec.js` | Gate 1-E: componentes fundamentais em isolamento na galeria `/components.html` (só dev): Button/IconButton, Input/Select/Search, Checkbox/Switch, Badge/StatCard/Alert/EmptyState/Skeleton, política de fechamento do Modal, ConfirmDialog, Toast (regiões vivas e tempo), Dropdown (teclado) e axe em light/dark por estado |
+| `components-app.spec.js` | Gate 1-E: componentes ADOTADOS no app real (menu da conta, KPIs, filtros do Painel, modais reais com `dismissible`, ConfirmDialog no lugar de `confirm()`, Toast, Switch) |
 | `shell.spec.js` | app shell por breakpoint: sidebar 256/72px, rail notebook, drawer tablet, barra inferior + "Mais" no mobile, foco/Esc, mudança de breakpoint em tempo real |
 | `a11y-baseline.spec.js` | baseline axe (desktop, tema claro), inclui drawer (tablet) e rail expandido (notebook) |
 | `visual-baseline.spec.js` | 4 capturas desktop |

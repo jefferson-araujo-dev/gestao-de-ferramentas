@@ -179,13 +179,12 @@ test.describe('FUNDAÇÃO 1-C — telas autenticadas (ADMIN)', () => {
   test('regras legadas migradas para tokens mantêm os valores anteriores (LIGHT e DARK)', async ({
     page,
   }) => {
-    const exportButton = page.locator("#btn-export-dashboard.btn[class*='bg-emerald-600']");
     const quickFilter = page.locator('#quick-filters .quick-filter-btn:not(.active)').first();
     const props = ['backgroundColor', 'borderTopColor', 'color'];
 
     await setDark(page, false);
 
-    for (const locator of [exportButton, quickFilter]) {
+    for (const locator of [quickFilter]) {
       expect(await styleOf(locator, props)).toEqual({
         backgroundColor: RGB.white,
         borderTopColor: RGB.slate200,
@@ -195,7 +194,7 @@ test.describe('FUNDAÇÃO 1-C — telas autenticadas (ADMIN)', () => {
 
     await setDark(page, true);
 
-    for (const locator of [exportButton, quickFilter]) {
+    for (const locator of [quickFilter]) {
       expect(await styleOf(locator, props)).toEqual({
         backgroundColor: RGB.slate900,
         borderTopColor: RGB.slate700,

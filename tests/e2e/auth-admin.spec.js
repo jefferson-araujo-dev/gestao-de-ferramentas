@@ -101,8 +101,8 @@ test.describe('ADMIN — login, navegação e contrato visível de autorização
       'Alterar Senha',
       'Sair do Sistema',
     ]) {
-      await expect(menu.getByRole('button', { name })).toBeVisible();
-      await expect(menu.getByRole('button', { name })).toBeEnabled();
+      await expect(menu.getByRole('menuitem', { name })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name })).toBeEnabled();
     }
 
     await expect(menu.getByText('Importar Excel')).toBeVisible();
@@ -139,7 +139,7 @@ test.describe('ADMIN — login, navegação e contrato visível de autorização
 
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Backup JSON' }).click(),
+      page.getByRole('menuitem', { name: 'Backup JSON' }).click(),
     ]);
 
     expect(download.suggestedFilename()).toMatch(

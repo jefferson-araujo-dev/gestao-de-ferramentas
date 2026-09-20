@@ -71,11 +71,11 @@ test.describe('PADRÃO — login, navegação e limites de autorização da UI',
       'Backup JSON',
       'Métricas do Sistema',
     ]) {
-      await expect(menu.getByRole('button', { name })).toBeHidden();
+      await expect(menu.getByRole('menuitem', { name })).toBeHidden();
     }
 
     for (const name of ['Meu Perfil', 'Alterar Senha', 'Sair do Sistema']) {
-      await expect(menu.getByRole('button', { name })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name })).toBeVisible();
     }
 
     await page.keyboard.press('Escape');

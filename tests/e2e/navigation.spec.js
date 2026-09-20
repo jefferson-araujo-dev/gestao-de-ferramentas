@@ -148,12 +148,12 @@ test.describe('ADMIN — rotas, histórico e título', () => {
     const menu = page.locator('#user-dropdown-menu');
 
     for (const name of ['Meu Perfil', 'Alterar Senha', 'Modo Noturno', 'Sair do Sistema']) {
-      await expect(menu.getByRole('button', { name })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name })).toBeVisible();
     }
 
     await expect(menu.getByText('Dados (transitório)')).toBeVisible();
-    await expect(menu.getByRole('button', { name: 'Resetar dados operacionais' })).toBeVisible();
-    await expect(menu.getByRole('button', { name: 'Gerenciar Usuários' })).toHaveCount(0);
+    await expect(menu.getByRole('menuitem', { name: 'Resetar dados operacionais' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Gerenciar Usuários' })).toHaveCount(0);
   });
 
   test('sessão: logout limpa a URL e o próximo login começa no Painel', async ({ page }) => {
