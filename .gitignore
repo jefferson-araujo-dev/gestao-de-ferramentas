@@ -29,3 +29,6 @@ backup_gestao_ferramentas*.json
 pre_restore_*.json
 pre_reset_*.json
 firebase-data-export.json
+
+# Logs de debug do Firebase Emulator (podem conter documentos usados nos testes)
+*-debug.log

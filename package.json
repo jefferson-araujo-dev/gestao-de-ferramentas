@@ -14,6 +14,7 @@
     "emulators": "firebase emulators:start",
     "seed:emulator": "node scripts/seed-emulator.js",
     "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:backup:emulator": "firebase emulators:exec --only firestore,auth --project gestao-de-ferramentas-3f8f1 \"node --test tests/integration/backupEmulator.test.mjs\"",
     "test:responsive": "playwright test --reporter=line",
     "test:responsive:list": "playwright test --list --reporter=line",
     "backup": "node scripts/backup-database.mjs",
