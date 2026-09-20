@@ -32,7 +32,8 @@ O script sobe os emuladores (`firebase emulators:exec`), semeia o estado, inicia
 | --- | --- |
 | `auth-admin.spec.js` | login, 6 telas, dados semeados, menu admin, guard de restore inválido, export v4 (somente leitura), logout |
 | `auth-standard.spec.js` | login, telas permitidas, ausência de itens admin **e** recusa em JS (dados nem chegam ao cliente) |
-| `auth-restricted.spec.js` | idem para o perfil restrito (sem Colaboradores) |
+| `auth-restricted.spec.js` | idem para o perfil restrito: sem Colaboradores no menu, na navegação programática, no listener, na memória e nas regras (leitura direta negada) |
+| `restricted-loan.spec.js` | Scanner do perfil restrito: empréstimo por crachá exato (`collaboratorBadge`), recibo sem a lista, recusa genérica, sem busca por nome e devolução; controle do perfil padrão (`collaboratorId`) |
 | `modals.spec.js` | ferramenta, colaborador, perfil, senha, histórico, métricas, logout (sem salvar nada) |
 | `scanner.spec.js` | ciclo de vida do Scanner com câmera falsa |
 | `navigation-baseline.spec.js` | comportamento ATUAL da navegação (pré-router por hash) |
@@ -46,17 +47,26 @@ espalhar seletores.
 
 ## Achados registrados como `test.fail()`
 
-Descrevem o contrato desejado e passam enquanto o defeito existir. Quando o defeito for corrigido o
-Playwright avisa ("expected to fail but passed"); então remova o `test.fail`.
+Nenhum aberto. Os dois achados do Gate 1-B foram corrigidos no Addendum 1-B1 e viraram testes normais:
 
-1. `auth-restricted`: perfil restrito só tem o item de menu oculto; `switchTab('collaborators')`
-   funciona e os dados de colaboradores são carregados. **Aberto**: a correção exige decidir como o
-   empréstimo no Scanner resolve o colaborador sem ler a coleção (o Scanner busca o colaborador por
-   crachá/nome em `Data.collaborators`).
+- **Scanner**: o modo câmera nunca exibia o container (`hidden-tab` com `!important`). `scanner.spec.js`
+  cobre USB -> câmera -> USB, inicialização única, liberação da câmera ao sair da aba e o atalho
+  "Emprestar" dos cards.
+- **Perfil restrito**: só tinha o item de menu oculto. Agora `switchTab('collaborators')` é recusado, o
+  listener não inicia, `Data.collaborators` fica vazio e as regras do Firestore negam a leitura. O
+  empréstimo continua: o restrito informa o crachá exato e o servidor resolve o colaborador
+  (`/api/tools/movement`, coberto por `tests/integration/movementEmulator.test.mjs`; as regras, por
+  `tests/integration/firestoreRulesEmulator.test.mjs`).
 
-Corrigido (Addendum 1-B1): o modo câmera do Scanner nunca exibia o container (`hidden-tab` com
-`!important`). Agora `scanner.spec.js` cobre USB -> câmera -> USB, inicialização única, liberação da
-câmera ao sair da aba e o atalho "Emprestar" dos cards.
+Quando um novo defeito for registrado, use `test.fail()` com a descrição do contrato desejado e remova-o
+ao corrigir (o Playwright avisa "expected to fail but passed").
+
+## API de movimentação no E2E
+
+`/api/tools/movement` é uma função Vercel e não existe no servidor de desenvolvimento do E2E. Os testes
+de empréstimo/devolução a substituem por um stub **na página** (`page.route`), que registra o payload
+exato enviado pelo app. O servidor real é validado nos testes de integração (Auth + Firestore
+Emulator). Qualquer outra chamada `/api/*` continua bloqueada pelo guard.
 
 ## Baselines
 
