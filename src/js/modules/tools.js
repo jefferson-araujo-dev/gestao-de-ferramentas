@@ -49,6 +49,8 @@ const SORT_OPTIONS = Object.freeze([
 const MANUAL_STATUSES = Object.freeze(['available', 'maintenance']);
 const LOAN_ONLY_BY_SCANNER_MESSAGE =
   'Empréstimo só pelo Scanner, com patrimônio e crachá do colaborador.';
+const BORROWED_DELETE_MESSAGE =
+  'Ferramenta emprestada não pode ser excluída: registre a devolução no Scanner antes.';
 
 // A lista vira tabela a partir do notebook (rail + conteúdo largo); abaixo disso são cartões.
 const TABLE_QUERY = `(min-width: ${BREAKPOINTS.notebook}px)`;
@@ -464,7 +466,17 @@ export const AppCRUDTools = {
         break;
       }
 
-      case 'delete':
+      case 'delete': {
+        // Com alguma emprestada na seleção, nada é excluído (sem exclusão parcial): o empréstimo
+        // termina só pela devolução no Scanner; as regras do Firestore também recusam.
+        const borrowedCount = tools.filter((t) => t.status === 'borrowed').length;
+        if (borrowedCount > 0) {
+          window.App.UI.showToast(
+            `${borrowedCount} ferramenta(s) emprestada(s) na seleção: ${BORROWED_DELETE_MESSAGE} Nada foi excluído.`,
+            'error'
+          );
+          return;
+        }
         if (
           await window.App.UI.confirmDanger('Excluir ferramentas?', `Tem certeza que deseja excluir ${tools.length} ferramenta(s)?`)
         ) {
@@ -483,6 +495,7 @@ export const AppCRUDTools = {
             });
         }
         break;
+      }
     }
   },
 
@@ -1716,6 +1729,10 @@ export const AppCRUDTools = {
   deleteTool: async function (id) {
     if (!this.canManageTools()) {
       window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
+    if (window.App.Data.tools.find((t) => t.firebaseId === id)?.status === 'borrowed') {
+      window.App.UI.showToast(BORROWED_DELETE_MESSAGE, 'error');
       return;
     }
     if (

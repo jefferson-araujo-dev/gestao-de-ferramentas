@@ -69,3 +69,29 @@ test('ferramenta emprestada não tem troca de status e a função recusa a alter
   ).toBeVisible();
   await expect(row(page, 'Parafusadeira')).toContainText('Emprestada');
 });
+
+// Por último (modo serial): exclui um documento semeado; o afterAll re-semeia o emulator.
+test('ferramenta disponível continua podendo ser excluída pelo admin (exclusão real no emulator)', async ({
+  page,
+}) => {
+  await loginAs(page, E2E_USERS.admin);
+  await openTab(page, 'management');
+  await expect(page.locator('#inventory-result-count')).toHaveText('Mostrando 8 de 8 ferramentas');
+  await expect(row(page, 'Nível a Laser')).toContainText('Disponível');
+
+  await page.evaluate(() => {
+    window.App.CRUDTools.deleteTool('T-E2E-007');
+  });
+
+  const dialog = page.getByRole('dialog', { name: 'Excluir ferramenta?' });
+
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Excluir' }).click();
+  await expect(
+    page.locator('.toast-item').filter({ hasText: 'Excluída com sucesso.' }).first()
+  ).toBeVisible();
+  await expect(row(page, 'Nível a Laser')).toHaveCount(0);
+  await expect(page.locator('#inventory-result-count')).toHaveText('Mostrando 7 de 7 ferramentas');
+  // A emprestada continua lá.
+  await expect(row(page, 'Parafusadeira')).toContainText('Emprestada');
+});

@@ -7,6 +7,8 @@ import { E2E_USERS } from './support/seed-data.mjs';
 // recusam 'borrowed' vindo de qualquer cliente (tests/integration/firestoreRulesEmulator.test.mjs);
 // aqui se prova que o próprio app recusa antes, sem escrever nada no emulator.
 const LOAN_ONLY = 'Empréstimo só pelo Scanner, com patrimônio e crachá do colaborador.';
+const BORROWED_DELETE =
+  'Ferramenta emprestada não pode ser excluída: registre a devolução no Scanner antes.';
 
 const toast = (page, text) => page.locator('.toast-item').filter({ hasText: text }).first();
 const row = (page, name) => page.locator('#crud-list tr.tools-row', { hasText: name });
@@ -121,6 +123,54 @@ test.describe('ADMIN — nenhum write do cliente entra em borrowed', () => {
     expect(
       await page.evaluate(() => window.App.Data.tools.filter((t) => /^T-IMP-/.test(t.code)).length)
     ).toBe(0);
+  });
+
+  test('ferramenta emprestada: sem ação de exclusão no menu e deleteTool recusa antes da confirmação', async ({
+    page,
+  }) => {
+    const trigger = row(page, 'Parafusadeira').getByRole('button', { name: 'Mais ações de Parafusadeira' });
+
+    await trigger.click();
+    await expect(row(page, 'Parafusadeira').getByRole('menuitem', { name: /Excluir/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    await page.evaluate(() => {
+      window.__dangerCalls = 0;
+      const original = window.App.UI.confirmDanger;
+      window.App.UI.confirmDanger = (...args) => {
+        window.__dangerCalls += 1;
+        return original.apply(window.App.UI, args);
+      };
+      window.App.CRUDTools.deleteTool('T-E2E-002');
+    });
+
+    await expect(toast(page, BORROWED_DELETE)).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Excluir ferramenta?' })).toHaveCount(0);
+    expect(await page.evaluate(() => window.__dangerCalls)).toBe(0);
+    await expect(row(page, 'Parafusadeira')).toContainText('Emprestada');
+    expect(await cachedStatus(page, 'T-E2E-002')).toBe('borrowed');
+  });
+
+  test('bulkAction("delete") com emprestada na seleção não exclui nada (sem exclusão parcial)', async ({
+    page,
+  }) => {
+    await page.evaluate(async () => {
+      window.__dangerCalls = 0;
+      window.App.UI.confirmDanger = async () => {
+        window.__dangerCalls += 1;
+        return true;
+      };
+      window.App.CRUDTools.selectedTools.add('T-E2E-002');
+      window.App.CRUDTools.selectedTools.add('T-E2E-005');
+      await window.App.CRUDTools.bulkAction('delete');
+    });
+
+    await expect(toast(page, '1 ferramenta(s) emprestada(s) na seleção')).toBeVisible();
+    await expect(toast(page, 'Nada foi excluído.')).toBeVisible();
+    expect(await page.evaluate(() => window.__dangerCalls)).toBe(0);
+    await expect(page.locator('#inventory-result-count')).toHaveText('Mostrando 8 de 8 ferramentas');
+    expect(await cachedStatus(page, 'T-E2E-002')).toBe('borrowed');
+    expect(await cachedStatus(page, 'T-E2E-005')).toBe('available');
   });
 
   test('"Emprestar" continua levando ao Scanner (fluxo oficial)', async ({ page }) => {
