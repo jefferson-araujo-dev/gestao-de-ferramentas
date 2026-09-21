@@ -32,6 +32,7 @@ import { AppCRUDTools } from './modules/tools.js';
 import { AppCRUDCollaborators } from './modules/collaborators.js';
 import { AppPDF } from './modules/pdf.js';
 import { CONFIG, DB_BASE_PATH, COLLECTIONS, FIREBASE_CONFIG } from './config/constants.js';
+import { injectSpeedInsights } from '@vercel/speed-insights';
 
 export { CONFIG, DB_BASE_PATH, COLLECTIONS };
 
@@ -156,6 +157,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Inicializar App
   App.init();
+
+  // Inicializar Vercel Speed Insights
+  injectSpeedInsights();
 
   // Event listener para mudanças de breakpoint
   window.addEventListener('breakpointChange', () => {
