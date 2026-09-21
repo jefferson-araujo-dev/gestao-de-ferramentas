@@ -10,7 +10,7 @@ async function requestToolMovement(body) {
 
   if (
     !body?.toolId ||
-    (body.action === 'loan' && !body.collaboratorId && !body.collaboratorBadge)
+    (body.action === 'loan' && (!body.toolCode || !body.collaboratorBadge))
   ) {
     throw new Error('Dados da movimentação incompletos.');
   }
@@ -40,16 +40,24 @@ async function requestToolMovement(body) {
       payload?.message || 'Não foi possível registrar a movimentação.'
     );
     error.code = payload?.code;
+    error.status = response.status;
     throw error;
   }
 
   return payload.data || null;
 }
 
-// Código devolvido pela API quando o perfil restrito informa um crachá que não pode ser usado.
+// Código devolvido pela API quando o crachá informado não pode ser usado (qualquer perfil).
 const LOAN_NOT_AUTHORIZED = 'LOAN_NOT_AUTHORIZED';
+
+const isMaintenanceOverdue = (tool) =>
+  Boolean(tool?.nextMaintenance) && new Date(tool.nextMaintenance).getTime() < Date.now();
+
 export const AppScanner = {
   currentTool: null,
+  // Patrimônio exatamente como lido nesta operação (a API confere com o da ferramenta).
+  currentToolCode: null,
+  checkoutInFlight: false,
   buffer: '',
   timeout: null,
   html5QrCode: null,
@@ -125,6 +133,12 @@ export const AppScanner = {
     };
     document.getElementById('manual-scan-input')?.addEventListener('keydown', mFn);
     document.getElementById('hidden-scanner')?.addEventListener('keydown', mFn);
+
+    // "Confirmar Empréstimo" só habilita com ferramenta lida + crachá preenchido.
+    document
+      .getElementById('checkout-user-badge')
+      ?.addEventListener('input', () => this.syncCheckoutButton());
+    this.syncCheckoutButton();
 
     this.loadStats();
   },
@@ -465,7 +479,10 @@ export const AppScanner = {
 
     this.addRecentScan(t, true);
 
+    // Nova leitura = nova operação: nada da anterior (ferramenta, patrimônio, crachá) é reaproveitado.
+    this.clearCheckoutBadge();
     this.currentTool = t;
+    this.currentToolCode = String(c).trim();
     document.getElementById('scanner-waiting')?.classList.add('hidden');
     document.getElementById('scanner-result')?.classList.remove('hidden');
 
@@ -520,15 +537,8 @@ export const AppScanner = {
       document.getElementById('scanner-return')?.classList.remove('hidden');
       setTimeout(() => document.getElementById('btn-return')?.focus(), 100);
     } else if (t.status === 'available') {
-      const bStat = document.getElementById('scanner-status-box');
-      if (bStat) {
-        bStat.innerHTML = '<div class="flex items-start text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 p-5 rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 mr-4 mt-0.5 text-emerald-500"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div><p class="font-extrabold text-lg tracking-tight">Pronta para Uso</p><p class="text-sm font-medium mt-1">Autorize a retirada abaixo.</p></div></div>';
-        bStat.classList.remove('hidden');
-      }
-      document.getElementById('scanner-checkout')?.classList.remove('hidden');
-      const bi = document.getElementById('checkout-user-badge');
-
-      if (t.nextMaintenance && new Date(t.nextMaintenance).getTime() < Date.now()) {
+      // Revisão/calibração vencida: o formulário de retirada nem aparece (a API também recusa).
+      if (isMaintenanceOverdue(t)) {
         window.AudioSys.playBeep('error');
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate([200, 100, 200]);
@@ -539,14 +549,12 @@ export const AppScanner = {
         );
       }
 
-      if (bi) {
-        bi.value = '';
-        bi.placeholder =
-          window.App.Auth.isRestricted === true
-            ? 'Crachá do colaborador'
-            : 'Crachá ou Nome do Colaborador';
-        setTimeout(() => bi.focus(), 100);
+      const bStat = document.getElementById('scanner-status-box');
+      if (bStat) {
+        bStat.innerHTML = '<div class="flex items-start text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 p-5 rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 mr-4 mt-0.5 text-emerald-500"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div><p class="font-extrabold text-lg tracking-tight">Pronta para Uso</p><p class="text-sm font-medium mt-1">Autorize a retirada abaixo.</p></div></div>';
+        bStat.classList.remove('hidden');
       }
+      this.openCheckout();
     } else {
       window.AudioSys.playBeep('error');
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -596,39 +604,21 @@ export const AppScanner = {
       }
     }, 500);
   },
+  // Empréstimo (todos os perfis): ferramenta lida nesta operação + crachá do colaborador. O cliente
+  // não resolve o colaborador (nem por nome, nem pela lista): envia o crachá exato e o patrimônio
+  // lido; a API confere o patrimônio, resolve o crachá e grava movimento + status juntos.
   processCheckout: function () {
-    const typedValue = document.getElementById('checkout-user-badge')?.value.trim() || '';
-    const bV = window.Utils.removeAccents(typedValue).toLowerCase();
-    if (!bV || !this.currentTool) {
+    const badge = document.getElementById('checkout-user-badge')?.value.trim() || '';
+    // Identidades capturadas agora: um reset durante o envio não troca a operação em andamento.
+    const tool = this.currentTool;
+    const toolCode = this.currentToolCode;
+
+    if (!badge || !tool || !toolCode || this.checkoutInFlight) {
       return;
     }
-    // Perfil restrito: não tem a lista de colaboradores. Envia só o crachá exato digitado e o
-    // servidor resolve o colaborador; não há busca por nome nem por aproximação.
-    const restricted = window.App.Auth.isRestricted === true;
-    let u = null;
-    if (!restricted) {
-      u = window.App.Data.collaborators.find(
-        (x) =>
-          ((x.badge !== null &&
-            x.badge !== undefined &&
-            window.Utils.removeAccents(x.badge).toLowerCase() === bV) ||
-            window.Utils.removeAccents(x.name).toLowerCase() === bV)
-      );
-      if (!u) {
-        window.AudioSys.playBeep('error');
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate([200, 100, 200]);
-        }
-        return window.App.UI.showToast('Colaborador não localizado.', 'error');
-      }
-      if (u.status === 'inactive') {
-        window.AudioSys.playBeep('error');
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate([200, 100, 200]);
-        }
-        return window.App.UI.showToast('Colaborador bloqueado/inativo.', 'error');
-      }
-    }
+    this.checkoutInFlight = true;
+    this.syncCheckoutButton();
+
     ['scanner-checkout', 'scanner-status-box'].forEach((id) =>
       document.getElementById(id)?.classList.add('hidden')
     );
@@ -637,17 +627,16 @@ export const AppScanner = {
       try {
         const movement = await requestToolMovement({
           action: 'loan',
-          toolId: this.currentTool.firebaseId,
-          ...(restricted
-            ? { collaboratorBadge: typedValue }
-            : { collaboratorId: u.firebaseId }),
+          toolId: tool.firebaseId,
+          toolCode,
+          collaboratorBadge: badge,
           device:
             window.App.Session.currentDevice ||
             window.navigator.userAgent ||
             'Navegador'
         });
-        // Restrito: nome e função vêm da resposta da própria movimentação autorizada.
-        const borrower = restricted ? movement.collaborator : u;
+        // Nome e função vêm da resposta da própria movimentação autorizada.
+        const borrower = movement.collaborator;
         window.AudioSys.playBeep('success');
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate(100);
@@ -655,18 +644,15 @@ export const AppScanner = {
         window.App.UI.showToast(`Autorizada para ${borrower.name}`, 'success');
 
         if (window.App.PDF && typeof window.App.PDF.generateReceipt === 'function') {
-          window.App.PDF.generateReceipt(
-            this.currentTool,
-            borrower.name,
-            restricted ? { badge: typedValue, role: borrower.role } : undefined
-          );
+          window.App.PDF.generateReceipt(tool, borrower.name, { badge, role: borrower.role });
         } else {
           window.Logger.warn('Módulo PDF ausente. O recibo não foi gerado.');
         }
 
-        metrics.trackAction('tools', 'checkout', this.currentTool.code);
+        metrics.trackAction('tools', 'checkout', tool.code);
         metrics.increment('tools.borrowed_total');
 
+        this.clearCheckoutBadge();
         document.getElementById('scanner-processing')?.classList.add('hidden');
         const rbc = document.getElementById('res-badge-container');
         if (rbc) {
@@ -679,33 +665,72 @@ export const AppScanner = {
         }
         setTimeout(() => this.reset(), 3000);
       } catch (err) {
+        document.getElementById('scanner-processing')?.classList.add('hidden');
         if (err.code === LOAN_NOT_AUTHORIZED) {
-          // Resposta genérica do servidor (crachá desconhecido, inválido ou inativo): sem detalhes.
+          // Resposta genérica do servidor (crachá desconhecido, duplicado ou inativo): sem detalhes.
           window.AudioSys.playBeep('error');
           if (typeof navigator !== 'undefined' && navigator.vibrate) {
             navigator.vibrate([200, 100, 200]);
           }
           window.App.UI.showToast(err.message, 'error');
-          document.getElementById('scanner-processing')?.classList.add('hidden');
-          document.getElementById('scanner-checkout')?.classList.remove('hidden');
+          this.openCheckout({ keepBadge: true });
+          return;
+        }
+        if (err.status >= 400 && err.status < 500) {
+          // Recusa de negócio (ferramenta indisponível, patrimônio divergente, revisão vencida):
+          // a operação termina; uma nova leitura começa do zero.
+          window.AudioSys.playBeep('error');
+          window.App.UI.showToast(err.message, 'error');
+          setTimeout(() => this.reset(), 3000);
           return;
         }
         window.Logger.error('Erro no processCheckout:', err);
         window.App.UI.showToast('Falha de comunicação com o banco. Tente novamente.', 'error');
-        document.getElementById('scanner-processing')?.classList.add('hidden');
-        document.getElementById('scanner-checkout')?.classList.remove('hidden');
+        this.openCheckout({ keepBadge: true });
+      } finally {
+        this.checkoutInFlight = false;
+        this.syncCheckoutButton();
       }
     }, 500);
   },
-  reset: function () {
-    this.currentTool = null;
-    document.getElementById('scanner-result')?.classList.add('hidden');
-    document.getElementById('scanner-waiting')?.classList.remove('hidden');
-
-    const quickActions = document.getElementById('scanner-quick-actions');
-    if (quickActions) {
-      quickActions.classList.add('hidden');
+  // Mostra o formulário de retirada da ferramenta lida. Todos os perfis informam o crachá.
+  openCheckout: function ({ keepBadge = false } = {}) {
+    if (!keepBadge) {
+      this.clearCheckoutBadge();
     }
+    document.getElementById('scanner-checkout')?.classList.remove('hidden');
+    const bi = document.getElementById('checkout-user-badge');
+    if (bi) {
+      bi.placeholder = 'Crachá do colaborador';
+      setTimeout(() => bi.focus(), 100);
+    }
+    this.syncCheckoutButton();
+  },
+  clearCheckoutBadge: function () {
+    const bi = document.getElementById('checkout-user-badge');
+    if (bi) {
+      bi.value = '';
+    }
+    this.syncCheckoutButton();
+  },
+  syncCheckoutButton: function () {
+    const button = document.getElementById('btn-checkout-confirm');
+    if (!button) {
+      return;
+    }
+    const badge = document.getElementById('checkout-user-badge')?.value.trim() || '';
+    button.disabled = !(this.currentTool && this.currentToolCode && badge) || this.checkoutInFlight;
+  },
+  // Encerra a operação atual sem mexer em câmera nem foco (usado ao sair da aba do Scanner).
+  clearOperation: function () {
+    this.currentTool = null;
+    this.currentToolCode = null;
+    this.clearCheckoutBadge();
+    ['scanner-result', 'scanner-checkout', 'scanner-return', 'scanner-processing'].forEach((id) =>
+      document.getElementById(id)?.classList.add('hidden')
+    );
+    document.getElementById('scanner-waiting')?.classList.remove('hidden');
+    document.getElementById('scanner-quick-actions')?.classList.add('hidden');
 
     const msi = document.getElementById('manual-scan-input');
     if (msi) {
@@ -716,6 +741,9 @@ export const AppScanner = {
       sli.className =
         'absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-brand-500 via-indigo-500 to-brand-500';
     }
+  },
+  reset: function () {
+    this.clearOperation();
     if (this.currentMode === 'cam') {
       this.startCamera();
     }
@@ -727,18 +755,28 @@ export const AppScanner = {
     }
 
     switch (action) {
-      case 'loan':
-        document.getElementById('scanner-checkout')?.classList.remove('hidden');
-        document.getElementById('checkout-user-badge')?.focus();
+      case 'loan': {
+        // Confere o estado atual (não o da leitura): só abre a retirada para ferramenta disponível.
+        const live =
+          window.App.Data.tools.find((t) => t.firebaseId === this.currentTool.firebaseId) ||
+          this.currentTool;
+        if (live.status !== 'available' || isMaintenanceOverdue(live)) {
+          window.App.UI.showToast('Ferramenta indisponível para empréstimo.', 'warning');
+          return;
+        }
+        this.openCheckout({ keepBadge: true });
         break;
+      }
       case 'return':
         this.processReturn();
         break;
       case 'details': {
+        // Sair da aba encerra a operação (clearOperation): guarda o código antes.
+        const code = this.currentTool.code;
         window.App.UI.switchTab('management');
         const searchInput = document.getElementById('tools-search');
         if (searchInput) {
-          searchInput.value = this.currentTool.code;
+          searchInput.value = code;
           searchInput.dispatchEvent(new Event('input'));
         }
         break;

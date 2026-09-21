@@ -6,9 +6,9 @@ import { E2E_USERS } from './support/seed-data.mjs';
 // payload EXATO enviado pelo app e responde como o servidor real (o servidor de verdade é
 // coberto por tests/integration/movementEmulator.test.mjs). Nenhum dado do emulator muda.
 //
-// Contrato validado no cliente:
-//   RESTRITO -> { action, toolId, collaboratorBadge, device }  (crachá exato; sem lista, sem nome)
-//   PADRÃO   -> { action, toolId, collaboratorId, device }     (resolvido na lista, como antes)
+// Contrato validado no cliente (igual em todos os perfis):
+//   { action, toolId, toolCode, collaboratorBadge, device }
+//   patrimônio lido + crachá exato; sem collaboratorId, sem nome, sem consultar a lista.
 const JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const GENERIC_DENIAL = 'Não foi possível autorizar a retirada. Confira o crachá informado.';
 
@@ -123,6 +123,7 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     expect(requests[0].body).toEqual({
       action: 'loan',
       toolId: 'T-E2E-001',
+      toolCode: 'T-E2E-001',
       collaboratorBadge: 'E2E-001',
       device: expect.any(String),
     });
@@ -226,53 +227,72 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
   });
 });
 
-test.describe('PADRÃO — controle: empréstimo por collaboratorId resolvido no cliente (inalterado)', () => {
-  test('resolve o crachá na lista, envia collaboratorId e o recibo usa a lista', async ({
-    page,
-  }) => {
-    await loginAs(page, E2E_USERS.standard);
-    await openTab(page, 'scanner');
-
-    const requests = await stubMovement(page, () => okLoan('T-E2E-001'));
-
-    await captureReceiptTexts(page);
-    await scanTool(page, 'T-E2E-001');
-    await expect(page.locator('#checkout-user-badge')).toHaveAttribute(
-      'placeholder',
-      'Crachá ou Nome do Colaborador'
-    );
-
-    const download = page.waitForEvent('download');
-
-    await page.locator('#checkout-user-badge').fill('e2e-002');
-    await page.getByRole('button', { name: 'Confirmar Empréstimo' }).click();
-
-    await expect(page.locator('#toast-container')).toContainText('Autorizada para Colaborador Beta');
-    expect(requests).toHaveLength(1);
-    expect(requests[0].body).toEqual({
-      action: 'loan',
-      toolId: 'T-E2E-001',
-      collaboratorId: 'c-e2e-2',
-      device: expect.any(String),
+// Admin e Padrão seguem o MESMO contrato do Restrito: o crachá vai ao servidor, que resolve o
+// colaborador. A lista local (que esses perfis ainda carregam) não é usada para escolher ninguém.
+for (const [label, user, toolCode] of [
+  ['PADRÃO', E2E_USERS.standard, 'T-E2E-001'],
+  ['ADMIN', E2E_USERS.admin, 'T-E2E-003'],
+]) {
+  test.describe(`${label} — empréstimo por crachá resolvido no servidor`, () => {
+    test.beforeEach(async ({ page }) => {
+      await loginAs(page, user);
+      await openTab(page, 'scanner');
     });
-    expect(requests[0].body).not.toHaveProperty('collaboratorBadge');
-    expect((await download).suggestedFilename()).toBe('Termo_T-E2E-001_Colaborador_Beta.pdf');
-    expect(await readReceiptTexts(page)).toEqual(
-      expect.arrayContaining(['Colaborador Beta', 'E2E-002', 'Operador'])
-    );
+
+    test('envia patrimônio lido + crachá (sem collaboratorId) e o recibo usa a resposta da API', async ({
+      page,
+    }) => {
+      const requests = await stubMovement(page, () =>
+        okLoan(toolCode, { collaborator: { name: 'Colaborador Beta', role: 'Operador' } })
+      );
+
+      await captureReceiptTexts(page);
+      await scanTool(page, toolCode);
+      await expect(page.locator('#checkout-user-badge')).toHaveAttribute(
+        'placeholder',
+        'Crachá do colaborador'
+      );
+
+      const download = page.waitForEvent('download');
+
+      await page.locator('#checkout-user-badge').fill('E2E-002');
+      await page.getByRole('button', { name: 'Confirmar Empréstimo' }).click();
+
+      await expect(page.locator('#toast-container')).toContainText('Autorizada para Colaborador Beta');
+      expect(requests).toHaveLength(1);
+      expect(requests[0].body).toEqual({
+        action: 'loan',
+        toolId: toolCode,
+        toolCode,
+        collaboratorBadge: 'E2E-002',
+        device: expect.any(String),
+      });
+      expect(requests[0].body).not.toHaveProperty('collaboratorId');
+      expect((await download).suggestedFilename()).toBe(`Termo_${toolCode}_Colaborador_Beta.pdf`);
+      expect(await readReceiptTexts(page)).toEqual(
+        expect.arrayContaining(['Colaborador Beta', 'E2E-002', 'Operador'])
+      );
+    });
+
+    test('nome do colaborador não substitui o crachá: vai ao servidor como crachá e é recusado', async ({
+      page,
+      guard,
+    }) => {
+      const requests = await stubMovement(page, () =>
+        json(422, { success: false, message: GENERIC_DENIAL, code: 'LOAN_NOT_AUTHORIZED' })
+      );
+
+      await scanTool(page, toolCode);
+      await page.locator('#checkout-user-badge').fill('Colaborador Gama');
+      await page.getByRole('button', { name: 'Confirmar Empréstimo' }).click();
+
+      await expect(page.locator('#toast-container')).toContainText(GENERIC_DENIAL);
+      expect(requests).toHaveLength(1);
+      expect(requests[0].body.collaboratorBadge).toBe('Colaborador Gama');
+      expect(requests[0].body).not.toHaveProperty('collaboratorId');
+      await expect(page.locator('#scanner-checkout')).toBeVisible();
+      await expect(page.locator('#scanner-status-box')).toBeHidden();
+      allowGenericDenial(guard);
+    });
   });
-
-  test('nome do colaborador continua funcionando para o perfil padrão', async ({ page }) => {
-    await loginAs(page, E2E_USERS.standard);
-    await openTab(page, 'scanner');
-
-    const requests = await stubMovement(page, () => okLoan('T-E2E-005'));
-
-    await scanTool(page, 'T-E2E-005');
-    await page.locator('#checkout-user-badge').fill('Colaborador Gama');
-    await page.getByRole('button', { name: 'Confirmar Empréstimo' }).click();
-
-    await expect(page.locator('#toast-container')).toContainText('Autorizada para Colaborador Gama');
-    expect(requests[0].body.collaboratorId).toBe('c-e2e-3');
-  });
-});
+}

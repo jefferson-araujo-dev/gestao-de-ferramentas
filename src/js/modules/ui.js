@@ -509,6 +509,8 @@ export const AppUI = {
       } else {
         window.App.Scanner.stopCamera();
       }
+      // Sair da aba encerra a operação: voltar ao Scanner nunca reaproveita ferramenta ou crachá.
+      window.App.Scanner.clearOperation?.();
     } else {
       window.App.Scanner.focus();
     }
