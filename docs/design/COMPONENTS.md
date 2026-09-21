@@ -33,6 +33,9 @@ passa por `esc`. O comportamento (foco, teclado, política de fechamento) fica e
   `input[type=checkbox][role=switch]`; o estado não depende só de cor (a posição do botão muda).
 - **Badge / StatusBadge** — tons `neutral | info | success | warning | danger`; o **texto** do status vem
   sempre (o tom é reforço). `getBadgeHTML` continua existindo e agora delega ao `StatusBadge`.
+  `STATUS_MAP` é o vocabulário **único** de status: ferramenta (`available`/`borrowed`/`maintenance`),
+  movimentação (`in`/`out`) e, desde o 1-F3, colaborador (`active`/`inactive`). São sempre valores já
+  persistidos: uma tela nova **mapeia** o seu status aqui em vez de inventar rótulo e cor próprios.
 - **Card / StatCard** — `surface`, `border`, `radius-ui`, `shadow-ui`, espaçamento; StatCard: valor
   (`tabular-nums`), rótulo e meta opcional; interativo = `<button>` (antes era um `<div>` só com clique).
 - **Alert** — persistente; `warning`/`danger` = `role="alert"`, `info`/`success` = `role="status"`; ícone + texto.
@@ -97,7 +100,9 @@ Ciclo de vida (Gate 1-F2): o único listener que o Dropdown registra fora do pr�
 `onOpen` (sem argumento) avisa a abertura, simétrico ao `onClose`. Um menu **flutuante** cobre parte de outros
 alvos da página e um clique fora dele, sobre a faixa ainda visível de um botão coberto, fecha o menu e também
 aciona esse botão (o axe `target-size` acusa a faixa). Quando o menu está sobre uma lista de ações, quem o
-usa deve tornar o restante da tela `inert` entre `onOpen` e `onClose` (como a tela Ferramentas faz).
+usa deve tornar o restante da tela `inert` entre `onOpen` e `onClose` (como fazem as telas Ferramentas e
+Colaboradores). Esse isolamento é parte do contrato de adoção do Dropdown em lista, não um detalhe de uma
+tela: toda lista nova com menu por linha deve repeti-lo e cobri-lo com teste.
 
 ## Adoção controlada nas telas
 
@@ -107,7 +112,8 @@ usa deve tornar o restante da tela `inert` entre `onOpen` e `onClose` (como a te
 | Painel: busca, filtro, ordenação, Limpar | Search, Select ×2, Button |
 | 4 botões Exportar/Importar verdes (`.btn` + override) | Button `secondary` |
 | Menu do avatar | Dropdown (ações por `data-menu-action`, sem `onclick`) |
-| "Agrupar por cargo" | Switch |
+| Menu de ações por linha (Ferramentas 1-F2, Colaboradores 1-F3) | Dropdown + `inert` no restante da tela |
+| "Agrupar por cargo" | Switch (clicar no **trilho** não alterna: dívida do componente, ver 1-F3) |
 | Toasts | Toast novo |
 | Listas (badges, skeleton, vazio) | StatusBadge / SkeletonCard / EmptyState via helpers compatíveis |
 | Botões só-ícone sem nome (8 fechar de modal, mostrar senha) | `aria-label` |
