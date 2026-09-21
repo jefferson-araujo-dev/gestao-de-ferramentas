@@ -5,6 +5,8 @@
 //
 // Contrato de leitura de colaboradores: ADMIN e PADRÃO (ativos) leem; RESTRITO não lê nem lista
 // nem busca por crachá (a resolução do crachá é feita pelo servidor, com o Admin SDK).
+// Ferramentas: nenhum cliente (nem o admin) cria ou leva uma ferramenta para 'borrowed'; o
+// empréstimo é exclusivo da API de movimentação.
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
@@ -254,6 +256,148 @@ describe('firestore.rules: colaboradores por perfil (Auth + Firestore Emulator)'
       await assertDenied(() => getDocs(collection(db, `${BASE}/tools`)), `${label}: tools`);
       await assertDenied(() => getDocs(collection(db, `${BASE}/history`)), `${label}: history`);
     }
+  });
+
+  // Empréstimo é exclusivo da API de movimentação (Admin SDK): nenhum cliente entra em 'borrowed'.
+  describe('ferramentas: nenhum cliente leva uma ferramenta para borrowed', () => {
+    const toolsPath = `${BASE}/tools`;
+    const scratchIds = ['rb-available', 'rb-maintenance', 'rb-borrowed', 'rb-nova', 'rb-nova-admin'];
+
+    before(async () => {
+      const batch = adminDb.batch();
+      const base = { category: 'Elétrica', currentUser: null, currentCollaboratorId: null };
+
+      batch.set(adminDb.doc(`${toolsPath}/rb-available`), {
+        ...base,
+        code: 'rb-available',
+        name: 'Disponível',
+        status: 'available',
+      });
+      batch.set(adminDb.doc(`${toolsPath}/rb-maintenance`), {
+        ...base,
+        code: 'rb-maintenance',
+        name: 'Manutenção',
+        status: 'maintenance',
+      });
+      batch.set(adminDb.doc(`${toolsPath}/rb-borrowed`), {
+        ...base,
+        code: 'rb-borrowed',
+        name: 'Emprestada',
+        status: 'borrowed',
+        currentUser: 'Colaborador Alfa',
+        currentCollaboratorId: 'c1',
+      });
+      await batch.commit();
+    });
+
+    after(async () => {
+      const batch = adminDb.batch();
+
+      scratchIds.forEach((id) => batch.delete(adminDb.doc(`${toolsPath}/${id}`)));
+      await batch.commit();
+    });
+
+    const borrowAttempts = (db) => [
+      ['update available -> borrowed', () => updateDoc(doc(db, `${toolsPath}/rb-available`), { status: 'borrowed' })],
+      [
+        'update maintenance -> borrowed com colaborador',
+        () =>
+          updateDoc(doc(db, `${toolsPath}/rb-maintenance`), {
+            status: 'borrowed',
+            currentUser: 'Colaborador Gama',
+            currentCollaboratorId: 'c3',
+          }),
+      ],
+      [
+        'setDoc sobrescrevendo available com borrowed',
+        () =>
+          setDoc(doc(db, `${toolsPath}/rb-available`), {
+            code: 'rb-available',
+            name: 'Disponível',
+            category: 'Elétrica',
+            status: 'borrowed',
+          }),
+      ],
+      [
+        'setDoc merge com borrowed',
+        () => setDoc(doc(db, `${toolsPath}/rb-available`), { status: 'borrowed' }, { merge: true }),
+      ],
+      [
+        'create já emprestada',
+        () =>
+          setDoc(doc(db, `${toolsPath}/rb-nova`), {
+            code: 'rb-nova',
+            name: 'Nova',
+            category: 'Elétrica',
+            status: 'borrowed',
+            currentUser: 'Colaborador Alfa',
+          }),
+      ],
+    ];
+
+    for (const [label, key] of [
+      ['ADMIN', 'admin'],
+      ['ADMIN com a flag isRestricted', 'adminflag'],
+      ['PADRÃO', 'standard'],
+      ['PADRÃO legado', 'legacy'],
+      ['RESTRITO', 'restricted'],
+    ]) {
+      test(`${label}: nenhuma escrita direta entra em borrowed`, async () => {
+        for (const [attempt, operation] of borrowAttempts(users[key].db)) {
+          await assertDenied(operation, `${label}: ${attempt}`);
+        }
+
+        assert.equal((await adminDb.doc(`${toolsPath}/rb-available`).get()).data().status, 'available');
+        assert.equal(
+          (await adminDb.doc(`${toolsPath}/rb-maintenance`).get()).data().status,
+          'maintenance'
+        );
+        assert.equal((await adminDb.doc(`${toolsPath}/rb-nova`).get()).exists, false);
+      });
+    }
+
+    test('PADRÃO e RESTRITO: nem alterações sem empréstimo são permitidas em tools', async () => {
+      for (const key of ['standard', 'restricted']) {
+        const { db } = users[key];
+
+        await assertDenied(
+          () => updateDoc(doc(db, `${toolsPath}/rb-available`), { status: 'maintenance' }),
+          `${key}: status`
+        );
+        await assertDenied(
+          () => updateDoc(doc(db, `${toolsPath}/rb-available`), { name: 'X' }),
+          `${key}: nome`
+        );
+      }
+    });
+
+    test('ADMIN: alterações legítimas de ferramenta continuam permitidas', async () => {
+      const { db } = users.admin;
+      const available = doc(db, `${toolsPath}/rb-available`);
+
+      await assertAllowed(() => updateDoc(available, { status: 'maintenance' }), 'available -> maintenance');
+      await assertAllowed(() => updateDoc(available, { status: 'available' }), 'maintenance -> available');
+      await assertAllowed(() => updateDoc(available, { name: 'Renomeada', category: 'Manual' }), 'editar');
+      await assertAllowed(
+        () =>
+          setDoc(doc(db, `${toolsPath}/rb-nova-admin`), {
+            code: 'rb-nova-admin',
+            name: 'Cadastro',
+            category: 'Elétrica',
+            status: 'available',
+            currentUser: null,
+          }),
+        'cadastro disponível'
+      );
+      // Ferramenta já emprestada: editar dados sem mudar o status não é um novo empréstimo.
+      await assertAllowed(
+        () => updateDoc(doc(db, `${toolsPath}/rb-borrowed`), { notes: 'Observação' }),
+        'editar emprestada sem mudar status'
+      );
+      await assertAllowed(() => deleteDoc(doc(db, `${toolsPath}/rb-nova-admin`)), 'excluir');
+      record('RULES_ADMIN_LEGIT_TOOL_WRITES', 'ALLOWED');
+      record('RULES_CLIENT_BORROWED_WRITE', 'DENIED_ALL_PROFILES');
+    });
   });
 
   test('nenhuma conexão de rede não local durante os testes', () => {

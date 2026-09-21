@@ -36,9 +36,19 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Empréstimo é exclusivo da API de movimentação (Admin SDK): nenhum cliente, nem o
+    // administrador, cria ferramenta emprestada nem leva uma ferramenta para 'borrowed'. Editar
+    // uma ferramenta que já está emprestada (sem mudar o status) continua permitido ao admin.
+    function isBorrowed(data) {
+      return data.get('status', null) == 'borrowed';
+    }
+
     match /artifacts/gestao-de-ferramentas-3f8f1/public/data/tools/{toolId} {
       allow read: if hasActiveProfile();
-      allow write: if isAdmin();
+      allow create: if isAdmin() && !isBorrowed(request.resource.data);
+      allow update: if isAdmin()
+        && (!isBorrowed(request.resource.data) || isBorrowed(resource.data));
+      allow delete: if isAdmin();
     }
 
     match /artifacts/gestao-de-ferramentas-3f8f1/public/data/collaborators/{collaboratorId} {
