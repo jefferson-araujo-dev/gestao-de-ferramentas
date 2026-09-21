@@ -58,7 +58,8 @@ service cloud.firestore {
           (!isBorrowed(resource.data) && !isBorrowed(request.resource.data))
           || (isBorrowed(resource.data) && loanFieldsUnchanged())
         );
-      allow delete: if isAdmin();
+      // Ferramenta emprestada não é excluída: o empréstimo termina só pela devolução oficial.
+      allow delete: if isAdmin() && (resource == null || !isBorrowed(resource.data));
     }
 
     match /artifacts/gestao-de-ferramentas-3f8f1/public/data/collaborators/{collaboratorId} {

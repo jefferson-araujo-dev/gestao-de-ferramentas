@@ -262,7 +262,16 @@ describe('firestore.rules: colaboradores por perfil (Auth + Firestore Emulator)'
   // Empréstimo e devolução são exclusivos da API de movimentação (Admin SDK).
   describe('ferramentas: nenhum cliente entra, sai ou altera o estado de borrowed', () => {
     const toolsPath = `${BASE}/tools`;
-    const scratchIds = ['rb-available', 'rb-maintenance', 'rb-borrowed', 'rb-nova', 'rb-nova-admin'];
+    const scratchIds = [
+      'rb-available',
+      'rb-maintenance',
+      'rb-borrowed',
+      'rb-nova',
+      'rb-nova-admin',
+      'rd-available',
+      'rd-maintenance',
+      'rd-borrowed',
+    ];
 
     before(async () => {
       const batch = adminDb.batch();
@@ -468,6 +477,81 @@ describe('firestore.rules: colaboradores por perfil (Auth + Firestore Emulator)'
         'name,category,condition,nextMaintenance,notes,manualUrl,manualName,imageUrl'
       );
       record('RULES_BORROWED_LOAN_FIELDS_LOCKED', 'status,currentUser,currentCollaboratorId,lastAction');
+    });
+
+    // Exclusão: bloqueada só para ferramenta emprestada (o empréstimo termina pela devolução oficial).
+    const seedDeletable = async () => {
+      const batch = adminDb.batch();
+      const base = { category: 'Elétrica', currentUser: null, currentCollaboratorId: null };
+
+      batch.set(adminDb.doc(`${toolsPath}/rd-available`), {
+        ...base,
+        code: 'rd-available',
+        name: 'Excluir disponível',
+        status: 'available',
+      });
+      batch.set(adminDb.doc(`${toolsPath}/rd-maintenance`), {
+        ...base,
+        code: 'rd-maintenance',
+        name: 'Excluir manutenção',
+        status: 'maintenance',
+      });
+      batch.set(adminDb.doc(`${toolsPath}/rd-borrowed`), {
+        ...base,
+        code: 'rd-borrowed',
+        name: 'Excluir emprestada',
+        status: 'borrowed',
+        currentUser: 'Colaborador Alfa',
+        currentCollaboratorId: 'c1',
+        lastAction: '2026-09-01T10:00:00.000Z',
+      });
+      await batch.commit();
+    };
+    const exists = async (id) => (await adminDb.doc(`${toolsPath}/${id}`).get()).exists;
+
+    for (const [label, key] of [
+      ['ADMIN', 'admin'],
+      ['ADMIN com a flag isRestricted', 'adminflag'],
+      ['PADRÃO', 'standard'],
+      ['PADRÃO legado', 'legacy'],
+      ['RESTRITO', 'restricted'],
+    ]) {
+      test(`${label}: não exclui ferramenta emprestada`, async () => {
+        await seedDeletable();
+        await assertDenied(
+          () => deleteDoc(doc(users[key].db, `${toolsPath}/rd-borrowed`)),
+          `${label}: delete borrowed`
+        );
+        assert.equal(await exists('rd-borrowed'), true);
+      });
+    }
+
+    test('ADMIN: exclusão continua permitida para ferramenta disponível ou em manutenção', async () => {
+      await seedDeletable();
+
+      const { db } = users.admin;
+
+      await assertAllowed(() => deleteDoc(doc(db, `${toolsPath}/rd-available`)), 'delete available');
+      await assertAllowed(() => deleteDoc(doc(db, `${toolsPath}/rd-maintenance`)), 'delete maintenance');
+      await assertAllowed(() => deleteDoc(doc(db, `${toolsPath}/rd-inexistente`)), 'delete inexistente');
+      assert.equal(await exists('rd-available'), false);
+      assert.equal(await exists('rd-maintenance'), false);
+      assert.equal(await exists('rd-borrowed'), true);
+      record('RULES_ADMIN_DELETE_AVAILABLE_MAINTENANCE', 'ALLOWED');
+      record('RULES_DELETE_BORROWED', 'DENIED_ALL_PROFILES');
+    });
+
+    test('PADRÃO e RESTRITO: continuam sem excluir ferramenta disponível', async () => {
+      await seedDeletable();
+
+      for (const key of ['standard', 'restricted']) {
+        await assertDenied(
+          () => deleteDoc(doc(users[key].db, `${toolsPath}/rd-available`)),
+          `${key}: delete available`
+        );
+      }
+
+      assert.equal(await exists('rd-available'), true);
     });
 
     test('PADRÃO e RESTRITO: nem alterações sem empréstimo são permitidas em tools', async () => {

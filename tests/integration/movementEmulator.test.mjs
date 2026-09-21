@@ -22,7 +22,7 @@ import {
   signIn,
 } from './support/emulator.mjs';
 
-const { doc, updateDoc } = await import('firebase/firestore');
+const { deleteDoc, doc, updateDoc } = await import('firebase/firestore');
 
 const THIS_FILE = fileURLToPath(import.meta.url);
 const movementApi = (await import('../../api/tools/movement.js')).default;
@@ -683,7 +683,54 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     record('MOVEMENT_ADMIN_SDK_UNAFFECTED_BY_RULES', true);
   });
 
-  test('15 nenhuma conexão de rede não local durante os testes', () => {
+  test('15 emprestada não é excluída pelo cliente; após a devolução oficial a exclusão volta a ser permitida', async () => {
+    const toolId = 'T-06';
+    const toolDoc = () => doc(users.admin.db, `${BASE}/tools/${toolId}`);
+
+    await assertLoanRecorded({
+      result: await callMovement({ token: users.standard.token, body: badgeLoan(toolId, 'B-300') }),
+      toolId,
+      collaboratorId: 'c3',
+      name: 'Colaborador Gama',
+      role: 'Supervisor',
+      operator: 'standard',
+    });
+
+    const historyBefore = await historyDocs();
+
+    for (const key of ['admin', 'standard', 'restricted']) {
+      await assert.rejects(
+        () => deleteDoc(doc(users[key].db, `${BASE}/tools/${toolId}`)),
+        (error) => error?.code === 'permission-denied',
+        `${key}: delete borrowed`
+      );
+    }
+
+    // Nada mudou: a ferramenta segue emprestada e nenhum movimento (nem `in` falso) foi criado.
+    assert.equal((await readTool(toolId)).status, 'borrowed');
+    assert.deepEqual(await historyDocs(), historyBefore);
+
+    const returned = await callMovement({
+      token: users.restricted.token,
+      body: { action: 'return', toolId, device },
+    });
+
+    assert.equal(returned.status, 200);
+    assert.equal((await readTool(toolId)).status, 'available');
+
+    const entries = (await historyDocs()).filter((entry) => entry.toolId === toolId);
+
+    assert.deepEqual(entries.map((entry) => entry.type).sort(), ['in', 'out']);
+
+    await deleteDoc(toolDoc());
+    assert.equal(await readTool(toolId), undefined);
+    // O histórico do empréstimo encerrado permanece.
+    assert.equal((await historyDocs()).filter((entry) => entry.toolId === toolId).length, 2);
+    record('MOVEMENT_DELETE_BORROWED', 'DENIED');
+    record('MOVEMENT_RETURN_THEN_DELETE', 'ALLOWED');
+  });
+
+  test('16 nenhuma conexão de rede não local durante os testes', () => {
     const remote = networkAttempts.filter((attempt) => attempt.remote);
 
     assert.equal(remote.length, 0);
