@@ -1081,27 +1081,33 @@ test.describe('ADMIN — Ferramentas: menu aberto não deixa alvos cobertos acio
     await expect(trigger).toBeFocused();
   });
 
-  test('perto da borda da viewport o menu inverte/limita e fica inteiro na tela', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1440, height: 500 });
+  // A viewport baixa vale desde o carregamento. Redimensionar com a lista já renderizada agenda uma
+  // re-renderização dela (ResponsiveManager 150 ms + ui.js 100 ms) que troca os nós no meio das ações
+  // do teste, e Locator.scrollIntoViewIfNeeded() resolve o elemento uma única vez (não reavalia o
+  // locator): o gatilho saía do DOM durante o scroll. Sem resize não há re-renderização, e click()
+  // já rola até o elemento e reavalia o locator se o nó for trocado.
+  test.describe('viewport baixa desde o carregamento', () => {
+    test.use({ viewport: { width: 1440, height: 500 } });
 
-    const triggers = page.locator('#crud-list [data-tools-menu-trigger]');
-    const total = await triggers.count();
+    test('perto da borda da viewport o menu inverte/limita e fica inteiro na tela', async ({
+      page,
+    }) => {
+      const triggers = page.locator('#crud-list [data-tools-menu-trigger]');
+      const total = await triggers.count();
 
-    for (const index of [0, Math.floor(total / 2), total - 1]) {
-      await triggers.nth(index).scrollIntoViewIfNeeded();
-      await triggers.nth(index).click();
-      await expect(page.getByRole('menu')).toBeVisible();
+      for (const index of [0, Math.floor(total / 2), total - 1]) {
+        await triggers.nth(index).click();
+        await expect(page.getByRole('menu')).toBeVisible();
 
-      const box = await page.getByRole('menu').boundingBox();
-      const viewport = page.viewportSize();
+        const box = await page.getByRole('menu').boundingBox();
+        const viewport = page.viewportSize();
 
-      expect(box.y, `linha ${index}: topo`).toBeGreaterThanOrEqual(0);
-      expect(box.y + box.height, `linha ${index}: base`).toBeLessThanOrEqual(viewport.height);
-      expect(box.x, `linha ${index}: esquerda`).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width, `linha ${index}: direita`).toBeLessThanOrEqual(viewport.width);
-      await page.keyboard.press('Escape');
-    }
+        expect(box.y, `linha ${index}: topo`).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height, `linha ${index}: base`).toBeLessThanOrEqual(viewport.height);
+        expect(box.x, `linha ${index}: esquerda`).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width, `linha ${index}: direita`).toBeLessThanOrEqual(viewport.width);
+        await page.keyboard.press('Escape');
+      }
+    });
   });
 });
