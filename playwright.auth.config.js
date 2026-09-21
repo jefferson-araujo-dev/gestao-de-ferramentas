@@ -73,6 +73,14 @@ export default defineConfig({
       dependencies: ['destructive'],
       use: { viewport: { width: 1440, height: 900 } },
     },
+    {
+      // Criação/edição real de colaborador (Addendum 1-F3.1). Por último: cria documentos além do
+      // seed, apaga o que criou e re-semeia ao final; não pode rodar em paralelo com os outros.
+      name: 'destructive-collaborators',
+      testMatch: /collaborators\.destructive\.spec\.js$/,
+      dependencies: ['destructive-tools'],
+      use: { viewport: { width: 1440, height: 900 } },
+    },
   ],
 
   webServer: {

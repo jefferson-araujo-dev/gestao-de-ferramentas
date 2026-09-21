@@ -11,7 +11,9 @@ O script sobe os emuladores (`firebase emulators:exec`), semeia o estado, inicia
 3200 com `VITE_USE_FIREBASE_EMULATOR=true` e executa quatro projetos: `desktop` (1440x900),
 `mobile` (390x844, arquivos `*.mobile.spec.js`), `destructive` (`data-backup.destructive.spec.js`, roda
 **por último**: apaga documentos semeados do emulator e re-semeia ao terminar) e `destructive-tools`
-(`tools.destructive.spec.js`, depois do `destructive`: os dois re-semeiam e não podem rodar em paralelo). Requer Java (emuladores) e Chromium do Playwright.
+(`tools.destructive.spec.js`, depois do `destructive`: os dois re-semeiam e não podem rodar em paralelo) e
+`destructive-collaborators` (`collaborators.destructive.spec.js`, por último: cria documentos além do seed,
+apaga o que criou e re-semeia). Requer Java (emuladores) e Chromium do Playwright.
 
 ## Segurança (falha fechado)
 
@@ -43,6 +45,7 @@ O script sobe os emuladores (`firebase emulators:exec`), semeia o estado, inicia
 | `tools.destructive.spec.js` | Gate 1-F2: troca de status pelo menu com escrita real no emulator (projeto `destructive-tools`; re-semeia) |
 | `collaborators.spec.js` | Gate 1-F3: tela Colaboradores (`#/colaboradores`): tabela semântica agrupada por cargo, situação em texto, busca (sem acento; nome/crachá/cargo), filtros independentes de situação e pendências, cargo, indicação de filtro ativo e Limpar filtros, ordenação, agrupamento ligado/desligado, ação visível e menu por pessoa (teclado, Esc, foco, isolamento do 1-F2.1), formulário (rótulos, erro no campo, envio duplo, descarte), histórico individual, exportação (planilha espiada) e importação, estados carregando/vazio/sem resultados/erro, perfis padrão e restrito (rota, deep link, ausência de listener e de dado no cliente), layout em 10 larguras (320-1536) e tema escuro |
 | `collaborators.mobile.spec.js` | Gate 1-F3: Colaboradores no mobile: cartões agrupados, alvos de toque de 44px, filtros/menu por toque, formulário utilizável, último cartão acima da barra inferior e isolamento do menu |
+| `collaborators.destructive.spec.js` | Addendum 1-F3.1: criação e edição REAIS no emulator pelo fluxo da aplicação (sem espião no lugar de `saveCollaborator`), guarda `isBusy` contra envio duplo, erros de formulário e falha de salvamento com liberação do botão e nova tentativa, e o bloqueio do perfil restrito depois das escritas. Persistência conferida direto no Firestore por `support/admin-db.mjs`. Projeto `destructive-collaborators`, depois de `destructive-tools`: apaga o que criou e re-semeia |
 | `auth-standard.spec.js` | login, telas permitidas, ausência de itens admin **e** recusa em JS (dados nem chegam ao cliente) |
 | `auth-restricted.spec.js` | idem para o perfil restrito: sem Colaboradores no menu, na navegação programática, no listener, na memória e nas regras (leitura direta negada) |
 | `restricted-loan.spec.js` | Scanner do perfil restrito: empréstimo por crachá exato (`collaboratorBadge`), recibo sem a lista, recusa genérica, sem busca por nome e devolução; controle do perfil padrão (`collaboratorId`) |
