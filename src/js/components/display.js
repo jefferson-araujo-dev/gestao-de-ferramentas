@@ -23,13 +23,17 @@ export function Badge({ label, tone = 'neutral', className = '', attributes = {}
   return `<span class="${cx('ui-badge', `ui-badge--${tone}`, className)}"${attrs(attributes)}>${esc(label)}</span>`;
 }
 
-// Estados de ferramenta/movimentação -> texto + tom. O texto vem SEMPRE (o tom é reforço).
+// Estados de ferramenta/movimentação/colaborador -> texto + tom. O texto vem SEMPRE (o tom é reforço).
+// `active`/`inactive` são os valores já persistidos do colaborador (Gate 1-F3): só ganharam rótulo
+// e tom aqui, para a tela não inventar o seu próprio vocabulário de status.
 export const STATUS_MAP = Object.freeze({
   available: { label: 'Disponível', tone: 'success' },
   borrowed: { label: 'Emprestada', tone: 'warning' },
   maintenance: { label: 'Manutenção', tone: 'danger' },
   in: { label: 'Devolução', tone: 'success' },
-  out: { label: 'Retirada', tone: 'info' }
+  out: { label: 'Retirada', tone: 'info' },
+  active: { label: 'Ativo', tone: 'success' },
+  inactive: { label: 'Inativo', tone: 'neutral' }
 });
 
 /** Compatível com o antigo getBadgeHTML(status): status desconhecido vira badge neutro com o texto. */

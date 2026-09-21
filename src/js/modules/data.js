@@ -96,6 +96,7 @@ export const AppData = {
   toolsError: false,
   usersLoaded: false,
   collaboratorsLoaded: false,
+  collaboratorsError: false,
   allHistoryLogs: null,
   destroyListeners: function () {
     this.listeners.forEach((u) => {
@@ -112,6 +113,7 @@ export const AppData = {
     this.toolsError = false;
     this.usersLoaded = false;
     this.collaboratorsLoaded = false;
+    this.collaboratorsError = false;
     window.App.UI.renderAll();
 
     if (permissions?.canReadTools === true) {
@@ -169,6 +171,7 @@ export const AppData = {
       // Sem permissão (perfil restrito): nenhum listener e nenhuma sobra de sessão anterior.
       this.collaborators = [];
       this.collaboratorsLoaded = true;
+      this.collaboratorsError = false;
     } else {
       this.listeners.push(
         onSnapshot(
@@ -178,6 +181,7 @@ export const AppData = {
               .map((d) => ({ firebaseId: d.id, ...d.data() }))
               .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
             this.collaboratorsLoaded = true;
+            this.collaboratorsError = false;
             if (window.App.UI.activeTab === 'collaborators') {
               window.App.CRUDCollaborators.render();
             }
@@ -186,6 +190,8 @@ export const AppData = {
           (err) => {
             this.collaborators = [];
             this.collaboratorsLoaded = true;
+            // Sinal de UI: a tela distingue "falhou ao carregar" de "nenhum colaborador cadastrado".
+            this.collaboratorsError = true;
             window.Logger.warn('Erro ao carregar colaboradores', err);
             if (window.App.UI.activeTab === 'collaborators') {
               window.App.CRUDCollaborators.render();

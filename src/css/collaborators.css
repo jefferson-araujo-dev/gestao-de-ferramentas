@@ -1,0 +1,554 @@
+/* ============================================
+   TELA "COLABORADORES" (Gate 1-F3)
+   ============================================
+
+   Só tokens (tokens.css): claro/escuro pelos próprios tokens, sem variante de tema ad hoc, sem
+   importância forçada e sem cor literal. Usa os componentes do Gate 1-E (ui-btn, ui-card, ui-badge,
+   ui-menu, ui-empty...) e acrescenta só o layout da tela. Breakpoints do contrato do shell:
+   767.98 (mobile), 768 (tablet) e 1024 (notebook: a lista vira tabela).
+   ============================================ */
+
+.collab-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* `display` dos componentes (ui-btn...) vence o atributo `hidden` do navegador: reafirma-o na tela. */
+.collab-screen [hidden] {
+  display: none;
+}
+
+/* Ações globais (só administrador): sem ações visíveis, o cabeçalho não ocupa espaço. */
+.collab-header {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.collab-header:not(:has(.ui-btn:not([style*='display: none']))) {
+  display: none;
+}
+
+.collab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.collab-actions .ui-btn {
+  flex: none;
+}
+
+/* Situação e pendências são dois grupos independentes, na mesma faixa. */
+.collab-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.collab-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* O estado ativo não é só cor: borda mais grossa e fundo de destaque. */
+.collab-chip {
+  gap: var(--space-2);
+}
+
+.collab-chip[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-text);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.collab-chip__count {
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-ui-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.collab-chip[aria-pressed='true'] .collab-chip__count {
+  background: var(--color-surface);
+}
+
+.collab-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.collab-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-height: 2rem;
+  font-size: var(--text-label);
+  line-height: 1rem;
+  color: var(--color-text-secondary);
+}
+
+.collab-meta__count {
+  margin: 0;
+}
+
+.collab-meta__filters {
+  font-weight: 600;
+  color: var(--color-accent-text);
+}
+
+/* O agrupamento é opção de visualização, não filtro: fica na ponta oposta da faixa. */
+.collab-meta__group {
+  margin-inline-start: auto;
+}
+
+.collab-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.collab-feedback:empty {
+  display: none;
+}
+
+.collab-more {
+  display: flex;
+  justify-content: center;
+}
+
+.collab-skeleton {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+/* ---------- Pessoa, situação e ações (tabela e cartões) ---------- */
+
+.collab-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.collab-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ui-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+button.collab-avatar {
+  cursor: zoom-in;
+}
+
+.collab-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.collab-person__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.collab-person__name {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.collab-person__meta {
+  font-size: var(--text-label);
+  line-height: 1rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.collab-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.collab-actions-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.collab-menu {
+  position: relative;
+}
+
+/* ---------- Grupos por cargo ---------- */
+
+.collab-group__row > .collab-group__cell {
+  padding: var(--space-2) var(--space-4);
+  border-block-start: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  text-align: start;
+}
+
+.collab-group:first-child .collab-group__row > .collab-group__cell {
+  border-block-start: 0;
+}
+
+.collab-group__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.collab-group__cell,
+.collab-group__title {
+  font-size: var(--text-label);
+  line-height: 1rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.collab-group__cell .collab-group__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.collab-group__count {
+  display: inline-block;
+  min-width: 1.25rem;
+  margin-inline-start: var(--space-2);
+  padding: 0 0.375rem;
+  border-radius: var(--radius-ui-full);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.collab-group-section + .collab-group-section {
+  margin-block-start: var(--space-4);
+}
+
+/* ---------- Tabela (>= 1024) ---------- */
+
+.collab-table-wrap {
+  padding: 0;
+}
+
+.collab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  color: var(--color-text-primary);
+}
+
+.collab-table thead th {
+  padding: var(--space-3) var(--space-4);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  font-size: var(--text-label);
+  line-height: 1rem;
+  font-weight: 600;
+  text-align: start;
+  color: var(--color-text-secondary);
+}
+
+.collab-table thead th:first-child {
+  border-start-start-radius: var(--radius-ui-lg);
+}
+
+.collab-table thead th:last-child {
+  border-start-end-radius: var(--radius-ui-lg);
+}
+
+.collab-row + .collab-row > .collab-cell {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.collab-row:hover {
+  background: var(--color-surface-muted);
+}
+
+.collab-cell {
+  padding: var(--space-3) var(--space-4);
+  vertical-align: middle;
+  text-align: start;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.collab-cell--person {
+  min-width: 14rem;
+}
+
+/* Crachá: número de identificação, alinhado em dígitos tabulares para leitura em coluna. */
+.collab-cell--badge {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.collab-cell--actions {
+  width: 1%;
+  text-align: end;
+  white-space: nowrap;
+}
+
+/* ---------- Cartões (< 1024) ---------- */
+
+.collab-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collab-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+.collab-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-label);
+  line-height: 1rem;
+}
+
+.collab-facts__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.collab-facts dt {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.collab-facts dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: end;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.collab-card .collab-actions-cell {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--color-border);
+}
+
+.collab-card .collab-actions-cell .ui-btn {
+  flex: 1;
+}
+
+/* ---------- Histórico individual (modal) ---------- */
+
+/* Lista de movimentações: um pouco mais largo que o modal padrão (32rem). */
+.collab-history-modal {
+  width: min(42rem, calc(100vw - 2rem));
+}
+
+.collab-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collab-history__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+}
+
+.collab-history__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.collab-history__date {
+  font-size: var(--text-label);
+  line-height: 1rem;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.collab-history__tool {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.collab-history__code {
+  margin: 0;
+  font-size: var(--text-label);
+  line-height: 1rem;
+  color: var(--color-text-secondary);
+}
+
+/* ---------- Formulário do colaborador (modal) ---------- */
+
+.collab-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.collab-form__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.collab-photo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.collab-photo__preview {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-ui-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.collab-photo__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* O <input type=file> real fica oculto; o rótulo é o alvo visível (e é focável pelo próprio input). */
+.collab-photo__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: var(--ui-control-h);
+  padding: 0.5rem 1rem;
+  border: 1px dashed var(--color-border-control);
+  border-radius: var(--radius-ui-lg);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--text-body);
+  line-height: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.collab-photo__label:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+
+.collab-photo__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.collab-photo__input:focus-visible + .collab-photo__label {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Ponteiro grosso (toque): alvos de 44px também nos botões compactos desta tela. */
+@media (pointer: coarse) {
+  .collab-screen .ui-btn--sm {
+    min-height: var(--ui-control-h);
+  }
+}
+
+@media (min-width: 768px) {
+  .collab-toolbar {
+    grid-template-columns: minmax(0, 1fr) 13rem 12rem;
+  }
+
+  .collab-cards,
+  .collab-skeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collab-form__row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767.98px) {
+  .collab-header,
+  .collab-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .collab-actions .ui-btn {
+    flex: 1 1 auto;
+  }
+
+  .collab-meta__group {
+    margin-inline-start: 0;
+  }
+}

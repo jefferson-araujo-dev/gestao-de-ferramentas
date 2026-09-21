@@ -5,6 +5,7 @@
 @import './components.css';
 @import './data-admin.css';
 @import './tools.css';
+@import './collaborators.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -204,7 +205,6 @@ body,
 /* Camada de sobriedade visual para reduzir disputa entre filtros, cards e ações secundárias. */
 #quick-filters .quick-filter-btn,
 #users-filters .filter-btn,
-#collab-quick-filters .collab-filter-btn,
 .sort-btn {
   background-color: var(--color-surface) !important;
   border-color: var(--color-border) !important;
@@ -215,7 +215,6 @@ body,
 
 #quick-filters .quick-filter-btn:hover,
 #users-filters .filter-btn:hover,
-#collab-quick-filters .collab-filter-btn:hover,
 .sort-btn:hover {
   border-color: #cbd5e1 !important;
   background-color: #f8fafc !important;
@@ -223,7 +222,6 @@ body,
 
 .dark #quick-filters .quick-filter-btn:hover,
 .dark #users-filters .filter-btn:hover,
-.dark #collab-quick-filters .collab-filter-btn:hover,
 .dark .sort-btn:hover {
   border-color: #475569 !important;
   background-color: #1e293b !important;
@@ -231,7 +229,6 @@ body,
 
 #quick-filters .quick-filter-btn.active,
 #users-filters .filter-btn.active,
-#collab-quick-filters .collab-filter-btn.active,
 .sort-btn.active {
   background-color: #eff6ff !important;
   border-color: #bfdbfe !important;
@@ -241,7 +238,6 @@ body,
 
 .dark #quick-filters .quick-filter-btn.active,
 .dark #users-filters .filter-btn.active,
-.dark #collab-quick-filters .collab-filter-btn.active,
 .dark .sort-btn.active {
   background-color: rgba(30, 64, 175, 0.22) !important;
   border-color: rgba(147, 197, 253, 0.36) !important;

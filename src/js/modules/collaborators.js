@@ -6,12 +6,52 @@ import {
   collection,
 } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { db, auth, DB_BASE_PATH, COLLECTIONS, CONFIG } from '../app.js';
+import {
+  Alert,
+  Badge,
+  Button,
+  Dropdown,
+  EmptyState,
+  IconButton,
+  Search,
+  Select,
+  SkeletonCard,
+  StatusBadge,
+  esc,
+  icon,
+  isBusy,
+  setBusy
+} from '../components/index.js';
+import { BREAKPOINTS } from '../config/breakpoints.js';
+
+// Situação do colaborador: os mesmos valores persistidos de sempre ('active'/'inactive').
+const STATUS_FILTERS = Object.freeze([
+  { value: 'all', label: 'Todos' },
+  { value: 'active', label: 'Ativos' },
+  { value: 'inactive', label: 'Inativos' }
+]);
+
+const SORT_OPTIONS = Object.freeze([
+  { value: 'name-asc', label: 'Nome A-Z' },
+  { value: 'name-desc', label: 'Nome Z-A' },
+  { value: 'badge', label: 'Crachá' },
+  { value: 'recent', label: 'Mais recentes' }
+]);
+
+const SEM_CARGO = 'Sem cargo';
+
+// A lista vira tabela a partir do notebook (rail + conteúdo largo); abaixo disso são cartões.
+const TABLE_QUERY = `(min-width: ${BREAKPOINTS.notebook}px)`;
 
 export const AppCRUDCollaborators = {
   collabLimit: 30,
   selectedCollabs: new Set(),
+  currentStatusFilter: 'all',
   currentPendingFilter: 'all',
   imagePreviewInitialized: false,
+  _mounted: false,
+  _menus: [],
+  _renderPending: false,
 
   _hasPermission: function (permission) {
     return window.App?.Auth?.permissions?.[permission] === true;
@@ -20,18 +60,331 @@ export const AppCRUDCollaborators = {
     window.App.UI.showToast('Acesso restrito a administradores.', 'error');
   },
 
-  setPendingFilter: function (filter) {
-    this.currentPendingFilter = filter;
-    document.querySelectorAll('#collab-quick-filters .collab-filter-btn').forEach((btn) => {
-      if (btn.dataset.filter === filter) {
-        btn.classList.add('active', 'bg-brand-600', 'text-white', 'border-brand-600');
-        btn.classList.remove('bg-white', 'dark:bg-slate-900', 'text-slate-600');
-      } else {
-        btn.classList.remove('active', 'bg-brand-600', 'text-white', 'border-brand-600');
-        btn.classList.add('bg-white', 'dark:bg-slate-900', 'text-slate-600', 'dark:text-slate-300');
+  // Filtros e busca/ordenação são montados uma única vez (com os componentes do design system) e
+  // depois só atualizados: assim o foco do usuário não se perde a cada renderização.
+  mountControls: function () {
+    const filters = document.getElementById('collab-filters');
+    const pending = document.getElementById('collab-pending-filters');
+    const toolbar = document.getElementById('collab-toolbar');
+
+    if (this._mounted || !filters || !pending || !toolbar) {
+      return;
+    }
+
+    this._mounted = true;
+
+    const chip = (attribute, value, label, pressed) =>
+      `<button type="button" class="ui-btn ui-btn--secondary ui-btn--sm collab-chip" ${attribute}="${value}" aria-pressed="${pressed}"><span class="ui-btn__label">${esc(label)}</span><span class="collab-chip__count" data-collab-count="${value}">0</span></button>`;
+
+    filters.innerHTML = STATUS_FILTERS.map((filter) =>
+      chip('data-collab-filter', filter.value, filter.label, filter.value === this.currentStatusFilter)
+    ).join('');
+
+    // Pendências é um filtro independente da situação: alterna sozinho (ligado/desligado).
+    pending.innerHTML = chip(
+      'data-collab-pending',
+      'pending',
+      'Com pendências',
+      this.currentPendingFilter === 'pending'
+    );
+
+    toolbar.innerHTML =
+      Search({
+        id: 'collab-search',
+        label: 'Buscar por nome, crachá ou cargo',
+        placeholder: 'Nome, crachá ou cargo',
+        className: 'collab-toolbar__search'
+      }) +
+      Select({
+        id: 'collab-role-filter',
+        label: 'Filtrar por cargo',
+        hideLabel: true,
+        className: 'collab-toolbar__select',
+        options: [{ value: 'all', label: 'Todos os cargos' }]
+      }) +
+      Select({
+        id: 'collab-sort',
+        label: 'Ordenar por',
+        hideLabel: true,
+        className: 'collab-toolbar__select',
+        options: SORT_OPTIONS
+      });
+
+    this._bindEvents();
+  },
+
+  // Listeners da tela (delegação): nada de onclick inline nos itens renderizados.
+  _bindEvents: function () {
+    const screen = document.getElementById('tab-collaborators');
+
+    screen?.addEventListener('click', (event) => this._onClick(event));
+
+    ['collab-role-filter', 'collab-sort'].forEach((id) =>
+      document.getElementById(id)?.addEventListener('change', () => {
+        this.collabLimit = 30;
+        this.render();
+      })
+    );
+    document.getElementById('collab-group-toggle')?.addEventListener('change', () => {
+      this.collabLimit = 30;
+      this.render();
+    });
+    document
+      .getElementById('crud-import-input-collab')
+      ?.addEventListener('change', (event) => this.importFile(event));
+
+    // O formulário fica fora da seção da tela (área de modais): mesma delegação, outro nó raiz.
+    document
+      .getElementById('crud-collab-modal')
+      ?.addEventListener('click', (event) => this._onClick(event));
+
+    // A lista troca de forma (tabela x cartões) na mudança do breakpoint; os dados são os mesmos.
+    window.matchMedia(TABLE_QUERY).addEventListener('change', () => {
+      if (window.App?.UI?.activeTab === 'collaborators') {
+        this.render();
       }
     });
+  },
+
+  _onClick: function (event) {
+    const status = event.target.closest('[data-collab-filter]');
+
+    if (status) {
+      this.setStatusFilter(status.dataset.collabFilter);
+      return;
+    }
+
+    const pending = event.target.closest('[data-collab-pending]');
+
+    if (pending) {
+      this.setPendingFilter(this.currentPendingFilter === 'pending' ? 'all' : 'pending');
+      return;
+    }
+
+    const trigger = event.target.closest('[data-collab-action]');
+
+    if (!trigger || trigger.disabled) {
+      return;
+    }
+
+    const { collabAction: action, collabId } = trigger.dataset;
+
+    // Item de menu: devolve o foco ao gatilho da linha antes da ação. Se a ação abrir um modal, o
+    // navegador devolve o foco a esse gatilho ao fechá-lo (o item do menu já não existe visível).
+    if (trigger.getAttribute('role') === 'menuitem') {
+      this._focusMenuTrigger(collabId);
+    }
+
+    switch (action) {
+      case 'export':
+        this.exportList();
+        break;
+      case 'import':
+        document.getElementById('crud-import-input-collab')?.click();
+        break;
+      case 'new':
+        this.openModal();
+        break;
+      case 'save':
+        this.saveCollaborator();
+        break;
+      case 'clear-filters':
+        this.clearFilters();
+        break;
+      case 'load-more':
+        this.loadMore();
+        break;
+      case 'edit':
+        this.openModal(collabId);
+        break;
+      case 'history':
+        this.showHistory(trigger.dataset.collabName);
+        break;
+      case 'toggle-status':
+        this.toggleStatus(collabId);
+        break;
+      case 'delete':
+        this.deleteCollaborator(collabId);
+        break;
+      case 'preview':
+        window.App.UI.showImagePreview(
+          trigger.querySelector('img')?.src || '',
+          trigger.dataset.collabName
+        );
+        break;
+      default:
+    }
+  },
+
+  setStatusFilter: function (filter) {
+    this.currentStatusFilter = filter;
+    this.collabLimit = 30;
+    this._syncChips();
     this.render();
+  },
+
+  setPendingFilter: function (filter) {
+    this.currentPendingFilter = filter;
+    this.collabLimit = 30;
+    this._syncChips();
+    this.render();
+  },
+
+  clearFilters: function () {
+    const search = document.getElementById('collab-search');
+    const role = document.getElementById('collab-role-filter');
+
+    if (search) {
+      search.value = '';
+    }
+
+    if (role) {
+      role.value = 'all';
+    }
+
+    this.currentStatusFilter = 'all';
+    this.currentPendingFilter = 'all';
+    this.collabLimit = 30;
+    this._syncChips();
+    this.render();
+    // O botão "Limpar filtros" some ao limpar: o foco vai para a busca, não se perde.
+    search?.focus();
+  },
+
+  _syncChips: function () {
+    document.querySelectorAll('[data-collab-filter]').forEach((chip) => {
+      chip.setAttribute(
+        'aria-pressed',
+        String(chip.dataset.collabFilter === this.currentStatusFilter)
+      );
+    });
+    document.querySelectorAll('[data-collab-pending]').forEach((chip) => {
+      chip.setAttribute('aria-pressed', String(this.currentPendingFilter === 'pending'));
+    });
+  },
+
+  // Os cargos vêm dos dados carregados (a lista só é conhecida depois do carregamento).
+  _syncRoles: function (collaborators) {
+    const select = document.getElementById('collab-role-filter');
+
+    if (!select) {
+      return;
+    }
+
+    const roles = [...new Set(collaborators.map((c) => c.role).filter(Boolean))].sort((a, b) =>
+      a.localeCompare(b, 'pt-BR')
+    );
+    const key = roles.join('\u0000');
+
+    if (select.dataset.roles === key) {
+      return;
+    }
+
+    const previous = select.value;
+
+    select.innerHTML =
+      '<option value="all">Todos os cargos</option>' +
+      roles.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+    select.value = roles.includes(previous) ? previous : 'all';
+    select.dataset.roles = key;
+  },
+
+  _isTableLayout: function () {
+    return window.matchMedia(TABLE_QUERY).matches;
+  },
+
+  _disposeMenus: function () {
+    this._menus.forEach((menu) => menu.dispose());
+    this._menus = [];
+  },
+
+  _mountMenus: function (list) {
+    this._menus = [...list.querySelectorAll('[data-dropdown]')].map(
+      (root) =>
+        new Dropdown({
+          trigger: root.querySelector('[data-collab-menu-trigger]'),
+          panel: root.querySelector('.ui-menu'),
+          onOpen: () => this._setBackgroundInert(root.closest('[data-collab-row]')),
+          onClose: ({ restoreFocus } = {}) => {
+            this._setBackgroundInert(null);
+            this._flushPendingRender({
+              restoreFocus,
+              collabId: root.closest('[data-collab-row]')?.dataset.collabId
+            });
+          }
+        })
+    );
+  },
+
+  // Mesma correção do Addendum 1-F2.1: com um menu de linha aberto o resto da tela fica inerte (sem
+  // clique, sem foco). O menu flutuante cobre parte de botões de outras linhas e um clique fora dele,
+  // sobre uma faixa ainda visível, fecharia o menu E acionaria o botão de baixo.
+  _setBackgroundInert: function (activeRow) {
+    document
+      .querySelectorAll(
+        '#collab-screen .collab-header, #collab-filters, #collab-pending-filters, #collab-toolbar, .collab-meta, #collab-load-more, #collab-list [data-collab-row]'
+      )
+      .forEach((element) => {
+        element.inert = Boolean(activeRow) && element !== activeRow;
+      });
+  },
+
+  // Uma atualização de dados durante um menu aberto espera o menu fechar: re-renderizar agora
+  // faria o menu sumir debaixo do teclado/leitor de tela.
+  _flushPendingRender: function ({ restoreFocus = false, collabId } = {}) {
+    if (this._renderPending && !this._menus.some((menu) => menu.isOpen())) {
+      this._renderPending = false;
+      this.render();
+
+      // O gatilho antigo saiu do DOM com a renderização: o foco volta ao gatilho novo da mesma linha.
+      if (restoreFocus) {
+        this._focusMenuTrigger(collabId);
+      }
+    }
+  },
+
+  _focusMenuTrigger: function (collabId) {
+    const row = [...document.querySelectorAll('#collab-list [data-collab-row]')].find(
+      (element) => element.dataset.collabId === collabId
+    );
+
+    row?.querySelector('[data-collab-menu-trigger]')?.focus({ preventScroll: true });
+  },
+
+  // Erro de um campo do formulário: mensagem ligada ao próprio campo (aria-describedby já no HTML),
+  // além do toast. Mensagem vazia limpa o estado.
+  _setFieldError: function (id, message) {
+    const control = document.getElementById(id);
+    const error = document.getElementById(`${id}-error`);
+
+    if (!control || !error) {
+      return;
+    }
+
+    control.setAttribute('aria-invalid', message ? 'true' : 'false');
+    control.closest('.ui-field')?.classList.toggle('is-invalid', Boolean(message));
+    error.textContent = message;
+    error.hidden = !message;
+  },
+
+  _setMeta: function ({ count, filters = 0 }) {
+    const countEl = document.getElementById('collab-result-count');
+    const filtersEl = document.getElementById('collab-active-filters');
+    const clearButton = document.getElementById('collab-clear-filters');
+
+    if (countEl) {
+      countEl.textContent = count;
+    }
+
+    if (filtersEl) {
+      filtersEl.textContent = filters
+        ? `${filters} filtro${filters !== 1 ? 's' : ''} ativo${filters !== 1 ? 's' : ''}`
+        : '';
+    }
+
+    if (clearButton) {
+      clearButton.hidden = filters === 0;
+    }
   },
 
   toggleSelection: function (id) {
@@ -76,45 +429,89 @@ export const AppCRUDCollaborators = {
 
   render: function () {
     const list = window.App.UI.domCache?.collabList || document.getElementById('collab-list');
+
     if (!list) {
       return;
     }
+
+    if (this._menus.some((menu) => menu.isOpen())) {
+      this._renderPending = true;
+      return;
+    }
+
+    this._disposeMenus();
+
+    const loadMore = document.getElementById('collab-load-more');
+    const feedback = document.getElementById('collab-feedback');
+
+    if (feedback) {
+      feedback.innerHTML = '';
+    }
+
     if (!window.App.Data.collaboratorsLoaded) {
-      list.innerHTML = Array(6).fill(window.Utils.getSkeletonHTML()).join('');
+      list.setAttribute('aria-busy', 'true');
+      list.innerHTML = `<div class="collab-skeleton">${Array(6).fill(SkeletonCard()).join('')}</div>`;
+      this._setMeta({ count: 'Carregando colaboradores...' });
+
+      if (loadMore) {
+        loadMore.hidden = true;
+      }
+
+      return;
+    }
+
+    list.removeAttribute('aria-busy');
+
+    // Falha ao carregar: aviso persistente e distinto de "nenhum colaborador cadastrado".
+    if (window.App.Data.collaboratorsError) {
+      if (feedback) {
+        feedback.innerHTML = Alert({
+          tone: 'danger',
+          title: 'Não foi possível carregar os colaboradores',
+          message:
+            'Verifique a conexão e recarregue a página. Se o problema continuar, procure um administrador.'
+        });
+      }
+
+      list.innerHTML = '';
+      this._setMeta({ count: '' });
+
+      if (loadMore) {
+        loadMore.hidden = true;
+      }
+
       return;
     }
 
     const collaborators = window.App.Data.collaborators;
+    const isActive = (c) => (c.status || 'active') === 'active';
 
-    const totalCountEl = document.getElementById('collab-total-count');
-    if (totalCountEl) {
-      totalCountEl.textContent = `${collaborators.length} colaboradore${collaborators.length !== 1 ? 's' : ''} cadastrado${collaborators.length !== 1 ? 's' : ''}`;
-    }
+    const counts = {
+      all: collaborators.length,
+      active: collaborators.filter(isActive).length,
+      inactive: collaborators.filter((c) => !isActive(c)).length,
+      pending: collaborators.filter((c) => this.getPendingTools(c.name).length > 0).length
+    };
 
-    const roleFilterEl = document.getElementById('collab-role-filter');
-    if (roleFilterEl && roleFilterEl.options.length <= 1) {
-      const roles = [...new Set(collaborators.map((c) => c.role).filter(Boolean))].sort();
-      roles.forEach((role) => {
-        const option = document.createElement('option');
-        option.value = role;
-        option.textContent = role;
-        roleFilterEl.appendChild(option);
-      });
-    }
+    document.querySelectorAll('[data-collab-count]').forEach((element) => {
+      element.textContent = counts[element.dataset.collabCount] ?? 0;
+    });
+    this._syncChips();
+    this._syncRoles(collaborators);
 
-    const q = document.getElementById('collab-search')?.value.trim() || '';
+    const q = window.Utils.removeAccents(
+      document.getElementById('collab-search')?.value.trim() || ''
+    ).toLowerCase();
     const roleFilter = document.getElementById('collab-role-filter')?.value || 'all';
-    const statusFilter = document.getElementById('collab-status-filter')?.value || 'all';
     const sort = document.getElementById('collab-sort')?.value || 'name-asc';
     const groupByRole = document.getElementById('collab-group-toggle')?.checked ?? true;
 
     let filtered = collaborators;
 
-    if (statusFilter !== 'all') {
-      const isActive = statusFilter === 'active';
-      filtered = filtered.filter(
-        (c) => (c.status || 'active') === (isActive ? 'active' : 'inactive')
-      );
+    if (this.currentStatusFilter !== 'all') {
+      const wanted = this.currentStatusFilter === 'active';
+
+      filtered = filtered.filter((c) => isActive(c) === wanted);
     }
 
     if (roleFilter !== 'all') {
@@ -122,18 +519,17 @@ export const AppCRUDCollaborators = {
     }
 
     if (q) {
-      const lowerQ = window.Utils.removeAccents(q).toLowerCase();
       filtered = filtered.filter(
         (u) =>
           window.Utils.removeAccents(String(u.name || ''))
             .toLowerCase()
-            .includes(lowerQ) ||
+            .includes(q) ||
           window.Utils.removeAccents(String(u.badge || ''))
             .toLowerCase()
-            .includes(lowerQ) ||
+            .includes(q) ||
           window.Utils.removeAccents(String(u.role || ''))
             .toLowerCase()
-            .includes(lowerQ)
+            .includes(q)
       );
     }
 
@@ -156,161 +552,257 @@ export const AppCRUDCollaborators = {
       }
     });
 
-    const resultCountEl = document.getElementById('collab-result-count');
-    if (resultCountEl) {
-      resultCountEl.textContent = `Mostrando ${Math.min(filtered.length, this.collabLimit)} de ${filtered.length} colaboradore${filtered.length !== 1 ? 's' : ''}`;
-    }
+    const activeFilters =
+      (this.currentStatusFilter !== 'all' ? 1 : 0) +
+      (this.currentPendingFilter !== 'all' ? 1 : 0) +
+      (roleFilter !== 'all' ? 1 : 0) +
+      (q ? 1 : 0);
+
+    this._setMeta({
+      count: `Mostrando ${Math.min(filtered.length, this.collabLimit)} de ${filtered.length} colaborador${filtered.length !== 1 ? 'es' : ''}`,
+      filters: activeFilters
+    });
 
     if (!filtered.length) {
-      list.innerHTML = `<div class="col-span-full text-center py-16 empty-state">
-        <svg class="w-16 h-16 mx-auto text-slate-300 mb-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-        </svg>
-        <h3 class="text-lg font-bold text-slate-700">Nenhum colaborador encontrado</h3>
-        <p class="text-slate-500 mt-2">Tente ajustar os filtros de busca</p>
-      </div>`;
-      document.getElementById('collab-load-more')?.classList.add('hidden');
-      document.getElementById('collab-pagination-info')?.classList.add('hidden');
+      list.innerHTML = this._emptyStateHtml(collaborators.length > 0);
+
+      if (loadMore) {
+        loadMore.hidden = true;
+      }
+
       return;
     }
 
-    if (groupByRole) {
-      this.renderWithGrouping(filtered, list);
-    } else {
-      this.renderFlat(filtered, list);
+    if (loadMore) {
+      loadMore.hidden = filtered.length <= this.collabLimit;
     }
-  },
-
-  renderWithGrouping: function (filtered, list) {
-    const groups = {};
-    filtered.forEach((c) => {
-      const role = c.role || 'Sem Cargo';
-      if (!groups[role]) {
-        groups[role] = [];
-      }
-      groups[role].push(c);
-    });
-
-    const sortedRoles = Object.keys(groups).sort();
-    let html = '';
-    let totalShown = 0;
-
-    sortedRoles.forEach((role) => {
-      const members = groups[role];
-      const shown = Math.min(members.length, this.collabLimit - totalShown);
-      if (shown === 0 || totalShown >= this.collabLimit) {
-        return;
-      }
-
-      totalShown += shown;
-
-      html += `<div class="col-span-full mt-6 mb-2">
-        <div class="flex items-center gap-3 px-4 py-3 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-xl">
-          <svg class="w-5 h-5 text-brand-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-          <h4 class="font-bold text-brand-700 dark:text-brand-400 text-sm">${window.Utils.escapeHTML(role)}</h4>
-          <span class="ml-auto text-xs font-bold text-brand-600 dark:text-brand-500 bg-brand-100 dark:bg-brand-900/40 px-2 py-0.5 rounded-full">${members.length}</span>
-        </div>
-      </div>`;
-
-      html += members
-        .slice(0, this.collabLimit)
-        .map((u, idx) => this.renderCard(u, idx))
-        .join('');
-    });
-
-    list.innerHTML = html;
-
-    const showLoadMore = filtered.length > this.collabLimit;
-    document.getElementById('collab-load-more')?.classList.toggle('hidden', !showLoadMore);
-    document.getElementById('collab-pagination-info')?.classList.toggle('hidden', !showLoadMore);
-
-    const paginationInfoEl = document.getElementById('collab-pagination-info');
-    if (paginationInfoEl) {
-      if (showLoadMore) {
-        paginationInfoEl.textContent = `Mostrando os primeiros ${totalShown} de ${filtered.length} colaboradores`;
-      } else {
-        paginationInfoEl.textContent = `Mostrando todos os ${filtered.length} colaboradores em ${sortedRoles.length} cargo${sortedRoles.length !== 1 ? 's' : ''}`;
-      }
-    }
-  },
-
-  renderFlat: function (filtered, list) {
-    const showLoadMore = filtered.length > this.collabLimit;
-    document.getElementById('collab-load-more')?.classList.toggle('hidden', !showLoadMore);
-    document.getElementById('collab-pagination-info')?.classList.toggle('hidden', !showLoadMore);
 
     const paginated = filtered.slice(0, this.collabLimit);
 
-    const paginationInfoEl = document.getElementById('collab-pagination-info');
-    if (paginationInfoEl) {
-      if (showLoadMore) {
-        paginationInfoEl.textContent = `Mostrando os primeiros ${paginated.length} de ${filtered.length} colaboradores`;
-      } else {
-        paginationInfoEl.textContent = `Mostrando todos os ${filtered.length} colaboradores`;
-      }
-    }
-
-    list.innerHTML = paginated.map((u, idx) => this.renderCard(u, idx)).join('');
+    list.innerHTML = this._isTableLayout()
+      ? this.renderTableView(paginated, groupByRole)
+      : this.renderCardsView(paginated, groupByRole);
+    this._mountMenus(list);
   },
 
-  renderCard: function (u, idx) {
-    const statusColor = (u.status || 'active') === 'active' ? 'emerald' : 'slate';
-    const statusText = (u.status || 'active') === 'active' ? 'Ativo' : 'Inativo';
-    const statusBorder =
-      (u.status || 'active') === 'active' ? 'border-l-emerald-500' : 'border-l-rose-500';
-    const canManageCollaborators = this._hasPermission('canManageCollaborators');
-    const imgHtml = u.imageUrl
-      ? `<img src="${window.Utils.escapeHTML(u.imageUrl)}" onclick="App.UI.showImagePreview(this.src, '${window.Utils.escapeHTML(u.name)}')" class="w-14 h-14 rounded-full object-cover border-2 border-slate-200 dark:border-slate-700 cursor-zoom-in shadow-sm" loading="lazy" decoding="async">`
-      : '<div class="w-14 h-14 rounded-full border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>';
-
-    const pendingTools = this.getPendingTools(u.name);
-    const pendingBadge =
-      pendingTools.length > 0
-        ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 text-[10px] font-bold rounded border border-rose-200 dark:border-rose-800" title="${pendingTools.length} Ferramenta(s) em posse"><svg class="w-3 h-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> ${pendingTools.length} PENDENTE(S)</span>`
-        : '';
-
-    let whatsappBtn = '';
-    if (u.phone && pendingTools.length > 0) {
-      const rawPhone = u.phone.replace(/\D/g, '');
-      if (rawPhone.length > 0) {
-        const finalPhone = rawPhone.length <= 11 ? `55${rawPhone}` : rawPhone;
-        const msg = encodeURIComponent(
-          `Olá ${u.name.split(' ')[0]}, consta no sistema do Almoxarifado que você possui ${pendingTools.length} ferramenta(s) pendente(s) de devolução. Por favor, regularize assim que possível!`
-        );
-        whatsappBtn = `<a href="https://wa.me/${finalPhone}?text=${msg}" target="_blank" class="flex-1 py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-xl border border-emerald-200 dark:border-emerald-800 transition-colors flex items-center justify-center shadow-sm" title="Cobrar via WhatsApp"><svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></a>`;
-      }
+  // EMPTY: não há colaboradores. NO_RESULTS: há, mas nenhum atende à busca/filtros.
+  _emptyStateHtml: function (hasCollaborators) {
+    if (hasCollaborators) {
+      return EmptyState({
+        title: 'Nenhum colaborador encontrado',
+        description: 'Nenhum colaborador corresponde à busca e aos filtros atuais.',
+        icon: 'icon-search',
+        action: Button({
+          label: 'Limpar filtros',
+          variant: 'secondary',
+          attributes: { 'data-collab-action': 'clear-filters' }
+        })
+      });
     }
 
-    return `<div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 border-l-4 ${statusBorder} p-5 flex flex-col gap-4 hover:shadow-lg transition-all relative overflow-hidden group animate-fade-in opacity-0" style="animation-delay: ${Math.min(idx * 20, 400)}ms; animation-fill-mode: forwards;">
-      <div class="flex items-start gap-4">
-         ${imgHtml}
-         <div class="flex-1 min-w-0 pt-1">
-            <h3 class="font-extrabold text-slate-900 dark:text-white text-base leading-tight truncate" title="${window.Utils.escapeHTML(u.name)}">${window.Utils.escapeHTML(u.name || 'Sem nome')}</h3>
-            <div class="flex items-center gap-2 mt-1.5 flex-wrap"><span class="text-[11px] font-bold text-slate-500 truncate max-w-[120px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded" title="${window.Utils.escapeHTML(u.role)}">${window.Utils.escapeHTML(u.role || 'Não definida')}</span><span class="px-2 py-0.5 bg-${statusColor}-100 dark:bg-${statusColor}-900/30 text-${statusColor}-700 dark:text-${statusColor}-400 text-[10px] font-bold rounded uppercase tracking-wider">${statusText}</span></div>
-            <div class="mt-2">${pendingBadge}</div>
-         </div>
-      </div>
-      <div class="border-t border-slate-100 dark:border-slate-800"></div>
-      <div class="flex flex-col gap-2">
-         <div class="flex justify-between items-center"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ponto/Cracha</span><span class="font-mono text-indigo-600 dark:text-indigo-400 font-bold text-sm bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md border border-indigo-100 dark:border-indigo-800/50">${window.Utils.escapeHTML(u.badge || '-')}</span></div>
-         ${u.phone ? `<div class="flex justify-between items-center"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Contato</span><span class="text-[11px] font-bold text-slate-600 dark:text-slate-300">${window.Utils.escapeHTML(u.phone)}</span></div>` : ''}
-      </div>
-      <div class="flex gap-1.5 mt-2">
-          ${canManageCollaborators ? `<button onclick="App.CRUDCollaborators.openModal('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Editar Colaborador"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg></button>` : ''}
-          ${canManageCollaborators ? `<button onclick="App.CRUDCollaborators.toggleStatus('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 ${u.status === 'inactive' ? 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400' : 'hover:bg-rose-50 dark:hover:bg-rose-900/30 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400'} rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="${u.status === 'inactive' ? 'Ativar' : 'Desativar / Bloquear'}"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M18.36 6.64A9 9 0 0 1 20.77 15"/><path d="M6.16 6.16a9 9 0 1 0 12.68 12.68"/><path d="M12 2v10"/></svg></button>` : ''}
-         <button onclick="App.CRUDCollaborators.showHistory('${window.Utils.escapeHTML(u.name)}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-sky-600 dark:hover:text-sky-400 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center shadow-sm" title="Ver Histórico"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button>
-         ${whatsappBtn}
-          ${canManageCollaborators ? `<button onclick="App.CRUDCollaborators.deleteCollaborator('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-900/30 text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-800 transition-colors flex items-center justify-center shadow-sm" title="Excluir Colaborador"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M3 6h18"/><path d="M19 6v14c0-1 1-2 2-2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>` : ''}
-      </div>
-    </div>`;
+    const action = this._hasPermission('canManageCollaborators')
+      ? Button({
+        label: 'Novo colaborador',
+        variant: 'secondary',
+        icon: 'icon-plus',
+        attributes: { 'data-collab-action': 'new' }
+      })
+      : '';
+
+    return EmptyState({
+      title: 'Nenhum colaborador cadastrado',
+      description: 'Cadastre a equipe autorizada a retirar ferramentas no Scanner.',
+      icon: 'icon-users',
+      action
+    });
+  },
+
+  // Agrupa na ordem já ordenada; os cargos saem em ordem alfabética e "Sem cargo" por último.
+  _groupByRole: function (collaborators) {
+    const groups = new Map();
+
+    collaborators.forEach((c) => {
+      const role = c.role || SEM_CARGO;
+
+      if (!groups.has(role)) {
+        groups.set(role, []);
+      }
+
+      groups.get(role).push(c);
+    });
+
+    return [...groups.entries()].sort(([a], [b]) => {
+      if (a === SEM_CARGO) {
+        return 1;
+      }
+
+      if (b === SEM_CARGO) {
+        return -1;
+      }
+
+      return a.localeCompare(b, 'pt-BR');
+    });
+  },
+
+  // Foto: clicável (amplia) quando existe; ícone decorativo quando não há.
+  _avatar: function (c) {
+    const name = esc(c.name || 'Sem nome');
+
+    return c.imageUrl
+      ? `<button type="button" class="collab-avatar" data-collab-action="preview" data-collab-name="${name}" aria-label="Ampliar foto de ${name}"><img src="${esc(c.imageUrl)}" alt="" loading="lazy" decoding="async"></button>`
+      : `<span class="collab-avatar" aria-hidden="true">${icon('icon-users', 'ui-icon')}</span>`;
+  },
+
+  // Situação (StatusBadge, sempre com texto) + pendências em palavras.
+  _statusCell: function (c) {
+    const pending = this.getPendingTools(c.name).length;
+    const flag = pending
+      ? Badge({
+        label: `${pending} ferramenta${pending !== 1 ? 's' : ''} em posse`,
+        tone: 'warning'
+      })
+      : '';
+
+    return `<div class="collab-status">${StatusBadge((c.status || 'active') === 'active' ? 'active' : 'inactive')}${flag}</div>`;
+  },
+
+  // Cobrança por WhatsApp: só com telefone E pendência (mesma regra e mesma mensagem de antes).
+  _whatsappUrl: function (c, pending) {
+    if (!c.phone || pending <= 0) {
+      return '';
+    }
+
+    const rawPhone = String(c.phone).replace(/\D/g, '');
+
+    if (!rawPhone) {
+      return '';
+    }
+
+    const finalPhone = rawPhone.length <= 11 ? `55${rawPhone}` : rawPhone;
+    const message = encodeURIComponent(
+      `Olá ${String(c.name || '').split(' ')[0]}, consta no sistema do Almoxarifado que você possui ${pending} ferramenta(s) pendente(s) de devolução. Por favor, regularize assim que possível!`
+    );
+
+    return `https://wa.me/${finalPhone}?text=${message}`;
+  },
+
+  // Histórico fica visível para todo perfil que lê a tela (é a única ação comum aos dois); as demais
+  // ficam no menu. Cada função continua validando a permissão ao executar: esconder não é a proteção.
+  _actionsCell: function (c) {
+    const id = esc(c.firebaseId);
+    const name = esc(c.name || 'Sem nome');
+    const canManage = this._hasPermission('canManageCollaborators');
+    const inactive = (c.status || 'active') !== 'active';
+    const whatsapp = this._whatsappUrl(c, this.getPendingTools(c.name).length);
+    const item = (action, label, extra = '') =>
+      `<button type="button" role="menuitem" class="ui-menu__item${extra}" data-collab-action="${action}" data-collab-id="${id}" data-collab-name="${name}">${esc(label)}</button>`;
+
+    const primary = Button({
+      label: 'Histórico',
+      size: 'sm',
+      variant: 'secondary',
+      attributes: {
+        'data-collab-action': 'history',
+        'data-collab-name': name,
+        'aria-label': `Histórico de ${c.name || 'Sem nome'}`
+      }
+    });
+
+    let items = '';
+
+    if (canManage) {
+      items += item('edit', 'Editar');
+      items += item('toggle-status', inactive ? 'Ativar' : 'Inativar');
+    }
+
+    if (whatsapp) {
+      items += `<a role="menuitem" class="ui-menu__item" href="${esc(whatsapp)}" target="_blank" rel="noopener noreferrer">Cobrar no WhatsApp</a>`;
+    }
+
+    if (canManage) {
+      items += '<hr class="ui-menu__sep" role="separator">';
+      items += item('delete', 'Excluir', ' ui-menu__item--danger');
+    }
+
+    if (!items) {
+      return `<div class="collab-actions-cell">${primary}</div>`;
+    }
+
+    const trigger = IconButton({
+      label: `Mais ações de ${c.name || 'Sem nome'}`,
+      icon: 'icon-more',
+      attributes: { 'data-collab-menu-trigger': true }
+    });
+
+    return `<div class="collab-actions-cell">${primary}<div class="collab-menu" data-dropdown>${trigger}<div class="ui-menu" aria-label="Ações de ${name}">${items}</div></div></div>`;
+  },
+
+  _dash: function (label) {
+    return `<span aria-hidden="true">—</span><span class="ui-sr-only">${esc(label)}</span>`;
+  },
+
+  _row: function (c, { withRole }) {
+    const name = esc(c.name || 'Sem nome');
+
+    return `<tr class="collab-row" data-collab-row data-collab-id="${esc(c.firebaseId)}"><th scope="row" class="collab-cell collab-cell--person"><div class="collab-person">${this._avatar(c)}<span class="collab-person__name">${name}</span></div></th><td class="collab-cell collab-cell--badge">${
+      c.badge ? esc(c.badge) : this._dash('Sem crachá')
+    }</td>${
+      withRole ? `<td class="collab-cell">${c.role ? esc(c.role) : this._dash('Sem cargo')}</td>` : ''
+    }<td class="collab-cell">${this._statusCell(c)}</td><td class="collab-cell">${
+      c.phone ? esc(c.phone) : this._dash('Sem contato')
+    }</td><td class="collab-cell collab-cell--actions">${this._actionsCell(c)}</td></tr>`;
+  },
+
+  // Desktop/notebook (>= 1024): tabela semântica para comparar a equipe lado a lado. Agrupada por
+  // cargo, cada grupo é um <tbody> com um cabeçalho de grupo (e a coluna Cargo deixa de repetir).
+  renderTableView: function (collaborators, groupByRole) {
+    const withRole = !groupByRole;
+    const columns = withRole ? 6 : 5;
+    const head = `<thead><tr><th scope="col">Colaborador</th><th scope="col">Crachá</th>${
+      withRole ? '<th scope="col">Cargo</th>' : ''
+    }<th scope="col">Situação</th><th scope="col">Contato</th><th scope="col"><span class="ui-sr-only">Ações</span></th></tr></thead>`;
+
+    const body = groupByRole
+      ? this._groupByRole(collaborators)
+        .map(
+          ([role, members]) =>
+            `<tbody class="collab-group"><tr class="collab-group__row"><th scope="rowgroup" colspan="${columns}" class="collab-group__cell"><span class="collab-group__name">${esc(role)}</span><span class="collab-group__count">${members.length}</span></th></tr>${members
+              .map((c) => this._row(c, { withRole }))
+              .join('')}</tbody>`
+        )
+        .join('')
+      : `<tbody>${collaborators.map((c) => this._row(c, { withRole })).join('')}</tbody>`;
+
+    return `<div class="ui-card collab-table-wrap"><table class="collab-table"><caption class="ui-sr-only">Lista de colaboradores</caption>${head}${body}</table></div>`;
+  },
+
+  // Agrupado, o cargo já está no título do grupo: a linha de identificação não o repete.
+  _card: function (c, { withRole }) {
+    const name = esc(c.name || 'Sem nome');
+    const badge = c.badge ? esc(c.badge) : 'Sem crachá';
+    const meta = withRole ? `${badge} · ${c.role ? esc(c.role) : SEM_CARGO}` : badge;
+
+    return `<li class="ui-card collab-card" data-collab-row data-collab-id="${esc(c.firebaseId)}"><div class="collab-person">${this._avatar(c)}<div class="collab-person__text"><h4 class="collab-person__name">${name}</h4><span class="collab-person__meta">${meta}</span></div></div>${this._statusCell(c)}<dl class="collab-facts"><div class="collab-facts__row"><dt>Contato</dt><dd>${
+      c.phone ? esc(c.phone) : this._dash('Sem contato')
+    }</dd></div></dl>${this._actionsCell(c)}</li>`;
+  },
+
+  // Tablet/mobile (< 1024): cartões compactos, mesma informação e mesma ordem de leitura.
+  renderCardsView: function (collaborators, groupByRole) {
+    if (!groupByRole) {
+      return `<ul class="collab-cards" role="list">${collaborators
+        .map((c) => this._card(c, { withRole: true }))
+        .join('')}</ul>`;
+    }
+
+    return this._groupByRole(collaborators)
+      .map(
+        ([role, members]) =>
+          `<section class="collab-group-section" aria-label="${esc(role)}"><h3 class="collab-group__title"><span class="collab-group__name">${esc(role)}</span><span class="collab-group__count">${members.length}</span></h3><ul class="collab-cards" role="list">${members
+            .map((c) => this._card(c, { withRole: false }))
+            .join('')}</ul></section>`
+      )
+      .join('');
   },
 
   loadMore: function () {
@@ -440,40 +932,27 @@ export const AppCRUDCollaborators = {
     logs.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 
     if (logs.length === 0) {
-      list.innerHTML =
-        '<div class="text-center py-8 text-slate-500 font-medium">Nenhum histórico de movimentação para este colaborador.</div>';
+      list.innerHTML = EmptyState({
+        title: 'Nenhuma movimentação registrada',
+        description: 'Este colaborador ainda não retirou nem devolveu ferramentas.',
+        icon: 'icon-history'
+      });
     } else {
-      list.innerHTML = logs
+      // Cada registro traz o tipo em palavras (StatusBadge), a ferramenta, o patrimônio e a data.
+      list.innerHTML = `<ul class="collab-history" role="list">${logs
         .map((log) => {
           const logType = String(log.type || '').toLowerCase();
-          const accentClass =
-            logType === 'in'
-              ? 'bg-emerald-500'
-              : logType === 'out'
-                ? 'bg-amber-500'
-                : 'bg-slate-400';
-          const safeTool = window.Utils.escapeHTML(log.toolName || 'Desconhecida');
-          const safeCode = window.Utils.escapeHTML(log.toolCode || '-');
-          const date = window.Utils.formatDate(log.date);
-          const typeText = logType === 'in' ? 'Devolveu' : 'Retirou';
-          return `
-          <div class="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 flex items-start gap-4 shadow-sm relative overflow-hidden">
-            <div class="absolute left-0 top-0 w-1 h-full ${accentClass}"></div>
-            <div class="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
-              <svg class="w-4 h-4 ${logType === 'in' ? 'text-emerald-500' : 'text-amber-500'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-bold text-slate-900 dark:text-white"><span class="${logType === 'in' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}">${typeText}</span> a ferramenta</p>
-              <p class="text-base font-extrabold text-slate-800 dark:text-slate-200 truncate mt-0.5">${safeTool}</p>
-              <div class="flex items-center gap-2 mt-2">
-                 <span class="text-[10px] font-mono text-slate-500 bg-slate-100 dark:bg-slate-900 px-2 py-0.5 rounded">${safeCode}</span>
-                 <span class="text-[10px] font-bold text-slate-400">${date}</span>
-              </div>
-            </div>
-          </div>
-        `;
+          const known = logType === 'in' || logType === 'out';
+
+          return `<li class="ui-card collab-history__item"><div class="collab-history__head">${
+            known
+              ? StatusBadge(logType)
+              : Badge({ label: String(log.type || 'Registro') })
+          }<span class="collab-history__date">${window.Utils.escapeHTML(window.Utils.formatDate(log.date))}</span></div><p class="collab-history__tool">${window.Utils.escapeHTML(
+            log.toolName || 'Desconhecida'
+          )}</p><p class="collab-history__code">${window.Utils.escapeHTML(log.toolCode || '-')}</p></li>`;
         })
-        .join('');
+        .join('')}</ul>`;
     }
 
     modal.showModal();
@@ -521,9 +1000,9 @@ export const AppCRUDCollaborators = {
     const input = event?.target || document.getElementById('crud-collab-image');
     const file = input?.files?.[0];
     const preview = document.getElementById('crud-collab-image-preview');
-    const icon = document.getElementById('collab-image-icon');
+    const iconEl = document.getElementById('collab-image-icon');
 
-    if (!file || !preview || !icon) {
+    if (!file || !preview || !iconEl) {
       return;
     }
 
@@ -537,7 +1016,7 @@ export const AppCRUDCollaborators = {
     reader.onload = () => {
       preview.src = String(reader.result || '');
       preview.classList.remove('hidden');
-      icon.classList.add('hidden');
+      iconEl.classList.add('hidden');
     };
     reader.onerror = () => {
       input.value = '';
@@ -554,7 +1033,7 @@ export const AppCRUDCollaborators = {
 
     const m = document.getElementById('crud-collab-modal');
     const pre = document.getElementById('crud-collab-image-preview');
-    const icon = document.getElementById('collab-image-icon');
+    const iconEl = document.getElementById('collab-image-icon');
     if (m) {
       m.showModal();
     }
@@ -565,30 +1044,35 @@ export const AppCRUDCollaborators = {
       pre.classList.add('hidden');
       pre.src = '';
     }
-    if (icon) {
-      icon.classList.remove('hidden');
+    if (iconEl) {
+      iconEl.classList.remove('hidden');
     }
     if (id) {
       const u = window.App.Data.collaborators.find((x) => x.firebaseId === id);
-      document.getElementById('collab-modal-title').innerHTML = 'Editar Colaborador';
+      document.getElementById('collab-modal-title').textContent = 'Editar colaborador';
       document.getElementById('crud-collab-id').value = u.firebaseId;
       document.getElementById('crud-collab-badge').value = u.badge || '';
       document.getElementById('crud-collab-name').value = u.name;
       document.getElementById('crud-collab-role').value = u.role || '';
       document.getElementById('crud-collab-phone').value = u.phone || '';
-      if (u.imageUrl && pre && icon) {
+      if (u.imageUrl && pre && iconEl) {
         pre.src = u.imageUrl;
         pre.classList.remove('hidden');
-        icon.classList.add('hidden');
+        iconEl.classList.add('hidden');
       }
     } else {
-      document.getElementById('collab-modal-title').innerHTML = 'Novo Colaborador';
+      document.getElementById('collab-modal-title').textContent = 'Novo colaborador';
       document.getElementById('crud-collab-id').value = '';
       document.getElementById('crud-collab-badge').value = '';
       document.getElementById('crud-collab-name').value = '';
       document.getElementById('crud-collab-role').value = '';
       document.getElementById('crud-collab-phone').value = '';
     }
+
+    // Abertura limpa: nenhum erro do envio anterior e foco no primeiro campo (não no "Fechar").
+    ['crud-collab-badge', 'crud-collab-name'].forEach((field) => this._setFieldError(field, ''));
+    setBusy(document.getElementById('btn-save-collab'), false);
+    document.getElementById('crud-collab-badge')?.focus();
   },
   closeModal: () => {
     const m = document.getElementById('crud-collab-modal');
@@ -609,7 +1093,28 @@ export const AppCRUDCollaborators = {
       p = document.getElementById('crud-collab-phone').value.trim(),
       file = document.getElementById('crud-collab-image');
 
+    const btn = document.getElementById('btn-save-collab');
+
+    // Envio duplo: o botão fica ocupado (sem perder o foco) e o segundo clique é ignorado.
+    if (isBusy(btn)) {
+      return;
+    }
+
+    this._setFieldError('crud-collab-badge', '');
+    this._setFieldError('crud-collab-name', '');
+
+    // Mesmas regras e mesmas mensagens de domínio de antes; agora também junto do campo.
     if (!n || !b) {
+      if (!b) {
+        this._setFieldError('crud-collab-badge', 'Informe o crachá / ponto.');
+      }
+
+      if (!n) {
+        this._setFieldError('crud-collab-name', 'Informe o nome.');
+      }
+
+      (b ? document.getElementById('crud-collab-name') : document.getElementById('crud-collab-badge'))?.focus();
+
       return window.App.UI.showToast('Os campos Nome e Cracha/Ponto são obrigatórios.', 'warning');
     }
     if (
@@ -620,13 +1125,13 @@ export const AppCRUDCollaborators = {
           String(u.badge).toLowerCase() === String(b).toLowerCase()
       )
     ) {
+      this._setFieldError('crud-collab-badge', 'Este crachá / ponto já está cadastrado.');
+      document.getElementById('crud-collab-badge')?.focus();
+
       return window.App.UI.showToast('Cracha/Ponto já cadastrado.', 'warning');
     }
-    const btn = document.getElementById('btn-save-collab');
-    const orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML =
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 mr-2 animate-spin inline"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Salvando...';
+
+    setBusy(btn, true);
     try {
       if (!auth.currentUser) {
         throw new Error('Sessão inválida ou expirada.');
@@ -675,8 +1180,7 @@ export const AppCRUDCollaborators = {
     } catch (e) {
       window.Logger.error('Erro ao salvar.', e);
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = orig;
+      setBusy(btn, false);
     }
   },
   deleteCollaborator: async function (id) {

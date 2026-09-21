@@ -1,154 +1,113 @@
-<section id="tab-collaborators" aria-labelledby="topbar-title" class="tab-content hidden space-y-6">
-  <div class="panel-card panel-content">
-    <!-- Header com contador -->
-    <div class="grid gap-4 lg:grid-cols-[minmax(240px,1fr)_auto] items-start">
-    <div class="min-w-0">
-      <h3 class="text-2xl font-extrabold text-slate-900 dark:text-white">
-        Colaboradores
-      </h3>
-      <p class="text-slate-500 dark:text-slate-400 mt-1">
-        Equipe autorizada a retirar ferramentas no Scanner.
-      </p>
-      <!-- Contador total -->
-      <p class="text-sm text-slate-500 mt-2" id="collab-total-count">Carregando...</p>
-    </div>
-    <div class="min-w-0 space-y-3">
-      <div class="responsive-action-bar flex flex-wrap justify-start lg:justify-end gap-2 items-center pb-1 w-full lg:w-auto min-w-0 max-w-full">
-      <!-- Exportar lista -->
-      <button
-        id="btn-collaborators-export"
-        type="button"
-        onclick="App.CRUDCollaborators.exportList()"
-        class="ui-btn ui-btn--secondary shrink-0"
+<section id="tab-collaborators" aria-labelledby="topbar-title" class="tab-content hidden">
+  <!-- Tela Colaboradores (Gate 1-F3). Filtros, busca e a lista são montados por
+       App.CRUDCollaborators (src/js/modules/collaborators.js) com os componentes do design system;
+       o título da página (h1) é o do shell. Os ids abaixo têm consumidores (auth, testes): não renomear. -->
+  <div id="collab-screen" class="collab-screen">
+    <div class="collab-header">
+      <div
+        class="responsive-action-bar collab-actions"
+        role="group"
+        aria-label="Ações de colaboradores"
       >
-        <svg class="w-4 h-4" aria-hidden="true"><use href="#icon-download"></use></svg>
-        Exportar
-      </button>
-      <button
-        id="btn-collaborators-import"
-        type="button"
-        onclick="document.getElementById('crud-import-input-collab').click()"
-        class="btn px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold shadow-sm transition-all active:scale-95 flex items-center gap-2 text-sm whitespace-nowrap shrink-0"
-      >
-        <svg class="w-4 h-4 shrink-0" aria-hidden="true"><use href="#icon-import"></use></svg>
-        Importar
-      </button>
-      <button
-        id="btn-collaborators-new"
-        type="button"
-        onclick="App.CRUDCollaborators.openModal()"
-        class="btn btn-primary px-4 py-2.5 font-bold active:scale-95 text-sm whitespace-nowrap shrink-0"
-      >
-        <svg class="w-4 h-4 shrink-0" aria-hidden="true"><use href="#icon-plus"></use></svg>
-      Novo
-      </button>
-    </div>
-    <input
-      type="file"
-      id="crud-import-input-collab"
-      class="hidden"
-      accept=".xlsx, .xls"
-      onchange="App.CRUDCollaborators.importFile(event)"
-    />
-    </div>
-  </div>
-
-  <!-- Filtros Rápidos (Pendências) -->
-  <div class="flex flex-wrap gap-2" id="collab-quick-filters">
-    <button
-      type="button"
-      onclick="App.CRUDCollaborators.setPendingFilter('all')"
-      class="collab-filter-btn active px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border bg-brand-600 text-white border-brand-600"
-      data-filter="all"
-    >
-      Todos
-    </button>
-    <button
-      type="button"
-      onclick="App.CRUDCollaborators.setPendingFilter('pending')"
-      class="collab-filter-btn px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-rose-300"
-      data-filter="pending"
-    >
-      Com Pendências
-    </button>
-  </div>
-
-  <!-- Filtros Avançados -->
-  <div
-    class="bg-white dark:bg-slate-900 p-3 md:p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm"
-  >
-    <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2 md:gap-3">
-      <!-- Busca -->
-      <div class="col-span-2 sm:col-span-1 lg:col-span-2 relative">
-        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" aria-hidden="true"><use href="#icon-search"></use></svg>
-        <input
-          id="collab-search"
-          type="text"
-          placeholder="Buscar por nome ou crachá..."
-          class="w-full pl-12 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all shadow-sm"
-        />
+        <button
+          id="btn-collaborators-export"
+          type="button"
+          class="ui-btn ui-btn--secondary"
+          data-collab-action="export"
+          title="Exportar lista completa"
+        >
+          <svg class="ui-icon ui-btn__icon" aria-hidden="true"><use href="#icon-download"></use></svg>
+          <span class="ui-btn__label">Exportar</span>
+        </button>
+        <button
+          id="btn-collaborators-import"
+          type="button"
+          class="ui-btn ui-btn--secondary"
+          data-collab-action="import"
+        >
+          <svg class="ui-icon ui-btn__icon" aria-hidden="true"><use href="#icon-import"></use></svg>
+          <span class="ui-btn__label">Importar</span>
+        </button>
+        <button
+          id="btn-collaborators-new"
+          type="button"
+          class="ui-btn ui-btn--primary"
+          data-collab-action="new"
+        >
+          <svg class="ui-icon ui-btn__icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+          <span class="ui-btn__label">Novo</span>
+        </button>
       </div>
-      <!-- Filtro por Cargo -->
-      <select
-        id="collab-role-filter"
-        class="collab-filter-select px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-brand-500/20"
-      >
-        <option value="all">Todos os Cargos</option>
-      </select>
-      <!-- Filtro por Status -->
-      <select
-        id="collab-status-filter"
-        class="collab-filter-select px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-brand-500/20"
-      >
-        <option value="all">Todos os Status</option>
-        <option value="active">Ativo</option>
-        <option value="inactive">Inativo</option>
-      </select>
-      <!-- Ordenação -->
-      <select
-        id="collab-sort"
-        class="collab-sort-select px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-brand-500/20"
-      >
-        <option value="name-asc">Nome A-Z</option>
-        <option value="name-desc">Nome Z-A</option>
-        <option value="badge">Crachá</option>
-        <option value="recent">Mais Recentes</option>
-      </select>
+      <input
+        type="file"
+        id="crud-import-input-collab"
+        class="hidden"
+        accept=".xlsx, .xls"
+        aria-label="Importar colaboradores de uma planilha Excel"
+      />
     </div>
-    <!-- Contador de resultados e toggle de agrupamento -->
-    <div
-      class="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 gap-2"
-    >
-      <p class="text-xs text-slate-500" id="collab-result-count" aria-live="polite">
-        Mostrando 0 de 0 colaboradores
+
+    <!-- Situação (com contagem) e pendências continuam sendo dois filtros independentes. -->
+    <div class="collab-filters">
+      <div
+        id="collab-filters"
+        class="collab-chips"
+        role="group"
+        aria-label="Filtrar por situação"
+      ></div>
+      <div
+        id="collab-pending-filters"
+        class="collab-chips"
+        role="group"
+        aria-label="Filtrar por pendências"
+      ></div>
+    </div>
+
+    <!-- Busca, cargo e ordenação: renderizados por App.CRUDCollaborators.mountControls. -->
+    <div id="collab-toolbar" class="collab-toolbar"></div>
+
+    <div class="collab-meta">
+      <p id="collab-result-count" class="collab-meta__count" aria-live="polite">
+        Carregando colaboradores...
       </p>
-      <div class="ui-switch">
-        <input class="ui-switch__input" type="checkbox" role="switch" id="collab-group-toggle" checked />
+      <span id="collab-active-filters" class="collab-meta__filters"></span>
+      <button
+        id="collab-clear-filters"
+        type="button"
+        class="ui-btn ui-btn--ghost ui-btn--sm"
+        data-collab-action="clear-filters"
+        hidden
+      >
+        <span class="ui-btn__label">Limpar filtros</span>
+      </button>
+      <div class="ui-switch collab-meta__group">
+        <input
+          class="ui-switch__input"
+          type="checkbox"
+          role="switch"
+          id="collab-group-toggle"
+          checked
+        />
         <span class="ui-switch__track" aria-hidden="true"><span class="ui-switch__thumb"></span></span>
         <label class="ui-switch__label" for="collab-group-toggle">Agrupar por cargo</label>
       </div>
     </div>
-  </div>
 
-  <!-- Lista com paginação -->
-  <div
-    id="collab-list"
-    class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
-  ></div>
-
-  <!-- Paginação -->
-  <div class="flex flex-col items-center gap-4" id="collab-pagination">
-    <button
-      id="collab-load-more"
-      type="button"
-      onclick="App.CRUDCollaborators.loadMore()"
-      class="w-full max-w-md py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-sm shadow-sm"
-    >
-      Carregar Mais (30)
-    </button>
-    <p class="text-xs text-slate-400" id="collab-pagination-info" aria-live="polite">
-      Mostrando os primeiros 30 colaboradores
-    </p>
-  </div>
+    <section aria-labelledby="collab-list-title" class="collab-list-section">
+      <h2 id="collab-list-title" class="ui-sr-only">Lista de colaboradores</h2>
+      <div id="collab-feedback" class="collab-feedback"></div>
+      <div id="collab-list" class="collab-list"></div>
+      <div class="collab-more">
+        <button
+          id="collab-load-more"
+          type="button"
+          class="ui-btn ui-btn--secondary"
+          data-collab-action="load-more"
+          hidden
+        >
+          <span class="ui-btn__label">Carregar mais</span>
+        </button>
+      </div>
+    </section>
   </div>
 </section>

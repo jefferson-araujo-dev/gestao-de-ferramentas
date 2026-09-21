@@ -1,119 +1,117 @@
+<!-- Formulário de colaborador (Gate 1-F3): componentes do design system, rótulos sempre visíveis e
+     mensagem de erro ligada ao campo. Campos, obrigatoriedade, validação e persistência inalterados;
+     os ids (crud-collab-*) têm consumidores em collaborators.js e nos testes. -->
 <dialog
   data-dismissible="false"
   id="crud-collab-modal"
-  class="p-0 bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden open:animate-fade-in max-h-[calc(var(--app-height)-2rem)] open:grid grid-rows-[auto_minmax(0,1fr)_auto] backdrop:bg-slate-900/60 backdrop:backdrop-blur-sm"
+  class="ui-modal"
+  aria-labelledby="collab-modal-title"
 >
-  <div
-    class="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0"
-  >
-    <h3 id="collab-modal-title" class="text-xl font-extrabold text-slate-900 dark:text-white">
-      Novo Colaborador
-    </h3>
-    <button
-      type="button"
-      onclick="App.CRUDCollaborators.closeModal()"
-      class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-     aria-label="Fechar">
-      <svg class="w-5 h-5" aria-hidden="true"><use href="#icon-close"></use></svg>
+  <div class="ui-modal__header">
+    <h2 id="collab-modal-title" class="ui-modal__title">Novo Colaborador</h2>
+    <button type="button" class="ui-icon-btn ui-icon-btn--ghost" data-modal-close aria-label="Fechar">
+      <svg class="ui-icon" aria-hidden="true"><use href="#icon-close"></use></svg>
     </button>
   </div>
-  <div class="p-6 space-y-4 overflow-y-auto min-h-0">
-    <input type="hidden" id="crud-collab-id" />
-    <div>
-      <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
-        >Crachá / Ponto</label
-      >
-      <input
-        id="crud-collab-badge"
-        type="text"
-        class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 dark:text-white"
-        required
-      />
-    </div>
-    <div>
-      <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
-        >Nome</label
-      >
-      <input
-        id="crud-collab-name"
-        type="text"
-        class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 dark:text-white"
-        required
-      />
-    </div>
-    <div>
-      <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
-        >Função</label
-      >
-      <input
-        id="crud-collab-role"
-        type="text"
-        class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 dark:text-white"
-      />
-    </div>
-    <div class="grid grid-cols-2 gap-4">
-      <div class="col-span-2 sm:col-span-1">
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
-          >Telefone / WhatsApp</label
+  <div class="ui-modal__body">
+    <div class="collab-form">
+      <input type="hidden" id="crud-collab-id" />
+
+      <div class="ui-field">
+        <label class="ui-label" for="crud-collab-badge"
+          >Crachá / Ponto<span class="ui-required" aria-hidden="true"> *</span></label
         >
         <input
-          id="crud-collab-phone"
-          type="tel"
-          placeholder="Ex: 11999999999"
-          class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 dark:text-white"
+          class="ui-control"
+          id="crud-collab-badge"
+          type="text"
+          required
+          autocomplete="off"
+          aria-describedby="crud-collab-badge-help crud-collab-badge-error"
         />
+        <p class="ui-help" id="crud-collab-badge-help">
+          Identificador usado no Scanner para retirar e devolver ferramentas.
+        </p>
+        <p class="ui-error" id="crud-collab-badge-error" hidden></p>
       </div>
-      <div class="col-span-2 sm:col-span-1">
-        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
-          >Foto</label
+
+      <div class="ui-field">
+        <label class="ui-label" for="crud-collab-name"
+          >Nome<span class="ui-required" aria-hidden="true"> *</span></label
         >
-        <div class="flex items-center gap-3">
-          <div
-            class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shrink-0"
-          >
-            <img id="crud-collab-image-preview" src="" class="w-full h-full object-cover hidden" />
-            <svg
-              id="collab-image-icon"
-              class="w-5 h-5 text-slate-400"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
+        <input
+          class="ui-control"
+          id="crud-collab-name"
+          type="text"
+          required
+          autocomplete="off"
+          aria-describedby="crud-collab-name-error"
+        />
+        <p class="ui-error" id="crud-collab-name-error" hidden></p>
+      </div>
+
+      <div class="collab-form__row">
+        <div class="ui-field">
+          <label class="ui-label" for="crud-collab-role">Cargo</label>
+          <input
+            class="ui-control"
+            id="crud-collab-role"
+            type="text"
+            autocomplete="off"
+            aria-describedby="crud-collab-role-error"
+          />
+          <p class="ui-error" id="crud-collab-role-error" hidden></p>
+        </div>
+
+        <div class="ui-field">
+          <label class="ui-label" for="crud-collab-phone">Telefone / WhatsApp</label>
+          <input
+            class="ui-control"
+            id="crud-collab-phone"
+            type="tel"
+            inputmode="tel"
+            placeholder="Ex: 11999999999"
+            autocomplete="off"
+            aria-describedby="crud-collab-phone-error"
+          />
+          <p class="ui-error" id="crud-collab-phone-error" hidden></p>
+        </div>
+      </div>
+
+      <div class="ui-field">
+        <span class="ui-label" id="crud-collab-photo-label">Foto</span>
+        <div class="collab-photo">
+          <span class="collab-photo__preview">
+            <img id="crud-collab-image-preview" src="" alt="" class="hidden" />
+            <svg id="collab-image-icon" class="ui-icon" aria-hidden="true">
+              <use href="#icon-users"></use>
             </svg>
-          </div>
-          <label
-            class="flex-1 py-2.5 px-3 bg-white dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-600 rounded-xl text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-xs font-bold text-slate-500"
-          >
-            Upload Foto
-            <input type="file" id="crud-collab-image" class="hidden" accept="image/*" />
+          </span>
+          <input
+            type="file"
+            id="crud-collab-image"
+            class="collab-photo__input"
+            accept="image/*"
+            aria-labelledby="crud-collab-photo-label crud-collab-image-label"
+          />
+          <label class="collab-photo__label" id="crud-collab-image-label" for="crud-collab-image">
+            Enviar foto
           </label>
         </div>
       </div>
     </div>
   </div>
-  <div
-    class="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex gap-3 shrink-0"
-  >
-    <button
-      type="button"
-      onclick="App.CRUDCollaborators.closeModal()"
-      class="flex-1 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-    >
-      Cancelar
+  <div class="ui-modal__footer">
+    <button type="button" class="ui-btn ui-btn--secondary" data-modal-close>
+      <span class="ui-btn__label">Cancelar</span>
     </button>
     <button
       id="btn-save-collab"
       type="button"
-      onclick="App.CRUDCollaborators.saveCollaborator()"
-      class="flex-1 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-md shadow-brand-600/20 transition-all active:scale-95"
+      class="ui-btn ui-btn--primary"
+      data-collab-action="save"
     >
-      Salvar
+      <span class="ui-btn__label">Salvar</span>
     </button>
   </div>
 </dialog>

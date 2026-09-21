@@ -312,6 +312,8 @@ export const AppUI = {
     this.renderDashboardControls();
     // Busca, categoria, ordenação e filtros de status de Ferramentas (também antes dos listeners).
     window.App.CRUDTools.mountControls();
+    // Busca, cargo, ordenação e filtros de situação de Colaboradores (idem).
+    window.App.CRUDCollaborators.mountControls();
 
     // Menu da conta: componente Dropdown; ações por data-menu-action (sem onclick inline).
     const userTrigger = document.getElementById('user-menu-trigger');
@@ -382,18 +384,8 @@ export const AppUI = {
       ['dash-filter', 'dash-sort'].forEach((id) =>
         document.getElementById(id)?.addEventListener('change', () => this.renderDashboard())
       );
-      // Collaborators filters
-      ['collab-role-filter', 'collab-sort', 'collab-status-filter'].forEach((id) =>
-        document.getElementById(id)?.addEventListener('change', () => {
-          window.App.CRUDCollaborators.collabLimit = 30;
-          window.App.CRUDCollaborators.render();
-        })
-      );
-      // Group toggle
-      document.getElementById('collab-group-toggle')?.addEventListener('change', () => {
-        window.App.CRUDCollaborators.collabLimit = 30;
-        window.App.CRUDCollaborators.render();
-      });
+      // Cargo, ordenação e agrupamento de Colaboradores: listeners de App.CRUDCollaborators
+      // (mountControls), junto dos controles que ele mesmo renderiza.
 
       // A navegação (links #/rota) é do App.Shell + hash router: ver startRouting().
 
