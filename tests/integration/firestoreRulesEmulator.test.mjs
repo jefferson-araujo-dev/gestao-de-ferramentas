@@ -5,8 +5,8 @@
 //
 // Contrato de leitura de colaboradores: ADMIN e PADRÃO (ativos) leem; RESTRITO não lê nem lista
 // nem busca por crachá (a resolução do crachá é feita pelo servidor, com o Admin SDK).
-// Ferramentas: nenhum cliente (nem o admin) cria ou leva uma ferramenta para 'borrowed'; o
-// empréstimo é exclusivo da API de movimentação.
+// Ferramentas: nenhum cliente (nem o admin) cria, leva para ou tira de 'borrowed', nem altera os
+// campos do empréstimo; empréstimo e devolução são exclusivos da API de movimentação.
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
@@ -24,6 +24,7 @@ const {
   collection,
   collectionGroup,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -258,8 +259,8 @@ describe('firestore.rules: colaboradores por perfil (Auth + Firestore Emulator)'
     }
   });
 
-  // Empréstimo é exclusivo da API de movimentação (Admin SDK): nenhum cliente entra em 'borrowed'.
-  describe('ferramentas: nenhum cliente leva uma ferramenta para borrowed', () => {
+  // Empréstimo e devolução são exclusivos da API de movimentação (Admin SDK).
+  describe('ferramentas: nenhum cliente entra, sai ou altera o estado de borrowed', () => {
     const toolsPath = `${BASE}/tools`;
     const scratchIds = ['rb-available', 'rb-maintenance', 'rb-borrowed', 'rb-nova', 'rb-nova-admin'];
 
@@ -355,6 +356,119 @@ describe('firestore.rules: colaboradores por perfil (Auth + Firestore Emulator)'
         assert.equal((await adminDb.doc(`${toolsPath}/rb-nova`).get()).exists, false);
       });
     }
+
+    // Campos que o empréstimo/devolução gravam (api/tools/movement.js): só o Admin SDK os altera.
+    const LOAN_STATE = {
+      status: 'borrowed',
+      currentUser: 'Colaborador Alfa',
+      currentCollaboratorId: 'c1',
+      lastAction: '2026-09-01T10:00:00.000Z',
+    };
+    const borrowedSnapshot = async () =>
+      JSON.stringify((await adminDb.doc(`${toolsPath}/rb-borrowed`).get()).data());
+
+    const leaveOrTamperAttempts = (db) => {
+      const borrowed = doc(db, `${toolsPath}/rb-borrowed`);
+
+      return [
+        ['borrowed -> available', () => updateDoc(borrowed, { status: 'available' })],
+        ['borrowed -> maintenance', () => updateDoc(borrowed, { status: 'maintenance' })],
+        ['borrowed -> outro status', () => updateDoc(borrowed, { status: 'lost' })],
+        ['remover o status', () => updateDoc(borrowed, { status: deleteField() })],
+        [
+          'devolução falsa (available + limpa colaborador)',
+          () =>
+            updateDoc(borrowed, {
+              status: 'available',
+              currentUser: null,
+              currentCollaboratorId: null,
+              lastAction: '2026-09-02T10:00:00.000Z',
+            }),
+        ],
+        ['trocar currentCollaboratorId', () => updateDoc(borrowed, { currentCollaboratorId: 'c3' })],
+        ['trocar currentUser', () => updateDoc(borrowed, { currentUser: 'Colaborador Gama' })],
+        ['limpar currentUser', () => updateDoc(borrowed, { currentUser: null })],
+        ['remover currentCollaboratorId', () => updateDoc(borrowed, { currentCollaboratorId: deleteField() })],
+        ['trocar lastAction', () => updateDoc(borrowed, { lastAction: '2026-09-03T10:00:00.000Z' })],
+        [
+          'setDoc sobrescrevendo com outro colaborador',
+          () =>
+            setDoc(borrowed, {
+              code: 'rb-borrowed',
+              name: 'Emprestada',
+              category: 'Elétrica',
+              ...LOAN_STATE,
+              currentUser: 'Colaborador Gama',
+              currentCollaboratorId: 'c3',
+            }),
+        ],
+        [
+          'setDoc merge para available',
+          () => setDoc(borrowed, { status: 'available' }, { merge: true }),
+        ],
+      ];
+    };
+
+    before(async () => {
+      await adminDb.doc(`${toolsPath}/rb-borrowed`).update(LOAN_STATE);
+    });
+
+    for (const [label, key] of [
+      ['ADMIN', 'admin'],
+      ['ADMIN com a flag isRestricted', 'adminflag'],
+      ['PADRÃO', 'standard'],
+      ['PADRÃO legado', 'legacy'],
+      ['RESTRITO', 'restricted'],
+    ]) {
+      test(`${label}: ferramenta emprestada não sai de borrowed nem troca os campos do empréstimo`, async () => {
+        const before = await borrowedSnapshot();
+
+        for (const [attempt, operation] of leaveOrTamperAttempts(users[key].db)) {
+          await assertDenied(operation, `${label}: ${attempt}`);
+        }
+
+        assert.equal(await borrowedSnapshot(), before);
+      });
+    }
+
+    test('ADMIN: editar dados que não são do empréstimo numa ferramenta emprestada continua permitido', async () => {
+      const borrowed = doc(users.admin.db, `${toolsPath}/rb-borrowed`);
+
+      // Mesmo formato do saveTool para ferramenta emprestada (sem status).
+      await assertAllowed(
+        () =>
+          updateDoc(borrowed, {
+            name: 'Emprestada (editada)',
+            category: 'Manual',
+            condition: 'Regular',
+            nextMaintenance: '2027-01-01',
+            notes: 'Observação',
+            manualUrl: null,
+            manualName: null,
+            imageUrl: 'data:image/png;base64,AA==',
+          }),
+        'metadados'
+      );
+      // Reenviar os campos do empréstimo com o MESMO valor não é alteração.
+      await assertAllowed(
+        () => setDoc(borrowed, { ...LOAN_STATE, notes: 'Outra observação' }, { merge: true }),
+        'merge com campos do empréstimo inalterados'
+      );
+
+      const stored = (await adminDb.doc(`${toolsPath}/rb-borrowed`).get()).data();
+
+      assert.equal(stored.name, 'Emprestada (editada)');
+      assert.equal(stored.notes, 'Outra observação');
+      for (const [field, value] of Object.entries(LOAN_STATE)) {
+        assert.equal(stored[field], value, field);
+      }
+
+      record(
+        'RULES_BORROWED_METADATA_FIELDS_ALLOWED',
+        'name,category,condition,nextMaintenance,notes,manualUrl,manualName,imageUrl'
+      );
+      record('RULES_BORROWED_LOAN_FIELDS_LOCKED', 'status,currentUser,currentCollaboratorId,lastAction');
+    });
 
     test('PADRÃO e RESTRITO: nem alterações sem empréstimo são permitidas em tools', async () => {
       for (const key of ['standard', 'restricted']) {
