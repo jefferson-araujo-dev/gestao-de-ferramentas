@@ -211,6 +211,27 @@ describe('Dropdown: libera o listener do documento (menus por linha re-renderiza
     assert.match(overlays, /this\.onClose\?\.\(\{ restoreFocus \}\)/);
   });
 
+  test('onOpen do Dropdown existe e tools.js isola o resto da tela enquanto um menu de linha está aberto', () => {
+    assert.ok(overlays.includes('constructor({ trigger, panel, onOpen, onClose }'));
+    assert.ok(overlays.includes('this.onOpen?.();'));
+    assert.ok(tools.includes('onOpen: () => this._setBackgroundInert('));
+    assert.ok(tools.includes('this._setBackgroundInert(null)'));
+    assert.ok(tools.includes('element.inert = Boolean(activeRow) && element !== activeRow'));
+  });
+
+  test('os testes de axe não usam exclusão (nada de conteúdo escondido da varredura)', () => {
+    const tests = new URL('../e2e/', import.meta.url);
+
+    for (const file of ['support/axe.js', 'a11y-baseline.spec.js', 'baseline.mobile.spec.js']) {
+      const source = readFileSync(new URL(file, tests), 'utf8');
+
+      assert.ok(
+        !source.includes('.exclude(') && !source.includes('exclude:'),
+        `${file}: exclusão no axe`
+      );
+    }
+  });
+
   test('tools.js descarta os menus antes de cada renderização', () => {
     const render = tools.slice(
       tools.indexOf('render: function'),

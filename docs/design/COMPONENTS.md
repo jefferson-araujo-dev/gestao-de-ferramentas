@@ -94,6 +94,10 @@ Ciclo de vida (Gate 1-F2): o único listener que o Dropdown registra fora do pr�
 `document`) é removido por `dispose()`. Menus criados a cada renderização de uma lista **devem** chamar
 `dispose()` antes de substituir o HTML, senão cada render acumula um listener. `onClose` recebe
 `{ restoreFocus }`: quem re-renderiza a lista ao fechar o menu sabe se deve devolver o foco ao gatilho novo.
+`onOpen` (sem argumento) avisa a abertura, simétrico ao `onClose`. Um menu **flutuante** cobre parte de outros
+alvos da página e um clique fora dele, sobre a faixa ainda visível de um botão coberto, fecha o menu e também
+aciona esse botão (o axe `target-size` acusa a faixa). Quando o menu está sobre uma lista de ações, quem o
+usa deve tornar o restante da tela `inert` entre `onOpen` e `onClose` (como a tela Ferramentas faz).
 
 ## Adoção controlada nas telas
 

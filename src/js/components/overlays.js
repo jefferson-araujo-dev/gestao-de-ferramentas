@@ -316,13 +316,14 @@ const ITEM_SELECTOR = '[role="menuitem"]:not([aria-disabled="true"]):not(:disabl
  * O contrato ARIA completo (role="menu") só existe porque todo esse teclado está implementado.
  */
 export class Dropdown {
-  constructor({ trigger, panel, onClose } = {}) {
+  constructor({ trigger, panel, onOpen, onClose } = {}) {
     if (!trigger || !panel) {
       throw new Error('Dropdown exige trigger e panel.');
     }
 
     this.trigger = trigger;
     this.panel = panel;
+    this.onOpen = onOpen;
     this.onClose = onClose;
     this.root = trigger.closest('[data-dropdown]') || trigger.parentElement;
 
@@ -394,6 +395,7 @@ export class Dropdown {
     const target = focus === 'last' ? items[items.length - 1] : items[0];
 
     target?.focus();
+    this.onOpen?.();
   }
 
   close({ restoreFocus = true } = {}) {

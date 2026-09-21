@@ -1119,13 +1119,29 @@ export const AppCRUDTools = {
         new Dropdown({
           trigger: root.querySelector('[data-tools-menu-trigger]'),
           panel: root.querySelector('.ui-menu'),
-          onClose: ({ restoreFocus } = {}) =>
+          onOpen: () => this._setBackgroundInert(root.closest('[data-tool-id]')),
+          onClose: ({ restoreFocus } = {}) => {
+            this._setBackgroundInert(null);
             this._flushPendingRender({
               restoreFocus,
               toolId: root.closest('[data-tool-id]')?.dataset.toolId
-            })
+            });
+          }
         })
     );
+  },
+
+  // Com um menu de linha aberto, o resto da tela fica inerte (sem clique, sem foco): o menu flutuante
+  // cobre parte de botões de outras linhas e um clique fora dele, em uma faixa ainda visível, fecharia o
+  // menu E acionaria o botão de baixo (ex.: Emprestar levava ao Scanner). Sem linha ativa, tudo volta.
+  _setBackgroundInert: function (activeRow) {
+    document
+      .querySelectorAll(
+        '#tools-screen .tools-header, #tools-filters, #tools-toolbar, .tools-meta, #crud-load-more, #crud-list tr[data-tool-id], #crud-list li[data-tool-id]'
+      )
+      .forEach((element) => {
+        element.inert = Boolean(activeRow) && element !== activeRow;
+      });
   },
 
   // Uma atualização de dados durante um menu aberto esperaria o menu fechar: re-renderizar agora

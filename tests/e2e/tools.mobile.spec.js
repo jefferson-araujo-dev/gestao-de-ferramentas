@@ -60,12 +60,19 @@ test.describe('MOBILE 390x844 — Ferramentas', () => {
   });
 
   test('filtros e busca funcionam com toque e sem rolagem horizontal', async ({ page }) => {
-    await page.locator('#tools-filters').getByRole('button', { name: /^Manutenção/ }).tap();
-    await expect(page.locator('#inventory-result-count')).toHaveText('Mostrando 2 de 2 ferramentas');
+    await page
+      .locator('#tools-filters')
+      .getByRole('button', { name: /^Manutenção/ })
+      .tap();
+    await expect(page.locator('#inventory-result-count')).toHaveText(
+      'Mostrando 2 de 2 ferramentas'
+    );
     await expect(page.locator('#crud-list ul.tools-cards > li')).toHaveCount(2);
 
     await page.locator('#tools-clear-filters').tap();
-    await expect(page.locator('#inventory-result-count')).toHaveText('Mostrando 8 de 8 ferramentas');
+    await expect(page.locator('#inventory-result-count')).toHaveText(
+      'Mostrando 8 de 8 ferramentas'
+    );
 
     await page.getByRole('searchbox').fill('trena');
     await expect(page.locator('#crud-list ul.tools-cards > li')).toHaveCount(1);
@@ -115,5 +122,72 @@ test.describe('MOBILE 390x844 — Ferramentas', () => {
     });
 
     expect(gap.lastBottom).toBeLessThanOrEqual(gap.navTop);
+  });
+});
+
+// Addendum 1-F2.1: também no toque, o menu aberto isola o resto da tela.
+test.describe('MOBILE 390x844 — menu aberto isola o restante da tela', () => {
+  test('toque fora do menu só o fecha e não aciona o botão de outro cartão', async ({ page }) => {
+    await loginAs(page, E2E_USERS.admin);
+    await openTab(page, 'management');
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+    await page.evaluate(() => {
+      window.__switchCalls = [];
+
+      const original = window.App.UI.switchTab.bind(window.App.UI);
+
+      window.App.UI.switchTab = (...args) => {
+        window.__switchCalls.push(args[0]);
+        return original(...args);
+      };
+    });
+
+    const triggers = page.locator('#crud-list [data-tools-menu-trigger]');
+    let point = null;
+
+    // Procura uma abertura em que um botão principal de OUTRO cartão (inerte) esteja visível, fora do
+    // menu e acima da barra inferior: é onde o toque antes atravessava para a ação de baixo.
+    for (let index = 0; index < (await triggers.count()) && !point; index += 1) {
+      await triggers.nth(index).scrollIntoViewIfNeeded();
+      await triggers.nth(index).tap();
+      await expect(page.getByRole('menu')).toBeVisible();
+
+      const open = await page.evaluate(() => ({
+        active: document.querySelectorAll('#crud-list li[data-tool-id]:not([inert])').length,
+        inert: document.querySelectorAll('#crud-list li[data-tool-id][inert]').length,
+      }));
+
+      expect(open).toEqual({ active: 1, inert: E2E_EXPECTED_COUNTS.tools - 1 });
+
+      point = await page.evaluate(() => {
+        const menu = document.querySelector('.ui-menu:not([hidden])').getBoundingClientRect();
+        const navTop = document.getElementById('bottom-nav').getBoundingClientRect().top;
+
+        for (const button of document.querySelectorAll('#crud-list .tools-card[inert] .ui-btn')) {
+          const rect = button.getBoundingClientRect();
+          const x = (rect.left + rect.right) / 2;
+          const y = (rect.top + rect.bottom) / 2;
+          const underMenu = x >= menu.left && x <= menu.right && y >= menu.top && y <= menu.bottom;
+
+          if (!underMenu && rect.top > 60 && rect.bottom < navTop) {
+            return { x, y };
+          }
+        }
+
+        return null;
+      });
+
+      if (!point) {
+        await page.keyboard.press('Escape');
+      }
+    }
+
+    expect(
+      point,
+      'alguma abertura deve deixar um botão de outro cartão visível fora do menu'
+    ).not.toBeNull();
+    await page.touchscreen.tap(point.x, point.y);
+    await expect(page.getByRole('menu')).toBeHidden();
+    expect(await page.evaluate(() => window.__switchCalls)).toEqual([]);
   });
 });

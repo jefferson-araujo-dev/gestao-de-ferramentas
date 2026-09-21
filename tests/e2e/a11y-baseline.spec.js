@@ -28,8 +28,8 @@ test.describe.configure({ mode: 'serial' });
 const collected = {};
 let axeVersion = 'desconhecida';
 
-async function check(page, project, screen, options) {
-  const { violations, axeVersion: version } = await scan(page, options);
+async function check(page, project, screen) {
+  const { violations, axeVersion: version } = await scan(page);
 
   axeVersion = version;
   collected[screen] = violations;
@@ -44,14 +44,8 @@ async function check(page, project, screen, options) {
 // Gate 1-F1: a varredura de página inteira inclui o cabeçalho do shell (#network-status-text, texto
 // 10px em slate-400, contraste anterior a este gate e presente em todas as telas). Para a tela nova,
 // a varredura restrita ao seu próprio conteúdo/diálogo não pode ter NENHUMA violação.
-async function expectScopedClean(page, selector, label, exclude) {
-  const builder = new AxeBuilder({ page }).include(selector).withTags(AXE_TAGS);
-
-  if (exclude) {
-    builder.exclude(exclude);
-  }
-
-  const results = await builder.analyze();
+async function expectScopedClean(page, selector, label) {
+  const results = await new AxeBuilder({ page }).include(selector).withTags(AXE_TAGS).analyze();
 
   expect(
     results.violations.map((violation) => `${violation.id}: ${violation.nodes.length} nó(s)`),
@@ -196,7 +190,10 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
     await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
     await expectScopedClean(page, '#tab-management', 'ociosa');
 
-    await page.locator('#tools-filters').getByRole('button', { name: /^Disponíveis/ }).click();
+    await page
+      .locator('#tools-filters')
+      .getByRole('button', { name: /^Disponíveis/ })
+      .click();
     await page.locator('#inventory-category-filter').selectOption('Elétrica');
     await page.getByRole('searchbox').fill('furad');
     await expect(page.locator('#tools-active-filters')).toHaveText('3 filtros ativos');
@@ -204,12 +201,14 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
     await expectScopedClean(page, '#tab-management', 'busca e filtros ativos');
 
     await page.locator('#tools-clear-filters').click();
-    await expect(page.locator('#inventory-result-count')).toHaveText('Mostrando 8 de 8 ferramentas');
+    await expect(page.locator('#inventory-result-count')).toHaveText(
+      'Mostrando 8 de 8 ferramentas'
+    );
 
     await page.locator('#crud-list [data-tools-menu-trigger]').first().click();
     await expect(page.getByRole('menu')).toBeVisible();
-    await check(page, project, 'admin-ferramentas-menu', { exclude: '#crud-list tr.tools-row ~ tr.tools-row' });
-    await expectScopedClean(page, '#tab-management', 'menu de ações aberto', '#crud-list tr.tools-row ~ tr.tools-row');
+    await check(page, project, 'admin-ferramentas-menu');
+    await expectScopedClean(page, '#tab-management', 'menu de ações aberto');
     await page.getByRole('menuitem', { name: 'Histórico' }).click();
     await expect(page.locator('#tool-history-modal')).toBeVisible();
     await check(page, project, 'admin-ferramentas-modal-historico');
@@ -232,6 +231,28 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
     await expectScopedClean(page, '#tab-management', 'estado de erro');
   });
 
+  // Addendum 1-F2.1: o menu flutuante cobria parte de botões de outras linhas e o axe (target-size) acusava
+  // a faixa visível. Sem exclusão nenhuma: cada abertura (a borda do menu corta linhas diferentes) fica limpa.
+  test('FERRAMENTAS: menu aberto em cada linha, sem exclusão e sem violações', async ({ page }) => {
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'management', { isAdmin: true });
+    await expect(page.locator('#crud-list')).toContainText('Furadeira de Impacto');
+
+    const triggers = page.locator('#crud-list [data-tools-menu-trigger]');
+    const total = await triggers.count();
+
+    expect(total).toBe(8);
+
+    for (let index = 0; index < total; index += 1) {
+      await triggers.nth(index).scrollIntoViewIfNeeded();
+      await triggers.nth(index).click();
+      await expect(page.getByRole('menu')).toBeVisible();
+      await expectScopedClean(page, '#tab-management', `menu aberto na linha ${index + 1}`);
+      await page.keyboard.press('Escape');
+    }
+  });
+
   test('FERRAMENTAS: tema escuro (lista e menu de ações)', async ({ page }, testInfo) => {
     const project = testInfo.project.name;
 
@@ -246,8 +267,8 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
 
     await page.locator('#crud-list [data-tools-menu-trigger]').first().click();
     await expect(page.getByRole('menu')).toBeVisible();
-    await check(page, project, 'admin-ferramentas-menu-escuro', { exclude: '#crud-list tr.tools-row ~ tr.tools-row' });
-    await expectScopedClean(page, '#tab-management', 'menu no tema escuro', '#crud-list tr.tools-row ~ tr.tools-row');
+    await check(page, project, 'admin-ferramentas-menu-escuro');
+    await expectScopedClean(page, '#tab-management', 'menu no tema escuro');
   });
 
   // Gate 1-D: estados novos do shell (drawer no tablet e rail expandido sobre o conteúdo no notebook).

@@ -892,3 +892,215 @@ test.describe('ADMIN — Ferramentas no tema escuro usa os tokens', () => {
     }
   });
 });
+
+// Addendum 1-F2.1: o menu de linha é flutuante e cobre parte de botões de outras linhas. Enquanto está
+// aberto o resto da tela fica inerte: nada coberto recebe clique ou foco, e um clique fora só fecha o menu.
+test.describe('ADMIN — Ferramentas: menu aberto não deixa alvos cobertos acionáveis', () => {
+  test.beforeEach(async ({ page }) => {
+    await openTools(page);
+  });
+
+  const openFirst = async (page) => {
+    const trigger = page.locator('#crud-list [data-tools-menu-trigger]').first();
+
+    await trigger.click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    return trigger;
+  };
+
+  test('só a linha do menu fica interativa; fechar restaura toda a tela', async ({ page }) => {
+    await openFirst(page);
+
+    const state = () =>
+      page.evaluate(() => {
+        const inert = (selector) =>
+          [...document.querySelectorAll(selector)].map((element) => element.inert);
+
+        return {
+          rows: inert('#crud-list tr[data-tool-id]'),
+          toolbar: inert('#tools-toolbar, #tools-filters, .tools-meta, .tools-header'),
+        };
+      });
+
+    const open = await state();
+
+    expect(open.rows.filter(Boolean)).toHaveLength(E2E_EXPECTED_COUNTS.tools - 1);
+    expect(open.rows[0]).toBe(false);
+    expect(open.toolbar.every(Boolean)).toBe(true);
+
+    await page.keyboard.press('Escape');
+
+    const closed = await state();
+
+    expect([...closed.rows, ...closed.toolbar].some(Boolean)).toBe(false);
+  });
+
+  test('clique fora do menu só o fecha: o botão de baixo não é acionado', async ({ page }) => {
+    await page.evaluate(() => {
+      window.__switchCalls = [];
+
+      const original = window.App.UI.switchTab.bind(window.App.UI);
+
+      window.App.UI.switchTab = (...args) => {
+        window.__switchCalls.push(args[0]);
+        return original(...args);
+      };
+    });
+    await openFirst(page);
+
+    // Um botão de OUTRA linha (inerte) que NÃO está sob o menu. A linha do próprio menu segue acionável.
+    const point = await page.evaluate(() => {
+      const menu = document.querySelector('.ui-menu:not([hidden])').getBoundingClientRect();
+
+      for (const button of document.querySelectorAll(
+        '#crud-list tr[inert] .tools-cell--actions .ui-btn'
+      )) {
+        const rect = button.getBoundingClientRect();
+        const x = (rect.left + rect.right) / 2;
+        const y = (rect.top + rect.bottom) / 2;
+        const underMenu = x >= menu.left && x <= menu.right && y >= menu.top && y <= menu.bottom;
+
+        if (!underMenu && rect.height > 0 && y > 0 && y < innerHeight) {
+          return { x, y };
+        }
+      }
+
+      return null;
+    });
+
+    expect(point, 'deve existir um botão de ação fora da área do menu').not.toBeNull();
+    await page.mouse.click(point.x, point.y);
+
+    await expect(page.getByRole('menu')).toBeHidden();
+    expect(await page.evaluate(() => window.__switchCalls)).toEqual([]);
+    await expect(page).toHaveURL(/#\/ferramentas$/);
+  });
+
+  test('clique na faixa visível de um botão parcialmente coberto também não o aciona', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      window.__switchCalls = [];
+
+      const original = window.App.UI.switchTab.bind(window.App.UI);
+
+      window.App.UI.switchTab = (...args) => {
+        window.__switchCalls.push(args[0]);
+        return original(...args);
+      };
+    });
+    const triggers = page.locator('#crud-list [data-tools-menu-trigger]');
+    let strip = null;
+
+    // A borda do menu corta botões diferentes conforme a linha aberta: procura uma abertura que deixe
+    // uma faixa visível (>= 6px) de um botão de outra linha (o caso que o axe acusava como target-size).
+    for (let index = 0; index < (await triggers.count()) && !strip; index += 1) {
+      await triggers.nth(index).click();
+      await expect(page.getByRole('menu')).toBeVisible();
+
+      strip = await page.evaluate(() => {
+        const menu = document.querySelector('.ui-menu:not([hidden])').getBoundingClientRect();
+
+        for (const button of document.querySelectorAll(
+          '#crud-list tr[inert] .tools-cell--actions .ui-btn'
+        )) {
+          const rect = button.getBoundingClientRect();
+          const overlapsX = rect.left < menu.right && rect.right > menu.left;
+          const below = menu.bottom - rect.top > 0 && rect.bottom - menu.bottom >= 6;
+          const above = rect.bottom - menu.top > 0 && menu.top - rect.top >= 6;
+
+          if (overlapsX && below) {
+            return { x: (rect.left + rect.right) / 2, y: (menu.bottom + rect.bottom) / 2 };
+          }
+
+          if (overlapsX && above) {
+            return { x: (rect.left + rect.right) / 2, y: (rect.top + menu.top) / 2 };
+          }
+        }
+
+        return null;
+      });
+
+      if (!strip) {
+        await page.keyboard.press('Escape');
+      }
+    }
+
+    expect(
+      strip,
+      'alguma abertura deve deixar uma faixa visível de um botão cortado'
+    ).not.toBeNull();
+    await page.mouse.click(strip.x, strip.y);
+    await expect(page.getByRole('menu')).toBeHidden();
+    expect(await page.evaluate(() => window.__switchCalls)).toEqual([]);
+  });
+
+  test('teclado: o foco fica no menu; Tab fecha e segue em ordem; Shift+Tab volta ao gatilho', async ({
+    page,
+  }) => {
+    const trigger = await openFirst(page);
+    const active = () =>
+      page.evaluate(() => {
+        const element = document.activeElement;
+
+        return {
+          name: element.getAttribute('aria-label') || element.textContent.trim().slice(0, 30),
+          inMenu: Boolean(element.closest('.ui-menu:not([hidden])')),
+          menuOpen: Boolean(document.querySelector('.ui-menu:not([hidden])')),
+        };
+      });
+
+    // Setas só percorrem os itens do menu (nunca um botão coberto).
+    for (let step = 0; step < 6; step += 1) {
+      await page.keyboard.press('ArrowDown');
+      expect(await active()).toMatchObject({ inMenu: true, menuOpen: true });
+    }
+
+    // Tab fecha o menu e o foco segue para o próximo controle, já sem nada coberto.
+    await page.keyboard.press('Tab');
+
+    const afterTab = await active();
+
+    expect(afterTab.menuOpen).toBe(false);
+    expect(afterTab.name).toMatch(/^(Devolver|Emprestar|Mais ações de) /);
+
+    // Shift+Tab a partir do menu volta ao gatilho da própria linha.
+    await trigger.focus();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Shift+Tab');
+    await expect(trigger).toBeFocused();
+    expect((await active()).menuOpen).toBe(false);
+  });
+
+  test('Esc fecha e devolve o foco ao gatilho', async ({ page }) => {
+    const trigger = await openFirst(page);
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+
+  test('perto da borda da viewport o menu inverte/limita e fica inteiro na tela', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 500 });
+
+    const triggers = page.locator('#crud-list [data-tools-menu-trigger]');
+    const total = await triggers.count();
+
+    for (const index of [0, Math.floor(total / 2), total - 1]) {
+      await triggers.nth(index).scrollIntoViewIfNeeded();
+      await triggers.nth(index).click();
+      await expect(page.getByRole('menu')).toBeVisible();
+
+      const box = await page.getByRole('menu').boundingBox();
+      const viewport = page.viewportSize();
+
+      expect(box.y, `linha ${index}: topo`).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height, `linha ${index}: base`).toBeLessThanOrEqual(viewport.height);
+      expect(box.x, `linha ${index}: esquerda`).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, `linha ${index}: direita`).toBeLessThanOrEqual(viewport.width);
+      await page.keyboard.press('Escape');
+    }
+  });
+});

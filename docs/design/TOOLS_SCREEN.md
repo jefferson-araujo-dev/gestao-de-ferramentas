@@ -54,6 +54,12 @@ Ferramenta = miniatura (abre o visualizador, quando há imagem) + nome + `patrim
 * **Não existe ação destrutiva por ferramenta na interface** (nem antes): `deleteTool` e a exclusão em lote
   são código sem gatilho na UI e ficam intactos (com o mesmo `canManageTools()`).
 * Cada função continua checando `canManageTools()` ao executar; esconder o botão não é a proteção.
+* **Menu aberto isola o resto da tela** (Addendum 1-F2.1): o menu flutuante cobre parte de botões de outras
+  linhas; sem isolamento, um clique fora dele sobre a faixa visível de um botão coberto fechava o menu **e**
+  acionava o botão (ex.: Emprestar levava ao Scanner) e o axe `target-size` acusava essa faixa. Entre `onOpen` e
+  `onClose` o cabeçalho, filtros, busca, linha de resultado, "Carregar mais" e as demais linhas ficam
+  `inert`; só a linha do menu é interativa. O teclado nunca alcançava alvos cobertos (as setas ficam no menu;
+  Tab fecha o menu e segue em ordem; Shift+Tab volta ao gatilho).
 * Ao usar um item do menu, o foco vai para o gatilho da linha; se a ação abrir um modal, o foco volta a ele
   ao fechar. Uma atualização de dados com o menu aberto espera o menu fechar e devolve o foco ao gatilho novo.
 
