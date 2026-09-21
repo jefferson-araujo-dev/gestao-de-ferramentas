@@ -22,6 +22,8 @@ import {
   signIn,
 } from './support/emulator.mjs';
 
+const { doc, updateDoc } = await import('firebase/firestore');
+
 const THIS_FILE = fileURLToPath(import.meta.url);
 const movementApi = (await import('../../api/tools/movement.js')).default;
 
@@ -613,7 +615,75 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     record('MOVEMENT_ALL_PROFILES_BADGE_SERVER_SIDE', 'PASS');
   });
 
-  test('14 nenhuma conexão de rede não local durante os testes', () => {
+  test('14 empréstimo oficial -> cliente não devolve nem troca o colaborador direto -> devolução oficial grava in', async () => {
+    const toolId = 'T-08';
+
+    await assertLoanRecorded({
+      result: await callMovement({ token: users.admin.token, body: badgeLoan(toolId, 'B-100') }),
+      toolId,
+      collaboratorId: 'c1',
+      name: 'Colaborador Alfa',
+      role: 'Operador',
+      operator: 'admin',
+    });
+
+    const loaned = JSON.stringify(await readTool(toolId));
+    const historyBefore = (await historyDocs()).length;
+
+    // SDK cliente autenticado como admin: as regras recusam sair de borrowed e trocar o empréstimo.
+    for (const [label, fields] of [
+      ['borrowed -> available', { status: 'available' }],
+      [
+        'devolução falsa',
+        { status: 'available', currentUser: null, currentCollaboratorId: null },
+      ],
+      ['borrowed -> maintenance', { status: 'maintenance' }],
+      ['trocar colaborador', { currentCollaboratorId: 'c3', currentUser: 'Colaborador Gama' }],
+      ['trocar lastAction', { lastAction: new Date().toISOString() }],
+    ]) {
+      await assert.rejects(
+        () => updateDoc(doc(users.admin.db, `${BASE}/tools/${toolId}`), fields),
+        (error) => error?.code === 'permission-denied',
+        label
+      );
+    }
+
+    assert.equal(JSON.stringify(await readTool(toolId)), loaned);
+    assert.equal((await historyDocs()).length, historyBefore);
+
+    // A devolução oficial (Admin SDK) não depende das regras do cliente.
+    const returned = await callMovement({
+      token: users.admin.token,
+      body: { action: 'return', toolId, device },
+    });
+
+    assert.equal(returned.status, 200);
+    assert.equal(returned.body.message, 'Devolução registrada.');
+
+    const stored = await readTool(toolId);
+
+    assert.equal(stored.status, 'available');
+    assert.equal(stored.currentUser, null);
+    assert.equal(stored.currentCollaboratorId, null);
+
+    const entries = (await historyDocs()).filter((entry) => entry.toolId === toolId);
+
+    assert.deepEqual(
+      entries.map((entry) => entry.type).sort(),
+      ['in', 'out']
+    );
+
+    const inEntry = entries.find((entry) => entry.type === 'in');
+
+    assert.equal(inEntry.collaboratorId, 'c1');
+    assert.equal(inEntry.user, 'Colaborador Alfa');
+    assert.equal(inEntry.date, stored.lastAction);
+    record('MOVEMENT_CLIENT_DIRECT_RETURN', 'DENIED');
+    record('MOVEMENT_OFFICIAL_RETURN_CREATES_IN', true);
+    record('MOVEMENT_ADMIN_SDK_UNAFFECTED_BY_RULES', true);
+  });
+
+  test('15 nenhuma conexão de rede não local durante os testes', () => {
     const remote = networkAttempts.filter((attempt) => attempt.remote);
 
     assert.equal(remote.length, 0);
