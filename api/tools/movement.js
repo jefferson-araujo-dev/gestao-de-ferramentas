@@ -10,18 +10,19 @@ const TOOLS_COLLECTION_PATH = `${DB_BASE_PATH}/tools`;
 const COLLABORATORS_COLLECTION_PATH = `${DB_BASE_PATH}/collaborators`;
 const HISTORY_COLLECTION_PATH = `${DB_BASE_PATH}/history`;
 const MAX_DOCUMENT_ID_LENGTH = 128;
+const MAX_TOOL_CODE_LENGTH = 128;
 const MAX_DEVICE_LENGTH = 160;
 const MAX_BADGE_LENGTH = 50;
 const MAX_IP_LENGTH = 128;
 const UNKNOWN_IP = 'IP Desconhecido';
 const INVALID_MOVEMENT_MESSAGE = 'Dados da movimentação inválidos.';
 const LOAN_NOT_AUTHORIZED_REASON = 'LOAN_NOT_AUTHORIZED';
-// Única resposta para crachá inexistente, inválido, duplicado ou colaborador inativo (perfil
-// restrito): não permite distinguir esses casos e não devolve nenhum dado do colaborador.
+// Única resposta, em todos os perfis, para crachá inexistente, inválido, duplicado ou colaborador
+// inativo: não permite distinguir esses casos e não devolve nenhum dado do colaborador.
 const LOAN_NOT_AUTHORIZED_MESSAGE =
   'Não foi possível autorizar a retirada. Confira o crachá informado.';
-const RESTRICTED_BADGE_REQUIRED_MESSAGE =
-  'Perfil restrito deve informar o crachá do colaborador.';
+const BADGE_REQUIRED_MESSAGE = 'O empréstimo exige o crachá do colaborador.';
+const TOOL_CODE_MISMATCH_MESSAGE = 'O patrimônio informado não corresponde à ferramenta.';
 
 function createHttpError(statusCode, message) {
   const error = new Error(message);
@@ -33,12 +34,6 @@ function createLoanNotAuthorizedError() {
   const error = createHttpError(422, LOAN_NOT_AUTHORIZED_MESSAGE);
   error.reason = LOAN_NOT_AUTHORIZED_REASON;
   return error;
-}
-
-// Perfil restrito = flag gravada no perfil (Firestore, somente via Admin SDK; as regras negam
-// escrita em users). Nunca é derivado do corpo da requisição.
-function isRestrictedOperator(profile) {
-  return profile.isRestricted === true && profile.accessLevel !== 'Administrador';
 }
 
 function parseRequiredString(value, maxLength) {
@@ -100,7 +95,19 @@ function parseBadge(value) {
   return badge;
 }
 
-function parseMovement(req, restricted) {
+// Mesma normalização da leitura no Scanner (sem acentos, sem diferenciar maiúsculas).
+function normalizeToolCode(value) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+// Empréstimo, em qualquer perfil: ferramenta (ID do documento + patrimônio lido, conferidos entre
+// si) e crachá do colaborador, resolvido aqui. O cliente nunca escolhe o colaborador por ID nem
+// por nome: collaboratorId é recusado antes de qualquer leitura.
+function parseMovement(req) {
   const body = req.body;
 
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -111,23 +118,15 @@ function parseMovement(req, restricted) {
     throw createHttpError(400, INVALID_MOVEMENT_MESSAGE);
   }
 
-  const restrictedLoan = restricted && body.action === 'loan';
+  const isLoan = body.action === 'loan';
 
-  // O perfil restrito nunca escolhe o colaborador por ID: recusa antes de qualquer leitura.
-  if (restrictedLoan && Object.hasOwn(body, 'collaboratorId')) {
-    throw createHttpError(403, RESTRICTED_BADGE_REQUIRED_MESSAGE);
+  if (isLoan && Object.hasOwn(body, 'collaboratorId')) {
+    throw createHttpError(403, BADGE_REQUIRED_MESSAGE);
   }
 
-  let expectedKeys = ['action', 'toolId', 'device'];
-
-  if (body.action === 'loan') {
-    expectedKeys = [
-      'action',
-      'toolId',
-      restrictedLoan ? 'collaboratorBadge' : 'collaboratorId',
-      'device'
-    ];
-  }
+  const expectedKeys = isLoan
+    ? ['action', 'toolId', 'toolCode', 'collaboratorBadge', 'device']
+    : ['action', 'toolId', 'device'];
 
   if (!hasExactKeys(Object.keys(body), expectedKeys)) {
     throw createHttpError(400, INVALID_MOVEMENT_MESSAGE);
@@ -139,10 +138,9 @@ function parseMovement(req, restricted) {
     device: parseRequiredString(body.device, MAX_DEVICE_LENGTH)
   };
 
-  if (restrictedLoan) {
+  if (isLoan) {
+    movement.toolCode = parseRequiredString(body.toolCode, MAX_TOOL_CODE_LENGTH);
     movement.collaboratorBadge = parseBadge(body.collaboratorBadge);
-  } else if (movement.action === 'loan') {
-    movement.collaboratorId = parseDocumentId(body.collaboratorId);
   }
 
   return movement;
@@ -293,62 +291,11 @@ function recordLoan(transaction, details) {
   return updatedTool;
 }
 
+// Empréstimo (todos os perfis): a ferramenta é conferida pelo ID e pelo patrimônio lido, e o crachá
+// exato é resolvido aqui, dentro da mesma transação que grava o movimento `out` e o status
+// `borrowed` (Admin SDK). O cliente nunca lê nem escolhe o colaborador. As falhas de ferramenta
+// independem do crachá e vêm primeiro; toda falha do colaborador é genérica.
 async function registerLoan(movement, authorization, ip) {
-  const toolRef = adminDb.doc(`${TOOLS_COLLECTION_PATH}/${movement.toolId}`);
-  const collaboratorRef = adminDb.doc(
-    `${COLLABORATORS_COLLECTION_PATH}/${movement.collaboratorId}`
-  );
-  const historyRef = adminDb.collection(HISTORY_COLLECTION_PATH).doc();
-
-  return adminDb.runTransaction(async (transaction) => {
-    const toolSnapshot = await transaction.get(toolRef);
-    const collaboratorSnapshot = await transaction.get(collaboratorRef);
-
-    if (!toolSnapshot.exists) {
-      throw createHttpError(404, 'Ferramenta não encontrada.');
-    }
-
-    if (!collaboratorSnapshot.exists) {
-      throw createHttpError(404, 'Colaborador não encontrado.');
-    }
-
-    const tool = toolSnapshot.data();
-    const collaborator = collaboratorSnapshot.data();
-    const toolCode = parseStoredRequiredString(tool.code, 'tool.code');
-    const toolName = parseStoredRequiredString(tool.name, 'tool.name');
-    const collaboratorName = parseStoredRequiredString(
-      collaborator.name,
-      'collaborator.name'
-    );
-
-    if (collaborator.status !== 'active') {
-      throw createHttpError(409, 'Colaborador inativo.');
-    }
-
-    const now = new Date();
-
-    assertToolAvailableForLoan(tool, now);
-
-    return recordLoan(transaction, {
-      toolRef,
-      historyRef,
-      toolSnapshot,
-      toolCode,
-      toolName,
-      collaboratorId: movement.collaboratorId,
-      collaboratorName,
-      movement,
-      authorization,
-      ip,
-      now
-    });
-  });
-}
-
-// Empréstimo do perfil restrito: o crachá exato é resolvido aqui, dentro da mesma transação
-// da movimentação (Admin SDK), então o cliente nunca lê a coleção de colaboradores. As falhas
-// de ferramenta independem do crachá e vêm primeiro; toda falha do colaborador é genérica.
-async function registerRestrictedLoan(movement, authorization, ip) {
   const toolRef = adminDb.doc(`${TOOLS_COLLECTION_PATH}/${movement.toolId}`);
   const badgeQuery = adminDb
     .collection(COLLABORATORS_COLLECTION_PATH)
@@ -367,6 +314,11 @@ async function registerRestrictedLoan(movement, authorization, ip) {
     const tool = toolSnapshot.data();
     const toolCode = parseStoredRequiredString(tool.code, 'tool.code');
     const toolName = parseStoredRequiredString(tool.name, 'tool.name');
+
+    if (normalizeToolCode(toolCode) !== normalizeToolCode(movement.toolCode)) {
+      throw createHttpError(422, TOOL_CODE_MISMATCH_MESSAGE);
+    }
+
     const now = new Date();
 
     assertToolAvailableForLoan(tool, now);
@@ -396,7 +348,7 @@ async function registerRestrictedLoan(movement, authorization, ip) {
     });
 
     // Somente o necessário para confirmação e recibo: o nome (toast, cartão e termo) e a função
-    // (termo). O crachá o cliente já possui (foi ele quem o digitou; a busca é exata).
+    // (termo). O crachá o cliente já possui (foi ele quem o leu; a busca é exata).
     return {
       tool: updatedTool,
       collaborator: {
@@ -476,11 +428,11 @@ export default async function handler(req, res) {
 
   try {
     const authorization = await requireActiveUser(req);
-    const movement = parseMovement(req, isRestrictedOperator(authorization.profile));
+    const movement = parseMovement(req);
     const ip = getRequestIp(req);
 
-    if (movement.collaboratorBadge !== undefined) {
-      const { tool, collaborator } = await registerRestrictedLoan(
+    if (movement.action === 'loan') {
+      const { tool, collaborator } = await registerLoan(
         movement,
         authorization,
         ip
@@ -497,17 +449,11 @@ export default async function handler(req, res) {
       });
     }
 
-    const tool =
-      movement.action === 'loan'
-        ? await registerLoan(movement, authorization, ip)
-        : await registerReturn(movement, authorization, ip);
+    const tool = await registerReturn(movement, authorization, ip);
 
     return res.status(200).json({
       success: true,
-      message:
-        movement.action === 'loan'
-          ? 'Empréstimo registrado.'
-          : 'Devolução registrada.',
+      message: 'Devolução registrada.',
       data: {
         action: movement.action,
         tool

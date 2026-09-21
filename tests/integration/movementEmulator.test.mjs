@@ -3,8 +3,10 @@
 //
 // Executar:  npm run test:movement:emulator   (firebase emulators:exec)
 //
-// Cobre o contrato do empréstimo por perfil: Admin/Padrão seguem por collaboratorId; o perfil
-// RESTRITO envia somente o crachá exato e o servidor resolve o colaborador (anti-enumeração).
+// Cobre o contrato do empréstimo, igual em TODOS os perfis (admin, padrão, restrito): o cliente envia
+// o ID da ferramenta, o patrimônio lido e o crachá exato; o servidor confere o patrimônio, resolve
+// o crachá (exatamente um colaborador ativo) e grava movimento `out` + `borrowed` na mesma transação.
+// collaboratorId e nome do colaborador nunca são aceitos.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -80,7 +82,15 @@ const record = (key, value) => {
 
 const device = 'Navegador de Teste';
 const loan = (toolId, extra) => ({ action: 'loan', toolId, device, ...extra });
-const restrictedLoan = (toolId, collaboratorBadge) => loan(toolId, { collaboratorBadge });
+// Contrato do empréstimo (todos os perfis): ID da ferramenta + patrimônio lido + crachá.
+const badgeLoan = (toolId, collaboratorBadge, toolCode = toolId) =>
+  loan(toolId, { toolCode, collaboratorBadge });
+const GENERIC_DENIAL = {
+  success: false,
+  message: 'Não foi possível autorizar a retirada. Confira o crachá informado.',
+  code: 'LOAN_NOT_AUTHORIZED',
+};
+const PROFILES = ['admin', 'standard', 'restricted', 'legacy'];
 
 // ---------------------------------------------------------------------------
 // Estado do emulator (fixtures via Admin SDK; não é a API testada)
@@ -117,6 +127,9 @@ const FIXED_TOOLS = () => ({
   'T-10': tool('T-10', 'Lima', 'available'),
   'T-11': tool('T-11', 'Serrote', 'available'),
   'T-12': tool('T-12', 'Nivelador', 'available'),
+  'T-13': tool('T-13', 'Torquimetro', 'available'),
+  // Patrimônio com acento e caixa mista: a conferência segue a normalização do Scanner.
+  'T-14': tool('FER-Ação-14', 'Paquimetro', 'available'),
 });
 
 const FIXED_COLLABORATORS = {
@@ -127,6 +140,8 @@ const FIXED_COLLABORATORS = {
   c5: { name: 'Colaborador Epsilon', badge: 'B-DUP', role: 'Operador', status: 'active' },
   c6: { name: 'Colaborador Zeta', badge: 'B-600', status: 'active' },
   c7: { name: 'Colaborador Eta', badge: '', role: 'Operador', status: 'active' },
+  // Importado sem status: não é colaborador ativo, então não empresta.
+  c8: { name: 'Colaborador Teta', badge: 'B-800', role: 'Operador' },
 };
 
 async function seedOperational() {
@@ -158,14 +173,24 @@ const collaboratorsDigest = async () =>
       .map((document) => [document.id, document.data()])
       .sort((a, b) => (a[0] < b[0] ? -1 : 1))
   );
+// Fotografia de tudo que um empréstimo recusado não pode alterar.
+const operationalDigest = async () =>
+  JSON.stringify({
+    tools: (await adminDb.collection(`${BASE}/tools`).get()).docs
+      .map((document) => [document.id, document.data()])
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1)),
+    history: (await historyDocs()).length,
+    collaborators: await collaboratorsDigest(),
+  });
 
 const users = {};
 
-// Nada do que segue pode aparecer em respostas de falha nem em logs do perfil restrito.
+// Nada do que segue pode aparecer em respostas de falha nem em logs.
 const SENSITIVE = [
   'Colaborador Alfa',
   'Colaborador Beta',
   'Colaborador Delta',
+  'Colaborador Teta',
   'Operador',
   'Auxiliar',
   'B-100',
@@ -181,6 +206,37 @@ function assertNoLeak(result, label) {
   for (const value of SENSITIVE) {
     assert.ok(!serialized.includes(value), `${label}: vazou dado sensível`);
   }
+}
+
+async function assertLoanRecorded({ result, toolId, collaboratorId, name, role, operator }) {
+  assert.equal(result.status, 200, `${operator}: status`);
+  assert.equal(result.body.success, true);
+  assert.equal(result.body.message, 'Empréstimo registrado.');
+  assert.deepEqual(Object.keys(result.body.data).sort(), ['action', 'collaborator', 'tool']);
+  // Somente nome (confirmação/termo) e função (termo): nada de crachá, telefone, ID ou foto.
+  assert.deepEqual(result.body.data.collaborator, { name, role });
+  assert.deepEqual(
+    Object.keys(result.body.data.tool).sort(),
+    ['currentCollaboratorId', 'currentUser', 'id', 'lastAction', 'status']
+  );
+  assert.equal(result.body.data.tool.status, 'borrowed');
+
+  const stored = await readTool(toolId);
+
+  assert.equal(stored.status, 'borrowed');
+  assert.equal(stored.currentUser, name);
+  assert.equal(stored.currentCollaboratorId, collaboratorId);
+
+  const entries = (await historyDocs()).filter(
+    (entry) => entry.toolId === toolId && entry.type === 'out'
+  );
+
+  assert.equal(entries.length, 1, `${operator}: um único movimento out`);
+  assert.equal(entries[0].collaboratorId, collaboratorId);
+  assert.equal(entries[0].user, name);
+  assert.equal(entries[0].operatorUid, users[operator].uid);
+  // Mesmo instante no movimento e na ferramenta: gravados na mesma transação.
+  assert.equal(entries[0].date, stored.lastAction);
 }
 
 describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)', () => {
@@ -265,7 +321,7 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
 
   test('02 sem autenticação: 401 (sem token, cabeçalho inválido, token inválido) e 405', async () => {
     const digestBefore = await collaboratorsDigest();
-    const body = restrictedLoan('T-01', 'B-100');
+    const body = badgeLoan('T-01', 'B-100');
 
     assert.equal((await callMovement({ body })).status, 401);
     assert.equal((await callMovement({ authorization: 'Basic abc', body })).status, 401);
@@ -277,178 +333,213 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     record('MOVEMENT_UNAUTHENTICATED_401', true);
   });
 
-  test('03 restrito + crachá válido: empréstimo registrado no servidor com resposta mínima', async () => {
-    const result = await callMovement({
-      token: users.restricted.token,
-      body: restrictedLoan('T-01', 'B-100'),
+  test('03 restrito + crachá válido: movimento out e borrowed atômicos, resposta mínima', async () => {
+    await assertLoanRecorded({
+      result: await callMovement({
+        token: users.restricted.token,
+        body: badgeLoan('T-01', 'B-100'),
+      }),
+      toolId: 'T-01',
+      collaboratorId: 'c1',
+      name: 'Colaborador Alfa',
+      role: 'Operador',
+      operator: 'restricted',
     });
-
-    assert.equal(result.status, 200);
-    assert.equal(result.body.success, true);
-    assert.deepEqual(Object.keys(result.body.data).sort(), ['action', 'collaborator', 'tool']);
-    // Somente nome (confirmação/termo) e função (termo): nada de crachá, telefone, ID ou foto.
-    assert.deepEqual(result.body.data.collaborator, { name: 'Colaborador Alfa', role: 'Operador' });
-    assert.equal(result.body.data.tool.status, 'borrowed');
-
-    const stored = await readTool('T-01');
-
-    assert.equal(stored.status, 'borrowed');
-    assert.equal(stored.currentUser, 'Colaborador Alfa');
-    assert.equal(stored.currentCollaboratorId, 'c1');
-
-    const entries = (await historyDocs()).filter((entry) => entry.toolId === 'T-01');
-
-    assert.equal(entries.length, 1);
-    assert.equal(entries[0].type, 'out');
-    assert.equal(entries[0].collaboratorId, 'c1');
-    assert.equal(entries[0].operatorUid, users.restricted.uid);
     record('MOVEMENT_RESTRICTED_VALID_BADGE', 'PASS');
-    record('MOVEMENT_RESTRICTED_RESPONSE_FIELDS', 'data.collaborator{name,role}');
+    record('MOVEMENT_RESPONSE_FIELDS', 'data.collaborator{name,role}');
   });
 
-  test('04 restrito + crachá com espaços nas pontas: aparado e aceito; sem função = string vazia', async () => {
+  test('04 crachá com espaços nas pontas: aparado e aceito; sem função = string vazia', async () => {
     const result = await callMovement({
       token: users.restricted.token,
-      body: restrictedLoan('T-02', '  B-600  '),
+      body: badgeLoan('T-02', '  B-600  '),
     });
 
     assert.equal(result.status, 200);
     assert.deepEqual(result.body.data.collaborator, { name: 'Colaborador Zeta', role: '' });
   });
 
-  test('05 restrito: falhas de crachá são genéricas e idênticas (sem PII, sem escrita)', async () => {
-    const digestBefore = await collaboratorsDigest();
-    const toolsBefore = JSON.stringify(await readTool('T-06'));
-    const historyBefore = (await historyDocs()).length;
+  test('05 todos os perfis: crachá inexistente, duplicado, inativo, sem status, nome no lugar do crachá -> genérico, sem escrita', async () => {
     const attempts = {
-      inexistente: restrictedLoan('T-06', 'B-999'),
-      inativo: restrictedLoan('T-06', 'B-200'),
-      duplicado: restrictedLoan('T-06', 'B-DUP'),
-      caixaDiferente: restrictedLoan('T-06', 'b-100'),
-      nomeNoLugarDoCracha: restrictedLoan('T-06', 'Colaborador Alfa'),
-      prefixo: restrictedLoan('T-06', 'B-1'),
-      vazio: restrictedLoan('T-06', ''),
-      espacos: restrictedLoan('T-06', '   '),
-      longo: restrictedLoan('T-06', 'B'.repeat(51)),
-      numero: loan('T-06', { collaboratorBadge: 100 }),
-      nulo: loan('T-06', { collaboratorBadge: null }),
-      objeto: loan('T-06', { collaboratorBadge: { $ne: '' } }),
+      inexistente: badgeLoan('T-06', 'B-999'),
+      inativo: badgeLoan('T-06', 'B-200'),
+      duplicado: badgeLoan('T-06', 'B-DUP'),
+      semStatus: badgeLoan('T-06', 'B-800'),
+      caixaDiferente: badgeLoan('T-06', 'b-100'),
+      nomeNoLugarDoCracha: badgeLoan('T-06', 'Colaborador Alfa'),
+      prefixo: badgeLoan('T-06', 'B-1'),
+      vazio: badgeLoan('T-06', ''),
+      espacos: badgeLoan('T-06', '   '),
+      longo: badgeLoan('T-06', 'B'.repeat(51)),
+      numero: badgeLoan('T-06', 100),
+      nulo: badgeLoan('T-06', null),
+      objeto: badgeLoan('T-06', { $ne: '' }),
     };
-    const results = {};
+    const before = await operationalDigest();
 
-    for (const [label, body] of Object.entries(attempts)) {
-      results[label] = await callMovement({ token: users.restricted.token, body });
-      assertNoLeak(results[label], label);
+    for (const key of [...PROFILES, 'adminflag']) {
+      for (const [label, body] of Object.entries(attempts)) {
+        const result = await callMovement({ token: users[key].token, body });
+
+        assert.equal(result.status, 422, `${key}/${label}`);
+        assert.deepEqual(result.body, GENERIC_DENIAL, `${key}/${label}`);
+        assertNoLeak(result, `${key}/${label}`);
+      }
     }
 
-    const [reference, ...others] = Object.values(results);
-
-    assert.equal(reference.status, 422);
-    assert.equal(reference.body.success, false);
-    assert.equal(reference.body.code, 'LOAN_NOT_AUTHORIZED');
-    assert.deepEqual(Object.keys(reference.body).sort(), ['code', 'message', 'success']);
-
-    for (const other of others) {
-      assert.equal(other.status, reference.status);
-      assert.deepEqual(other.body, reference.body);
-    }
-
-    assert.equal(JSON.stringify(await readTool('T-06')), toolsBefore);
-    assert.equal((await historyDocs()).length, historyBefore);
-    assert.equal(await collaboratorsDigest(), digestBefore);
-    record('MOVEMENT_RESTRICTED_INVALID_BADGE_GENERIC', true);
-    record('MOVEMENT_RESTRICTED_FAILURE_CASES_IDENTICAL', Object.keys(attempts).length);
+    assert.equal(await operationalDigest(), before);
+    record('MOVEMENT_UNKNOWN_BADGE_REJECTED', true);
+    record('MOVEMENT_DUPLICATE_BADGE_REJECTED', true);
+    record('MOVEMENT_INACTIVE_BADGE_REJECTED', true);
+    record('MOVEMENT_NAME_AS_BADGE_REJECTED', true);
+    record('MOVEMENT_BADGE_FAILURE_CASES_PER_PROFILE', Object.keys(attempts).length);
   });
 
-  test('06 restrito: collaboratorId (bypass) é negado com 403, com ou sem crachá, sem escrita', async () => {
-    const historyBefore = (await historyDocs()).length;
+  test('06 todos os perfis: collaboratorId (escolha do colaborador pelo cliente) -> 403, sem escrita', async () => {
+    const before = await operationalDigest();
     const bypass = [
+      loan('T-07', { toolCode: 'T-07', collaboratorId: 'c3' }),
+      loan('T-07', { toolCode: 'T-07', collaboratorId: 'c3', collaboratorBadge: 'B-300' }),
       loan('T-07', { collaboratorId: 'c3' }),
-      loan('T-07', { collaboratorId: 'c3', collaboratorBadge: 'B-300' }),
-      loan('T-07', { collaboratorId: 'inexistente' }),
-      loan('T-07', { collaboratorId: 'c2' }),
+      loan('T-07', { toolCode: 'T-07', collaboratorId: 'inexistente' }),
+      loan('T-07', { toolCode: 'T-07', collaboratorId: 'c2' }),
     ];
-    const results = [];
 
-    for (const body of bypass) {
-      const result = await callMovement({ token: users.restricted.token, body });
+    for (const key of [...PROFILES, 'adminflag']) {
+      const results = [];
 
-      results.push(result);
-      assert.equal(result.status, 403);
-      assert.equal(result.body.success, false);
-      assertNoLeak(result, 'bypass');
+      for (const body of bypass) {
+        const result = await callMovement({ token: users[key].token, body });
+
+        results.push(result);
+        assert.equal(result.status, 403, key);
+        assert.deepEqual(result.body, {
+          success: false,
+          message: 'O empréstimo exige o crachá do colaborador.',
+        });
+        assertNoLeak(result, `${key} bypass`);
+      }
     }
 
-    // Mesma resposta para ID válido, inexistente ou de colaborador inativo: nenhum oráculo.
-    assert.deepEqual(results[0].body, results[2].body);
-    assert.deepEqual(results[0].body, results[3].body);
-    assert.equal((await readTool('T-07')).status, 'available');
-    assert.equal((await historyDocs()).length, historyBefore);
-    record('MOVEMENT_RESTRICTED_COLLABORATOR_ID_BYPASS', 'DENIED_403');
+    assert.equal(await operationalDigest(), before);
+    record('MOVEMENT_COLLABORATOR_ID_BYPASS', 'DENIED_403_ALL_PROFILES');
   });
 
-  test('07 restrito: erros da ferramenta independem do crachá (nenhum vazamento por ordem)', async () => {
-    for (const [toolId, status] of [
-      ['T-03', 409],
-      ['T-04', 409],
-      ['T-05', 409],
-      ['T-99', 404],
-    ]) {
-      const valid = await callMovement({
-        token: users.restricted.token,
-        body: restrictedLoan(toolId, 'B-300'),
-      });
-      const invalid = await callMovement({
-        token: users.restricted.token,
-        body: restrictedLoan(toolId, 'B-999'),
-      });
+  test('07 todos os perfis: ferramenta inexistente/emprestada/manutenção/revisão vencida recusadas, independente do crachá', async () => {
+    const before = await operationalDigest();
 
-      assert.equal(valid.status, status, `${toolId} com crachá válido`);
-      assert.deepEqual(invalid.body, valid.body, `${toolId}: mesma resposta com crachá inválido`);
-      assertNoLeak(valid, toolId);
-    }
-  });
+    for (const key of PROFILES) {
+      for (const [toolId, status, message] of [
+        ['T-03', 409, 'Ferramenta indisponível para empréstimo.'],
+        ['T-04', 409, 'Ferramenta indisponível para empréstimo.'],
+        ['T-05', 409, 'Ferramenta com manutenção vencida.'],
+        ['T-99', 404, 'Ferramenta não encontrada.'],
+      ]) {
+        const valid = await callMovement({
+          token: users[key].token,
+          body: badgeLoan(toolId, 'B-300'),
+        });
+        const invalid = await callMovement({
+          token: users[key].token,
+          body: badgeLoan(toolId, 'B-999'),
+        });
 
-  test('08 restrito: corpo malformado devolve 400 sem tocar colaboradores', async () => {
-    const digest = await collaboratorsDigest();
-
-    for (const body of [
-      undefined,
-      [],
-      { action: 'loan' },
-      { action: 'loan', toolId: 'T-08', device },
-      { action: 'transfer', toolId: 'T-08', device },
-      { ...restrictedLoan('T-08', 'B-300'), isRestricted: true },
-      { ...restrictedLoan('T-08', 'B-300'), accessLevel: 'Administrador' },
-    ]) {
-      const result = await callMovement({ token: users.restricted.token, body });
-
-      assert.equal(result.status, 400);
-      assert.equal(result.body.message, 'Dados da movimentação inválidos.');
+        assert.equal(valid.status, status, `${key} ${toolId} com crachá válido`);
+        assert.equal(valid.body.message, message, `${key} ${toolId}`);
+        assert.deepEqual(invalid.body, valid.body, `${key} ${toolId}: mesma resposta com crachá inválido`);
+        assertNoLeak(valid, `${key} ${toolId}`);
+      }
     }
 
-    assert.equal((await readTool('T-08')).status, 'available');
-    assert.equal(await collaboratorsDigest(), digest);
+    assert.equal(await operationalDigest(), before);
+    record('MOVEMENT_INVALID_TOOL_REJECTED', true);
+    record('MOVEMENT_BORROWED_TOOL_REJECTED', true);
+    record('MOVEMENT_MAINTENANCE_REJECTED', true);
   });
 
-  test('09 restrito: sem PII nos logs do servidor em qualquer falha de crachá', async () => {
-    const result = await callMovement({
-      token: users.restricted.token,
-      body: restrictedLoan('T-08', 'B-200'),
+  test('08 patrimônio divergente do ID da ferramenta -> 422 sem escrita; normalização igual à do Scanner', async () => {
+    const before = await operationalDigest();
+
+    for (const key of PROFILES) {
+      for (const toolCode of ['T-07', 'T-6', 'T-06X', 'Martelo', 'FER-Ação-14']) {
+        const mismatch = await callMovement({
+          token: users[key].token,
+          body: badgeLoan('T-06', 'B-300', toolCode),
+        });
+
+        assert.equal(mismatch.status, 422, `${key} ${toolCode}`);
+        assert.deepEqual(mismatch.body, {
+          success: false,
+          message: 'O patrimônio informado não corresponde à ferramenta.',
+        });
+      }
+    }
+
+    assert.equal(await operationalDigest(), before);
+
+    // Mesma regra de leitura do Scanner: sem acentos e sem diferenciar maiúsculas.
+    const normalized = await callMovement({
+      token: users.standard.token,
+      body: badgeLoan('T-14', 'B-300', '  fer-acao-14 '),
     });
 
-    assert.equal(result.status, 422);
-    assert.equal(result.logged, '', 'nenhuma saída de console em falha de crachá');
-    record('MOVEMENT_RESTRICTED_NO_PII_LOGS', true);
+    assert.equal(normalized.status, 200);
+    assert.equal((await readTool('T-14')).status, 'borrowed');
+    record('MOVEMENT_TOOL_CODE_MISMATCH_REJECTED', true);
   });
 
-  test('10 restrito: devolução continua funcionando (sem crachá, sem colaborador)', async () => {
+  test('09 corpo malformado devolve 400 sem tocar dados', async () => {
+    const before = await operationalDigest();
+
+    for (const key of PROFILES) {
+      for (const body of [
+        undefined,
+        [],
+        { action: 'loan' },
+        { action: 'loan', toolId: 'T-08', device },
+        loan('T-08', { collaboratorBadge: 'B-300' }),
+        loan('T-08', { toolCode: 'T-08' }),
+        badgeLoan('T-08', 'B-300', ''),
+        badgeLoan('T-08', 'B-300', 8),
+        badgeLoan('T-08', 'B-300', 'X'.repeat(129)),
+        { action: 'transfer', toolId: 'T-08', device },
+        { ...badgeLoan('T-08', 'B-300'), collaboratorName: 'Colaborador Gama' },
+        { ...badgeLoan('T-08', 'B-300'), isRestricted: true },
+        { ...badgeLoan('T-08', 'B-300'), accessLevel: 'Administrador' },
+        { ...badgeLoan('T-08', 'B-300'), status: 'borrowed' },
+      ]) {
+        const result = await callMovement({ token: users[key].token, body });
+
+        assert.equal(result.status, 400, `${key} ${JSON.stringify(body)}`);
+        assert.equal(result.body.message, 'Dados da movimentação inválidos.');
+      }
+    }
+
+    assert.equal(await operationalDigest(), before);
+  });
+
+  test('10 sem PII nos logs do servidor em qualquer falha de crachá', async () => {
+    for (const key of PROFILES) {
+      const result = await callMovement({
+        token: users[key].token,
+        body: badgeLoan('T-08', 'B-200'),
+      });
+
+      assert.equal(result.status, 422);
+      assert.equal(result.logged, '', `${key}: nenhuma saída de console em falha de crachá`);
+    }
+
+    record('MOVEMENT_NO_PII_LOGS', true);
+  });
+
+  test('11 devolução continua funcionando (sem crachá, sem colaborador) e recusa campos extras', async () => {
     const result = await callMovement({
       token: users.restricted.token,
       body: { action: 'return', toolId: 'T-03', device },
     });
 
     assert.equal(result.status, 200);
+    assert.equal(result.body.message, 'Devolução registrada.');
     assert.deepEqual(Object.keys(result.body.data).sort(), ['action', 'tool']);
     assert.equal(result.body.data.tool.status, 'available');
     assert.equal((await readTool('T-03')).status, 'available');
@@ -460,19 +551,28 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     assert.equal(entries[0].collaboratorId, 'c1');
     assert.equal(entries[0].operatorUid, users.restricted.uid);
 
-    const extra = await callMovement({
-      token: users.restricted.token,
-      body: { action: 'return', toolId: 'T-01', device, collaboratorBadge: 'B-100' },
+    for (const extra of [{ collaboratorBadge: 'B-100' }, { toolCode: 'T-01' }]) {
+      const rejected = await callMovement({
+        token: users.restricted.token,
+        body: { action: 'return', toolId: 'T-01', device, ...extra },
+      });
+
+      assert.equal(rejected.status, 400);
+    }
+
+    const notBorrowed = await callMovement({
+      token: users.admin.token,
+      body: { action: 'return', toolId: 'T-06', device },
     });
 
-    assert.equal(extra.status, 400);
-    record('MOVEMENT_RESTRICTED_RETURN', 'PASS');
+    assert.equal(notBorrowed.status, 409);
+    record('MOVEMENT_RETURN', 'PASS');
   });
 
-  test('11 restrito: duas retiradas concorrentes da mesma ferramenta -> uma só vence', async () => {
+  test('12 duas retiradas concorrentes da mesma ferramenta -> uma só vence', async () => {
     const [first, second] = await Promise.all([
-      callMovement({ token: users.restricted.token, body: restrictedLoan('T-09', 'B-100') }),
-      callMovement({ token: users.restricted.token, body: restrictedLoan('T-09', 'B-300') }),
+      callMovement({ token: users.restricted.token, body: badgeLoan('T-09', 'B-100') }),
+      callMovement({ token: users.admin.token, body: badgeLoan('T-09', 'B-300') }),
     ]);
     const statuses = [first.status, second.status].sort();
 
@@ -481,31 +581,26 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     const entries = (await historyDocs()).filter((entry) => entry.toolId === 'T-09');
 
     assert.equal(entries.length, 1);
+    assert.equal(entries[0].type, 'out');
     assert.equal((await readTool('T-09')).status, 'borrowed');
-    record('MOVEMENT_RESTRICTED_ATOMIC', true);
+    record('MOVEMENT_CONCURRENT_LOAN', '1_SUCCESS_1_CONFLICT');
   });
 
-  test('12 admin/padrão/legado: fluxo anterior preservado (collaboratorId e resposta)', async () => {
-    for (const [key, toolId, collaboratorId, expectedName] of [
-      ['admin', 'T-10', 'c1', 'Colaborador Alfa'],
-      ['standard', 'T-11', 'c3', 'Colaborador Gama'],
-      ['legacy', 'T-12', 'c6', 'Colaborador Zeta'],
+  test('13 admin/padrão/legado/admin com flag: empréstimo por crachá resolvido no servidor', async () => {
+    for (const [key, toolId, badge, collaboratorId, name, role] of [
+      ['admin', 'T-10', 'B-100', 'c1', 'Colaborador Alfa', 'Operador'],
+      ['standard', 'T-11', 'B-300', 'c3', 'Colaborador Gama', 'Supervisor'],
+      ['legacy', 'T-12', 'B-600', 'c6', 'Colaborador Zeta', ''],
+      ['adminflag', 'T-13', 'B-300', 'c3', 'Colaborador Gama', 'Supervisor'],
     ]) {
-      const result = await callMovement({
-        token: users[key].token,
-        body: loan(toolId, { collaboratorId }),
+      await assertLoanRecorded({
+        result: await callMovement({ token: users[key].token, body: badgeLoan(toolId, badge) }),
+        toolId,
+        collaboratorId,
+        name,
+        role,
+        operator: key,
       });
-
-      assert.equal(result.status, 200, key);
-      assert.equal(result.body.message, 'Empréstimo registrado.');
-      assert.deepEqual(Object.keys(result.body.data).sort(), ['action', 'tool'], key);
-      assert.deepEqual(
-        Object.keys(result.body.data.tool).sort(),
-        ['currentCollaboratorId', 'currentUser', 'id', 'lastAction', 'status'],
-        key
-      );
-      assert.equal(result.body.data.tool.currentUser, expectedName);
-      assert.equal((await readTool(toolId)).currentCollaboratorId, collaboratorId);
 
       const returned = await callMovement({
         token: users[key].token,
@@ -515,63 +610,10 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
       assert.equal(returned.status, 200, `${key} devolução`);
     }
 
-    record('MOVEMENT_ADMIN_STANDARD_PRESERVED', 'PASS');
+    record('MOVEMENT_ALL_PROFILES_BADGE_SERVER_SIDE', 'PASS');
   });
 
-  test('13 admin/padrão: mensagens de erro anteriores preservadas', async () => {
-    for (const key of ['admin', 'standard']) {
-      const inactive = await callMovement({
-        token: users[key].token,
-        body: loan('T-06', { collaboratorId: 'c2' }),
-      });
-      const missing = await callMovement({
-        token: users[key].token,
-        body: loan('T-06', { collaboratorId: 'nao-existe' }),
-      });
-
-      assert.equal(inactive.status, 409);
-      assert.equal(inactive.body.message, 'Colaborador inativo.');
-      assert.equal(missing.status, 404);
-      assert.equal(missing.body.message, 'Colaborador não encontrado.');
-    }
-  });
-
-  test('14 admin/padrão não usam o caminho do crachá nem escolhem o fluxo restrito pelo corpo', async () => {
-    for (const key of ['admin', 'standard', 'legacy']) {
-      for (const body of [
-        restrictedLoan('T-06', 'B-100'),
-        loan('T-06', { collaboratorId: 'c1', collaboratorBadge: 'B-100' }),
-        loan('T-06', { collaboratorId: 'c1', isRestricted: true }),
-        loan('T-06', { collaboratorId: 'c1', accessLevel: 'Usuário Padrão' }),
-      ]) {
-        const result = await callMovement({ token: users[key].token, body });
-
-        assert.equal(result.status, 400, key);
-        assert.equal(result.body.message, 'Dados da movimentação inválidos.');
-      }
-    }
-
-    assert.equal((await readTool('T-06')).status, 'available');
-  });
-
-  test('15 administrador com a flag isRestricted continua administrador (collaboratorId)', async () => {
-    const result = await callMovement({
-      token: users.adminflag.token,
-      body: loan('T-06', { collaboratorId: 'c3' }),
-    });
-
-    assert.equal(result.status, 200);
-    assert.deepEqual(Object.keys(result.body.data).sort(), ['action', 'tool']);
-
-    const badgeAttempt = await callMovement({
-      token: users.adminflag.token,
-      body: restrictedLoan('T-07', 'B-300'),
-    });
-
-    assert.equal(badgeAttempt.status, 400);
-  });
-
-  test('16 nenhuma conexão de rede não local durante os testes', () => {
+  test('14 nenhuma conexão de rede não local durante os testes', () => {
     const remote = networkAttempts.filter((attempt) => attempt.remote);
 
     assert.equal(remote.length, 0);
