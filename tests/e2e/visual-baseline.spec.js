@@ -151,6 +151,43 @@ test.describe('VISUAL — desktop 1440x900: Ferramentas', () => {
   });
 });
 
+// Gate 1-F3: tela Colaboradores (menu de ações e tema escuro; a ociosa já está acima).
+test.describe('VISUAL — desktop 1440x900: Colaboradores', () => {
+  test('colaboradores: menu de ações aberto', async ({ page }) => {
+    await loginAs(page, E2E_USERS.admin);
+    await openTab(page, 'collaborators', { isAdmin: true });
+    await expect(page.locator('#collab-list')).toContainText('Colaborador Alfa');
+    await page.locator('#collab-list [data-collab-menu-trigger]').first().click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await expect(page).toHaveScreenshot('colaboradores-admin-menu-desktop.png', {
+      mask: dynamicMasks(page),
+    });
+  });
+
+  test('colaboradores: perfil padrão (somente leitura)', async ({ page }) => {
+    await loginAs(page, E2E_USERS.standard);
+    await openTab(page, 'collaborators');
+    await expect(page.locator('#collab-list')).toContainText('Colaborador Alfa');
+    await expect(page).toHaveScreenshot('colaboradores-padrao-desktop.png', {
+      mask: dynamicMasks(page),
+    });
+  });
+});
+
+test.describe('VISUAL — desktop 1440x900 (ADMIN, tema escuro): Colaboradores', () => {
+  test.use({ colorScheme: 'dark' });
+
+  test('colaboradores no escuro', async ({ page }) => {
+    await loginAs(page, E2E_USERS.admin);
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await openTab(page, 'collaborators', { isAdmin: true });
+    await expect(page.locator('#collab-list')).toContainText('Colaborador Alfa');
+    await expect(page).toHaveScreenshot('colaboradores-admin-desktop-dark.png', {
+      mask: dynamicMasks(page),
+    });
+  });
+});
+
 test.describe('VISUAL — desktop 1440x900 (ADMIN, tema escuro): Ferramentas', () => {
   test.use({ colorScheme: 'dark' });
 

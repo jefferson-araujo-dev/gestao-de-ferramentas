@@ -271,6 +271,111 @@ test.describe('AXE — baseline (desktop, tema claro; atualizado no Gate 1-D par
     await expectScopedClean(page, '#tab-management', 'menu no tema escuro');
   });
 
+  // Gate 1-F3: estados da tela Colaboradores (a ociosa já foi verificada acima). A varredura restrita
+  // à própria tela não pode ter NENHUMA violação; a de página inteira só herda o nó do cabeçalho do shell.
+  test('COLABORADORES: busca e filtros, menu aberto, formulário, histórico, vazio e erro', async ({
+    page,
+  }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'collaborators', { isAdmin: true });
+    await expect(page.locator('#collab-list')).toContainText('Colaborador Alfa');
+    await expectScopedClean(page, '#tab-collaborators', 'ociosa');
+
+    await page.getByRole('button', { name: /^Ativos\s*\d+/ }).click();
+    await page.locator('#collab-role-filter').selectOption('Operador');
+    await page.getByRole('searchbox').fill('alfa');
+    await expect(page.locator('#collab-active-filters')).toHaveText('3 filtros ativos');
+    await check(page, project, 'admin-colaboradores-filtros');
+    await expectScopedClean(page, '#tab-collaborators', 'busca e filtros ativos');
+
+    await page.locator('#collab-clear-filters').click();
+    await expect(page.locator('#collab-result-count')).toHaveText(
+      'Mostrando 5 de 5 colaboradores'
+    );
+
+    await page.locator('#collab-list [data-collab-menu-trigger]').first().click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await check(page, project, 'admin-colaboradores-menu');
+    await expectScopedClean(page, '#tab-collaborators', 'menu de ações aberto');
+    await page.keyboard.press('Escape');
+
+    await page.locator('#btn-collaborators-new').click();
+    await expect(page.locator('#crud-collab-modal')).toBeVisible();
+    await check(page, project, 'admin-colaboradores-modal-formulario');
+    await expectScopedClean(page, '#crud-collab-modal', 'formulário vazio');
+
+    // Formulário com erro: a mensagem precisa estar ligada ao campo, não só colorida.
+    await page.locator('#btn-save-collab').click();
+    await expect(page.locator('#crud-collab-badge-error')).toBeVisible();
+    await check(page, project, 'admin-colaboradores-modal-erro');
+    await expectScopedClean(page, '#crud-collab-modal', 'formulário com erro');
+    await page.keyboard.press('Escape');
+
+    await page.locator('#collab-list').getByRole('button', { name: /^Histórico de/ }).first().click();
+    await expect(page.locator('#collab-history-modal')).toBeVisible();
+    await check(page, project, 'admin-colaboradores-modal-historico');
+    await expectScopedClean(page, '#collab-history-modal', 'histórico individual');
+    await page.keyboard.press('Escape');
+
+    await page.evaluate(() => {
+      window.App.Data.collaborators = [];
+      window.App.CRUDCollaborators.render();
+    });
+    await expect(page.locator('#collab-list')).toContainText('Nenhum colaborador cadastrado');
+    await check(page, project, 'admin-colaboradores-vazio');
+    await expectScopedClean(page, '#tab-collaborators', 'estado vazio');
+
+    await page.evaluate(() => {
+      window.App.Data.collaboratorsError = true;
+      window.App.CRUDCollaborators.render();
+    });
+    await expect(page.locator('#collab-feedback').getByRole('alert')).toBeVisible();
+    await check(page, project, 'admin-colaboradores-erro');
+    await expectScopedClean(page, '#tab-collaborators', 'estado de erro');
+  });
+
+  // Gate 1-F3: a borda do menu flutuante corta linhas diferentes a cada abertura (contrato do 1-F2.1).
+  test('COLABORADORES: menu aberto em cada linha, sem exclusão e sem violações', async ({ page }) => {
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'collaborators', { isAdmin: true });
+    await expect(page.locator('#collab-list')).toContainText('Colaborador Alfa');
+
+    const triggers = page.locator('#collab-list [data-collab-menu-trigger]');
+    const total = await triggers.count();
+
+    expect(total).toBe(5);
+
+    for (let index = 0; index < total; index += 1) {
+      await triggers.nth(index).scrollIntoViewIfNeeded();
+      await triggers.nth(index).click();
+      await expect(page.getByRole('menu')).toBeVisible();
+      await expectScopedClean(page, '#tab-collaborators', `menu aberto na linha ${index + 1}`);
+      await page.keyboard.press('Escape');
+    }
+  });
+
+  test('COLABORADORES: tema escuro (lista e menu de ações)', async ({ page }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'collaborators', { isAdmin: true });
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await expect(page.locator('#collab-list')).toContainText('Colaborador Alfa');
+    await check(page, project, 'admin-colaboradores-escuro');
+    await expectScopedClean(page, '#tab-collaborators', 'tema escuro');
+
+    await page.locator('#collab-list [data-collab-menu-trigger]').first().click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await check(page, project, 'admin-colaboradores-menu-escuro');
+    await expectScopedClean(page, '#tab-collaborators', 'menu no tema escuro');
+  });
+
   // Gate 1-D: estados novos do shell (drawer no tablet e rail expandido sobre o conteúdo no notebook).
   test('SHELL: drawer (tablet) e rail expandido (notebook)', async ({ page }, testInfo) => {
     const project = testInfo.project.name;

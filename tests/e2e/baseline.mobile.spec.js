@@ -108,6 +108,16 @@ test.describe('MOBILE 390x844 — visual (baseline do shell novo)', () => {
     });
   });
 
+  // Gate 1-F3: Colaboradores no mobile (cartões agrupados por cargo).
+  test('colaboradores', async ({ page }) => {
+    await openTab(page, 'collaborators');
+    await expectActiveTab(page, 'collaborators');
+    await expect(page.locator('#collab-list')).toContainText('Colaborador Alfa');
+    await expect(page).toHaveScreenshot('colaboradores-admin-mobile.png', {
+      mask: dynamicMasks(page),
+    });
+  });
+
   // Gate 1-F1: tela Dados e backup no mobile (aberta por "Mais"; o item não cabe na barra inferior).
   test('dados e backup', async ({ page }) => {
     await openTab(page, 'data');
@@ -228,6 +238,54 @@ test.describe('MOBILE 390x844 — axe (shell novo)', () => {
       expect(
         scoped.violations.map((violation) => `${violation.id}: ${violation.nodes.length} nó(s)`),
         `axe restrito a #tab-management (${screen})`
+      ).toEqual([]);
+    }
+  });
+
+  // Gate 1-F3: Colaboradores no mobile (lista em cartões e menu de ações aberto).
+  test('colaboradores: lista e menu de ações', async ({ page }, testInfo) => {
+    const project = testInfo.project.name;
+
+    await loginAs(page, E2E_USERS.admin);
+    await freezeMotion(page);
+    await openTab(page, 'collaborators');
+    await expect(page.locator('#collab-list')).toContainText('Colaborador Alfa');
+
+    for (const [screen, prepare] of [
+      ['mobile-colaboradores', async () => {}],
+      [
+        'mobile-colaboradores-menu',
+        async () => {
+          const trigger = page.locator('#collab-list [data-collab-menu-trigger]').first();
+
+          await trigger.scrollIntoViewIfNeeded();
+          await trigger.click();
+          await expect(page.getByRole('menu')).toBeVisible();
+        },
+      ],
+    ]) {
+      await prepare();
+
+      const { violations, axeVersion: version } = await scan(page);
+
+      axeVersion = version;
+      collected[screen] = violations;
+
+      if (!UPDATE_BASELINE) {
+        expect(
+          findRegressions(loadBaseline(project).screens[screen], violations),
+          `regressões de acessibilidade em "${screen}"`
+        ).toEqual([]);
+      }
+
+      const scoped = await new AxeBuilder({ page })
+        .include('#tab-collaborators')
+        .withTags(AXE_TAGS)
+        .analyze();
+
+      expect(
+        scoped.violations.map((violation) => `${violation.id}: ${violation.nodes.length} nó(s)`),
+        `axe restrito a #tab-collaborators (${screen})`
       ).toEqual([]);
     }
   });

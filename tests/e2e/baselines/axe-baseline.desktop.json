@@ -29,10 +29,6 @@
       "color-contrast": {
         "impact": "serious",
         "nodes": 1
-      },
-      "select-name": {
-        "impact": "critical",
-        "nodes": 3
       }
     },
     "admin-ferramentas": {
@@ -128,6 +124,35 @@
     },
     "admin-ferramentas-escuro": {},
     "admin-ferramentas-menu-escuro": {},
+    "admin-colaboradores-filtros": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-colaboradores-menu": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-colaboradores-modal-formulario": {},
+    "admin-colaboradores-modal-erro": {},
+    "admin-colaboradores-modal-historico": {},
+    "admin-colaboradores-vazio": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-colaboradores-erro": {
+      "color-contrast": {
+        "impact": "serious",
+        "nodes": 1
+      }
+    },
+    "admin-colaboradores-escuro": {},
+    "admin-colaboradores-menu-escuro": {},
     "admin-drawer-tablet": {
       "color-contrast": {
         "impact": "serious",
