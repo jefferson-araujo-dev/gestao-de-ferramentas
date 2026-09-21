@@ -332,11 +332,11 @@ test.describe('ADMIN — Ferramentas: ações por ferramenta', () => {
       return labels;
     };
 
+    // Sem "Marcar como emprestada": empréstimo só pelo Scanner (ação principal "Emprestar").
     expect(await items('Chave de Fenda')).toEqual([
       'Editar',
       'Registrar manutenção',
       'Histórico',
-      'Marcar como emprestada',
       'Marcar como em manutenção',
     ]);
     // Emprestada: sem manutenção nem troca de status (regra existente do quickStatusUpdate).
@@ -346,8 +346,9 @@ test.describe('ADMIN — Ferramentas: ações por ferramenta', () => {
       'Registrar manutenção',
       'Histórico',
       'Marcar como disponível',
-      'Marcar como emprestada',
     ]);
+    await expect(page.getByRole('menuitem', { name: 'Marcar como emprestada' })).toHaveCount(0);
+    await expect(page.locator('[data-next-status="borrowed"]')).toHaveCount(0);
   });
 
   test('menu por teclado: ↓ abre e foca o primeiro; ↑↓ navegam; Esc fecha e devolve o foco', async ({

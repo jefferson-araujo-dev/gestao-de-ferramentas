@@ -44,6 +44,12 @@ const SORT_OPTIONS = Object.freeze([
   { value: 'patrimony', label: 'Patrimônio' }
 ]);
 
+// Status que o cliente pode gravar diretamente. 'borrowed' fica de fora: empréstimo só pelo Scanner
+// (patrimônio + crachá, resolvidos na API); as regras do Firestore também recusam.
+const MANUAL_STATUSES = Object.freeze(['available', 'maintenance']);
+const LOAN_ONLY_BY_SCANNER_MESSAGE =
+  'Empréstimo só pelo Scanner, com patrimônio e crachá do colaborador.';
+
 // A lista vira tabela a partir do notebook (rail + conteúdo largo); abaixo disso são cartões.
 const TABLE_QUERY = `(min-width: ${BREAKPOINTS.notebook}px)`;
 
@@ -389,6 +395,10 @@ export const AppCRUDTools = {
 
     switch (action) {
       case 'status':
+        if (!MANUAL_STATUSES.includes(payload)) {
+          window.App.UI.showToast(LOAN_ONLY_BY_SCANNER_MESSAGE, 'error');
+          return;
+        }
         if (
           !(await window.App.UI.confirmAction('Alterar status em lote?', `Alterar o status de ${tools.length} ferramenta(s) para ${payload === 'available' ? 'Disponível' : 'Manutenção'}?`, 'Alterar'))
         ) {
@@ -481,12 +491,16 @@ export const AppCRUDTools = {
       window.App.UI.showToast('Acesso restrito a administradores.', 'error');
       return;
     }
+    if (!MANUAL_STATUSES.includes(newStatus)) {
+      window.App.UI.showToast(LOAN_ONLY_BY_SCANNER_MESSAGE, 'error');
+      return;
+    }
     const tool = window.App.Data.tools.find((t) => t.firebaseId === id);
     if (!tool) {
       return;
     }
 
-    if (tool.status === 'borrowed' && newStatus !== 'borrowed') {
+    if (tool.status === 'borrowed') {
       window.App.UI.showToast('Não é possível alterar status de ferramenta emprestada.', 'warning');
       return;
     }
@@ -1444,9 +1458,9 @@ export const AppCRUDTools = {
     items += item('history', 'Histórico');
 
     if (!borrowed) {
+      // Sem "Marcar como emprestada": empréstimo só pelo Scanner (ação principal "Emprestar").
       const targets = [
         ['available', 'Marcar como disponível'],
-        ['borrowed', 'Marcar como emprestada'],
         ['maintenance', 'Marcar como em manutenção']
       ].filter(([status]) => status !== t.status);
 
@@ -1616,6 +1630,16 @@ export const AppCRUDTools = {
     ) {
       return window.App.UI.showToast('Ref/Patrimonio já cadastrado.', 'warning');
     }
+    // O select só oferece Disponível/Manutenção; um valor adulterado (ex.: 'borrowed') é recusado,
+    // não trocado em silêncio. Ferramenta já emprestada não tem o status gravado aqui.
+    const editedTool = id ? window.App.Data.tools.find((t) => t.firebaseId === id) : null;
+    if (
+      editedTool &&
+      editedTool.status !== 'borrowed' &&
+      !MANUAL_STATUSES.includes(document.getElementById('crud-status').value)
+    ) {
+      return window.App.UI.showToast(LOAN_ONLY_BY_SCANNER_MESSAGE, 'error');
+    }
     const btn = document.getElementById('btn-save-tool');
     const orig = btn.innerHTML;
     btn.disabled = true;
@@ -1743,7 +1767,8 @@ export const AppCRUDTools = {
         }
         window.App.UI.showToast('Importando ferramentas... Aguarde.', 'info');
         let c = 0,
-          dup = 0;
+          dup = 0,
+          loanRows = 0;
         const eC = new Set(window.App.Data.tools.map((t) => String(t.code).toLowerCase()));
         for (let i = 1; i < rows.length; i++) {
           const cols = rows[i];
@@ -1755,15 +1780,19 @@ export const AppCRUDTools = {
           const cat = cols[2] !== null && cols[2] !== undefined ? String(cols[2]).trim() : 'Outros';
           let status =
             cols[3] !== null && cols[3] !== undefined ? String(cols[3]).trim() : 'available';
-          const currentUser =
-            cols[4] !== null && cols[4] !== undefined ? String(cols[4]).trim() : null;
           if (name.startsWith('"') && name.endsWith('"')) {
             name = name.slice(1, -1);
           }
+          // Linha "emprestada" é recusada (não vira disponível em silêncio): a importação cadastra
+          // ferramentas, não registra empréstimo, que só acontece pelo Scanner.
+          if (status === 'Emprestada' || status === 'borrowed') {
+            if (code && name) {
+              loanRows++;
+            }
+            continue;
+          }
           if (status === 'Disponível') {
             status = 'available';
-          } else if (status === 'Emprestada' || status === 'borrowed') {
-            status = 'borrowed';
           } else if (status === 'Manutenção' || status === 'maintenance') {
             status = 'maintenance';
           } else {
@@ -1782,7 +1811,7 @@ export const AppCRUDTools = {
                 name,
                 category: cat,
                 status,
-                currentUser: status === 'borrowed' ? currentUser : null,
+                currentUser: null,
                 lastAction: new Date().toISOString(),
                 imageUrl: null,
               });
@@ -1796,6 +1825,12 @@ export const AppCRUDTools = {
           `${c} ferramentas importadas. ${dup > 0 ? `(${dup} ignoradas)` : ''}`,
           'success'
         );
+        if (loanRows > 0) {
+          window.App.UI.showToast(
+            `${loanRows} linha(s) com status "Emprestada" recusada(s): ${LOAN_ONLY_BY_SCANNER_MESSAGE}`,
+            'warning'
+          );
+        }
       } catch {
         window.App.UI.showToast('Falha ao ler arquivo.', 'error');
       } finally {

@@ -21,6 +21,8 @@ export const LEGACY_BACKUP_VERSION = '3.0';
 export const BACKUP_APP_ID = 'gestao-de-ferramentas-3f8f1';
 export const RESTORABLE_COLLECTIONS = Object.freeze(['tools', 'collaborators', 'history']);
 export const BACKUP_GENERATORS = Object.freeze(['browser', 'cli', 'legacy-adapter']);
+// 'borrowed' continua aceito: o restore (somente admin, Admin SDK) recupera o estado salvo, com os
+// empréstimos que já existiam. Não é um novo empréstimo; esse só acontece pela API de movimentação.
 export const TOOL_STATUSES = Object.freeze(['available', 'borrowed', 'maintenance']);
 export const COLLABORATOR_STATUSES = Object.freeze(['active', 'inactive']);
 export const HISTORY_TYPES = Object.freeze(['out', 'in', 'maintenance']);

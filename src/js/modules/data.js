@@ -748,11 +748,18 @@ export const AppData = {
             continue;
           }
 
+          // Linha "emprestada" é recusada: importar cadastra ferramentas, não registra empréstimo
+          // (só pelo Scanner, com patrimônio e crachá; as regras do Firestore também recusam).
+          if (statusRaw.includes('emprest') || statusRaw === 'borrowed') {
+            errors.push(
+              `Linha ${i + 2}: status "Emprestada" não é aceito na importação (empréstimo só pelo Scanner)`
+            );
+            continue;
+          }
+
           // Mapeia status
           let status = 'available';
-          if (statusRaw.includes('emprest') || statusRaw === 'borrowed') {
-            status = 'borrowed';
-          } else if (statusRaw.includes('manuten') || statusRaw === 'maintenance') {
+          if (statusRaw.includes('manuten') || statusRaw === 'maintenance') {
             status = 'maintenance';
           }
 
@@ -763,7 +770,7 @@ export const AppData = {
             status,
             createdAt: new Date().toISOString(),
             lastAction: new Date().toISOString(),
-            currentUser: row['Responsável'] || row['Responsavel'] || null,
+            currentUser: null,
             imageUrl: null,
             notes: row['Observações'] || row['Observacoes'] || row['Notes'] || null
           });
