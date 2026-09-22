@@ -256,6 +256,188 @@ describe('firestore.rules: colaboradores por perfil (Auth + Firestore Emulator)'
     }
   });
 
+  test('PADRÃO: nunca escreve em tools (contrato preservado)', async () => {
+    const { db } = users.standard;
+
+    await assertDenied(() => updateDoc(doc(db, `${BASE}/tools/t1`), { status: 'maintenance' }), 'update');
+    await assertDenied(
+      () => setDoc(doc(db, `${BASE}/tools/novo`), { code: 'X', name: 'X', status: 'available' }),
+      'create'
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // Integridade de empréstimo em tools/{toolId} (Gate 1-F3.2B). 'borrowed' só é um estado
+  // legítimo quando produzido pelo Movement API (Admin SDK, que não passa por estas Rules).
+  // Mesma sessão de usuários/emulator do describe acima (evita reautenticar e reabrir clientes).
+  // -------------------------------------------------------------------------
+  const toolsPath = `${BASE}/tools`;
+
+  async function seedTool(id, data) {
+    await adminDb.doc(`${toolsPath}/${id}`).set({
+      code: id,
+      name: 'Ferramenta de teste',
+      category: 'Elétrica',
+      currentUser: null,
+      currentCollaboratorId: null,
+      lastAction: null,
+      ...data,
+    });
+  }
+
+  test('1/2 create: status available permitido; status borrowed negado', async () => {
+    const { db } = users.admin;
+
+    await assertAllowed(
+      () => setDoc(doc(db, `${toolsPath}/loan-t-create-ok`), {
+        code: 'loan-t-create-ok',
+        name: 'Furadeira',
+        category: 'Elétrica',
+        status: 'available',
+      }),
+      'create available'
+    );
+    await assertDenied(
+      () => setDoc(doc(db, `${toolsPath}/loan-t-create-borrowed`), {
+        code: 'loan-t-create-borrowed',
+        name: 'Furadeira',
+        category: 'Elétrica',
+        status: 'borrowed',
+      }),
+      'create borrowed'
+    );
+  });
+
+  test('3/4 available <-> maintenance: permitido nos dois sentidos', async () => {
+    await seedTool('loan-t-flip', { status: 'available' });
+    const ref = doc(users.admin.db, `${toolsPath}/loan-t-flip`);
+
+    await assertAllowed(() => updateDoc(ref, { status: 'maintenance' }), 'available -> maintenance');
+    await assertAllowed(() => updateDoc(ref, { status: 'available' }), 'maintenance -> available');
+  });
+
+  test('5 available -> borrowed direto (client) é negado, mesmo para admin', async () => {
+    await seedTool('loan-t-direct-borrow', { status: 'available' });
+
+    await assertDenied(
+      () => updateDoc(doc(users.admin.db, `${toolsPath}/loan-t-direct-borrow`), { status: 'borrowed' }),
+      'available -> borrowed'
+    );
+  });
+
+  test('6/7 ferramenta já borrowed: mudar status para available/maintenance é negado', async () => {
+    await seedTool('loan-t-frozen-status', {
+      status: 'borrowed',
+      currentUser: 'Colaborador Alfa',
+      currentCollaboratorId: 'c1',
+      lastAction: '2026-09-01T10:00:00.000Z',
+    });
+    const ref = doc(users.admin.db, `${toolsPath}/loan-t-frozen-status`);
+
+    await assertDenied(() => updateDoc(ref, { status: 'available' }), 'borrowed -> available');
+    await assertDenied(() => updateDoc(ref, { status: 'maintenance' }), 'borrowed -> maintenance');
+  });
+
+  test('8/9/10 ferramenta borrowed: campos do empréstimo ficam congelados para o cliente', async () => {
+    await seedTool('loan-t-frozen-fields', {
+      status: 'borrowed',
+      currentUser: 'Colaborador Alfa',
+      currentCollaboratorId: 'c1',
+      lastAction: '2026-09-01T10:00:00.000Z',
+    });
+    const ref = doc(users.admin.db, `${toolsPath}/loan-t-frozen-fields`);
+
+    await assertDenied(() => updateDoc(ref, { currentCollaboratorId: 'c3' }), 'currentCollaboratorId');
+    await assertDenied(() => updateDoc(ref, { currentUser: 'Outro Nome' }), 'currentUser');
+    await assertDenied(() => updateDoc(ref, { lastAction: '2026-09-20T00:00:00.000Z' }), 'lastAction');
+  });
+
+  test('11 ferramenta borrowed: metadado não protegido continua editável', async () => {
+    await seedTool('loan-t-metadata', {
+      status: 'borrowed',
+      currentUser: 'Colaborador Alfa',
+      currentCollaboratorId: 'c1',
+      lastAction: '2026-09-01T10:00:00.000Z',
+      notes: 'original',
+    });
+    const ref = doc(users.admin.db, `${toolsPath}/loan-t-metadata`);
+
+    await assertAllowed(() => updateDoc(ref, { notes: 'revisada em campo' }), 'notes');
+    await assertAllowed(() => updateDoc(ref, { category: 'Hidráulica' }), 'category');
+  });
+
+  test('12 delete de ferramenta borrowed é negado, mesmo para admin', async () => {
+    await seedTool('loan-t-delete-borrowed', {
+      status: 'borrowed',
+      currentUser: 'Colaborador Alfa',
+      currentCollaboratorId: 'c1',
+      lastAction: '2026-09-01T10:00:00.000Z',
+    });
+
+    await assertDenied(
+      () => deleteDoc(doc(users.admin.db, `${toolsPath}/loan-t-delete-borrowed`)),
+      'delete borrowed'
+    );
+  });
+
+  test('13 devolução oficial (Admin SDK) não é controlada por estas Rules', async () => {
+    await seedTool('loan-t-official-return', {
+      status: 'borrowed',
+      currentUser: 'Colaborador Alfa',
+      currentCollaboratorId: 'c1',
+      lastAction: '2026-09-01T10:00:00.000Z',
+    });
+
+    // Simula o efeito da devolução oficial feita pelo Movement API (Admin SDK): não passa pelas
+    // Rules do cliente, então não é bloqueada pelo congelamento de campos acima.
+    await adminDb.doc(`${toolsPath}/loan-t-official-return`).update({
+      status: 'available',
+      currentUser: null,
+      currentCollaboratorId: null,
+      lastAction: '2026-09-02T00:00:00.000Z',
+    });
+
+    const afterReturn = await adminDb.doc(`${toolsPath}/loan-t-official-return`).get();
+
+    assert.equal(afterReturn.data().status, 'available');
+  });
+
+  test('14 delete permitido após devolução/available', async () => {
+    await seedTool('loan-t-delete-after-return', { status: 'available' });
+
+    await assertAllowed(
+      () => deleteDoc(doc(users.admin.db, `${toolsPath}/loan-t-delete-after-return`)),
+      'delete available'
+    );
+  });
+
+  test('Standard/Restricted continuam sem client-write em tools sob a nova política', async () => {
+    await seedTool('loan-t-no-client-write', { status: 'available' });
+
+    for (const key of ['standard', 'restricted']) {
+      const { db } = users[key];
+
+      await assertDenied(
+        () => updateDoc(doc(db, `${toolsPath}/loan-t-no-client-write`), { status: 'maintenance' }),
+        `${key}: update`
+      );
+      await assertDenied(
+        () => setDoc(doc(db, `${toolsPath}/loan-t-no-client-write-2`), {
+          code: 'x',
+          name: 'x',
+          status: 'available',
+        }),
+        `${key}: create`
+      );
+      await assertDenied(
+        () => deleteDoc(doc(db, `${toolsPath}/loan-t-no-client-write`)),
+        `${key}: delete`
+      );
+    }
+
+    record('LOAN_INTEGRITY_RULES_STANDARD_RESTRICTED_NO_WRITE', 'DENIED');
+  });
+
   test('nenhuma conexão de rede não local durante os testes', () => {
     const remote = networkAttempts.filter((attempt) => attempt.remote);
 

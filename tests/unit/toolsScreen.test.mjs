@@ -199,6 +199,57 @@ describe('tela Ferramentas: contratos preservados', () => {
   });
 });
 
+describe('tela Ferramentas: integridade de empréstimo (Gate 1-F3.2B — verificações estáticas)', () => {
+  test('menu não expõe "Marcar como emprestada" nem qualquer atalho para status borrowed', () => {
+    assert.doesNotMatch(tools, /Marcar como emprestada/);
+    assert.doesNotMatch(tools, /\['borrowed', /);
+  });
+
+  test('quickStatusUpdate e bulkAction(\'status\') usam a mesma allow-list e rejeitam borrowed', () => {
+    assert.match(tools, /QUICK_STATUS_TARGETS:\s*\['available', 'maintenance'\]/);
+
+    const quickStart = tools.indexOf('quickStatusUpdate: function');
+    const quickBody = tools.slice(quickStart, quickStart + 400);
+
+    assert.match(quickBody, /QUICK_STATUS_TARGETS\.includes\(newStatus\)/);
+
+    const bulkStart = tools.indexOf("case 'status':");
+    const bulkBody = tools.slice(bulkStart, bulkStart + 300);
+
+    assert.match(bulkBody, /QUICK_STATUS_TARGETS\.includes\(payload\)/);
+  });
+
+  test('saveTool não confia no DOM puro para o próximo status: usa a allow-list', () => {
+    const saveToolStart = tools.indexOf('saveTool: async function');
+    const start = tools.indexOf("crud-status').value", saveToolStart);
+    const body = tools.slice(start - 40, start + 350);
+
+    assert.match(body, /QUICK_STATUS_TARGETS\.includes\(nextStatus\)/);
+  });
+
+  test('deleteTool e o delete em lote rejeitam ferramenta borrowed antes de excluir', () => {
+    const deleteStart = tools.indexOf('deleteTool: async function');
+    const deleteBody = tools.slice(deleteStart, deleteStart + 500);
+
+    assert.match(deleteBody, /status === 'borrowed'/);
+
+    const bulkDeleteStart = tools.indexOf("case 'delete':");
+    const bulkDeleteBody = tools.slice(bulkDeleteStart, bulkDeleteStart + 400);
+
+    assert.match(bulkDeleteBody, /t\.status !== 'borrowed'/);
+  });
+
+  test('importFile rejeita linhas com status "Emprestada"/"borrowed" em vez de converter para available', () => {
+    const start = tools.indexOf('importFile: async function');
+    const body = tools.slice(start, start + 3000);
+
+    assert.match(body, /requestedBorrowed/);
+    assert.match(body, /rejectedBorrowed\+\+/);
+    // Não deve mais existir o caminho antigo que gravava status 'borrowed' vindo da planilha.
+    assert.doesNotMatch(body, /status: 'borrowed'/);
+  });
+});
+
 describe('Dropdown: libera o listener do documento (menus por linha re-renderizados)', () => {
   const overlays = read('js/components/overlays.js');
 

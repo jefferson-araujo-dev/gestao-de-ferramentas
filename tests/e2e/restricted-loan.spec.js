@@ -6,11 +6,14 @@ import { E2E_USERS } from './support/seed-data.mjs';
 // payload EXATO enviado pelo app e responde como o servidor real (o servidor de verdade é
 // coberto por tests/integration/movementEmulator.test.mjs). Nenhum dado do emulator muda.
 //
-// Contrato validado no cliente:
-//   RESTRITO -> { action, toolId, collaboratorBadge, device }  (crachá exato; sem lista, sem nome)
-//   PADRÃO   -> { action, toolId, collaboratorId, device }     (resolvido na lista, como antes)
+// Contrato unificado (Gate 1-F3.2B): TODOS os perfis (Admin, Padrão, Restrito) enviam
+//   { action: 'loan', toolId, toolCode, collaboratorBadge, device }
+// O cliente NUNCA resolve o colaborador localmente (nem por crachá, nem por nome) e NUNCA envia
+// collaboratorId. O servidor resolve o crachá; Admin/Padrão recebem mensagens específicas de
+// erro (visíveis nos testes desta suíte), Restrito recebe sempre a mesma resposta genérica.
 const JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const GENERIC_DENIAL = 'Não foi possível autorizar a retirada. Confira o crachá informado.';
+const NOT_FOUND_DENIAL = 'Colaborador não encontrado.';
 
 const json = (status, payload) => ({ status, payload });
 const okLoan = (toolId, extra = {}) =>
@@ -39,11 +42,12 @@ async function stubMovement(page, respond) {
   return requests;
 }
 
-// A negação genérica do servidor é 422 de propósito: o navegador registra esse status como
-// erro de rede. Só esse caso esperado é retirado do guard; qualquer outro erro continua falhando.
-function allowGenericDenial(guard) {
-  guard.badResponses = guard.badResponses.filter((entry) => entry !== '422 /api/tools/movement');
-  guard.consoleErrors = guard.consoleErrors.filter((entry) => !/status of 422/.test(entry));
+// A negação genérica/específica do servidor usa um status de erro (422/404/...): o navegador
+// registra esse status como erro de rede. Só o caso esperado é retirado do guard; qualquer outro
+// erro continua falhando.
+function allowDenial(guard, status) {
+  guard.badResponses = guard.badResponses.filter((entry) => entry !== `${status} /api/tools/movement`);
+  guard.consoleErrors = guard.consoleErrors.filter((entry) => !new RegExp(`status of ${status}`).test(entry));
 }
 
 async function scanTool(page, code) {
@@ -96,7 +100,7 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     await expectActiveTab(page, 'scanner');
   });
 
-  test('empréstimo: pede o crachá exato e envia só collaboratorBadge (sem lista, sem ID)', async ({
+  test('empréstimo: pede o crachá exato e envia toolCode + collaboratorBadge (sem lista, sem ID)', async ({
     page,
   }) => {
     const requests = await stubMovement(page, () =>
@@ -123,6 +127,7 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     expect(requests[0].body).toEqual({
       action: 'loan',
       toolId: 'T-E2E-001',
+      toolCode: 'T-E2E-001',
       collaboratorBadge: 'E2E-001',
       device: expect.any(String),
     });
@@ -174,10 +179,10 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     await expect(page.locator('#toast-container')).not.toContainText('Colaborador');
     await expect(page.locator('#scanner-status-box')).toBeHidden();
     expect(requests).toHaveLength(1);
-    allowGenericDenial(guard);
+    allowDenial(guard, 422);
   });
 
-  test('pesquisa por nome indisponível: o nome digitado não é resolvido no cliente', async ({
+  test('nome no lugar do crachá não é resolvido no cliente: segue como texto para o servidor decidir', async ({
     page,
     guard,
   }) => {
@@ -196,10 +201,10 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     expect(requests[0].body).not.toHaveProperty('collaboratorId');
     await expect(page.locator('#checkout-user-badge')).not.toHaveAttribute('list', /.+/);
     expect(await page.evaluate(() => window.App.Data.collaborators.length)).toBe(0);
-    allowGenericDenial(guard);
+    allowDenial(guard, 422);
   });
 
-  test('devolução continua disponível e não envia colaborador', async ({ page }) => {
+  test('devolução continua disponível e não envia colaborador nem toolCode', async ({ page }) => {
     const requests = await stubMovement(page, (body) =>
       json(200, {
         success: true,
@@ -226,20 +231,23 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
   });
 });
 
-test.describe('PADRÃO — controle: empréstimo por collaboratorId resolvido no cliente (inalterado)', () => {
-  test('resolve o crachá na lista, envia collaboratorId e o recibo usa a lista', async ({
-    page,
-  }) => {
+test.describe('PADRÃO — mesmo contrato por crachá (sem resolução local, sem nome, sem ID)', () => {
+  test.beforeEach(async ({ page }) => {
     await loginAs(page, E2E_USERS.standard);
     await openTab(page, 'scanner');
+    await expectActiveTab(page, 'scanner');
+  });
 
-    const requests = await stubMovement(page, () => okLoan('T-E2E-001'));
+  test('empréstimo: envia toolCode + collaboratorBadge, nunca collaboratorId', async ({ page }) => {
+    const requests = await stubMovement(page, () =>
+      okLoan('T-E2E-001', { collaborator: { name: 'Colaborador Beta', role: 'Operador' } })
+    );
 
     await captureReceiptTexts(page);
     await scanTool(page, 'T-E2E-001');
     await expect(page.locator('#checkout-user-badge')).toHaveAttribute(
       'placeholder',
-      'Crachá ou Nome do Colaborador'
+      'Crachá do colaborador'
     );
 
     const download = page.waitForEvent('download');
@@ -252,27 +260,35 @@ test.describe('PADRÃO — controle: empréstimo por collaboratorId resolvido no
     expect(requests[0].body).toEqual({
       action: 'loan',
       toolId: 'T-E2E-001',
-      collaboratorId: 'c-e2e-2',
+      toolCode: 'T-E2E-001',
+      collaboratorBadge: 'e2e-002',
       device: expect.any(String),
     });
-    expect(requests[0].body).not.toHaveProperty('collaboratorBadge');
+    expect(requests[0].body).not.toHaveProperty('collaboratorId');
     expect((await download).suggestedFilename()).toBe('Termo_T-E2E-001_Colaborador_Beta.pdf');
+    // O recibo mostra exatamente o que foi digitado (o cliente não resolve mais contra o cadastro
+    // local para exibir a grafia "canônica" do crachá): mesmo comportamento do perfil restrito.
     expect(await readReceiptTexts(page)).toEqual(
-      expect.arrayContaining(['Colaborador Beta', 'E2E-002', 'Operador'])
+      expect.arrayContaining(['Colaborador Beta', 'e2e-002', 'Operador'])
     );
   });
 
-  test('nome do colaborador continua funcionando para o perfil padrão', async ({ page }) => {
-    await loginAs(page, E2E_USERS.standard);
-    await openTab(page, 'scanner');
-
-    const requests = await stubMovement(page, () => okLoan('T-E2E-005'));
+  test('nome do colaborador não substitui o crachá: rejeitado com mensagem específica do servidor', async ({
+    page,
+    guard,
+  }) => {
+    const requests = await stubMovement(page, () =>
+      json(404, { success: false, message: NOT_FOUND_DENIAL })
+    );
 
     await scanTool(page, 'T-E2E-005');
     await page.locator('#checkout-user-badge').fill('Colaborador Gama');
     await page.getByRole('button', { name: 'Confirmar Empréstimo' }).click();
 
-    await expect(page.locator('#toast-container')).toContainText('Autorizada para Colaborador Gama');
-    expect(requests[0].body.collaboratorId).toBe('c-e2e-3');
+    await expect(page.locator('#toast-container')).toContainText(NOT_FOUND_DENIAL);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.collaboratorBadge).toBe('Colaborador Gama');
+    expect(requests[0].body).not.toHaveProperty('collaboratorId');
+    allowDenial(guard, 404);
   });
 });

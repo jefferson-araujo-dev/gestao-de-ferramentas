@@ -332,11 +332,12 @@ test.describe('ADMIN — Ferramentas: ações por ferramenta', () => {
       return labels;
     };
 
+    // 'Marcar como emprestada' foi removida (Gate 1-F3.2B): empréstimo só pelo fluxo oficial do
+    // Scanner. O ajuste rápido de status só oferece destinos administrativos (disponível/manutenção).
     expect(await items('Chave de Fenda')).toEqual([
       'Editar',
       'Registrar manutenção',
       'Histórico',
-      'Marcar como emprestada',
       'Marcar como em manutenção',
     ]);
     // Emprestada: sem manutenção nem troca de status (regra existente do quickStatusUpdate).
@@ -346,7 +347,6 @@ test.describe('ADMIN — Ferramentas: ações por ferramenta', () => {
       'Registrar manutenção',
       'Histórico',
       'Marcar como disponível',
-      'Marcar como emprestada',
     ]);
   });
 

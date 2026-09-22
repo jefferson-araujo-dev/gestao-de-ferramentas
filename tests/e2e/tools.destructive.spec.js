@@ -49,6 +49,21 @@ test('trocar status pelo menu grava no emulator, atualiza a linha e as contagens
   await expect(chip(page, 'Disponíveis')).toContainText(String(E2E_EXPECTED_COUNTS.available));
 });
 
+test('quickStatusUpdate rejeita "borrowed" programaticamente, mesmo com ferramenta disponível', async ({
+  page,
+}) => {
+  await loginAs(page, E2E_USERS.admin);
+  await openTab(page, 'management');
+  await expect(row(page, 'Martelo')).toContainText('Disponível');
+
+  await page.evaluate(() => window.App.CRUDTools.quickStatusUpdate('T-E2E-003', 'borrowed'));
+  await expect(
+    page.locator('.toast-item').filter({ hasText: 'Status inválido para ajuste manual.' }).first()
+  ).toBeVisible();
+  // Nenhuma escrita real no emulator: a linha continua "Disponível" após recarregar os dados.
+  await expect(row(page, 'Martelo')).toContainText('Disponível');
+});
+
 test('ferramenta emprestada não tem troca de status e a função recusa a alteração', async ({
   page,
 }) => {

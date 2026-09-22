@@ -30,6 +30,38 @@ for (const [label, user, isAdmin] of [
       await expect(page.locator('#tab-scanner')).toBeHidden();
       await expect(page.locator('#reader video')).toHaveCount(0);
     });
+
+    test('trocar de aba limpa a ferramenta identificada e o crachá digitado (Gate 1-F3.2B)', async ({
+      page,
+    }) => {
+      await openTab(page, 'scanner', { isAdmin });
+      await expectActiveTab(page, 'scanner', { isAdmin });
+
+      await expect
+        .poll(() => page.evaluate(() => window.App.Data.toolsLoaded && window.App.Data.tools.length))
+        .toBeGreaterThan(0);
+
+      const code = await page.evaluate(
+        () => window.App.Data.tools.find((t) => t.status === 'available')?.code
+      );
+
+      await page.locator('#manual-scan-input').fill(code);
+      await page.locator('#manual-scan-input').press('Enter');
+      await expect(page.locator('#res-code')).toHaveText(code);
+      await page.locator('#checkout-user-badge').fill('crachá abandonado antes da troca de aba');
+      expect(await page.evaluate(() => window.App.Scanner.currentTool?.code)).toBe(code);
+
+      await openTab(page, 'dashboard', { isAdmin });
+      await openTab(page, 'scanner', { isAdmin });
+      await expectActiveTab(page, 'scanner', { isAdmin });
+
+      // Nenhuma operação abandonada sobrevive à troca de aba: sem ferramenta identificada, sem
+      // crachá residual, aguardando uma nova leitura.
+      expect(await page.evaluate(() => window.App.Scanner.currentTool)).toBeNull();
+      await expect(page.locator('#scanner-waiting')).toBeVisible();
+      await expect(page.locator('#scanner-result')).toBeHidden();
+      await expect(page.locator('#checkout-user-badge')).toHaveValue('');
+    });
   });
 }
 
