@@ -10,7 +10,7 @@ async function requestToolMovement(body) {
 
   if (
     !body?.toolId ||
-    (body.action === 'loan' && !body.collaboratorId && !body.collaboratorBadge)
+    (body.action === 'loan' && (!body.toolCode || !body.collaboratorBadge))
   ) {
     throw new Error('Dados da movimentação incompletos.');
   }
@@ -40,14 +40,15 @@ async function requestToolMovement(body) {
       payload?.message || 'Não foi possível registrar a movimentação.'
     );
     error.code = payload?.code;
+    // Erro de negócio devolvido pelo servidor (ferramenta/crachá/patrimônio): a mensagem já é
+    // apropriada para exibição, diferente de uma falha real de rede/comunicação.
+    error.isMovementError = true;
     throw error;
   }
 
   return payload.data || null;
 }
 
-// Código devolvido pela API quando o perfil restrito informa um crachá que não pode ser usado.
-const LOAN_NOT_AUTHORIZED = 'LOAN_NOT_AUTHORIZED';
 export const AppScanner = {
   currentTool: null,
   buffer: '',
@@ -541,10 +542,9 @@ export const AppScanner = {
 
       if (bi) {
         bi.value = '';
-        bi.placeholder =
-          window.App.Auth.isRestricted === true
-            ? 'Crachá do colaborador'
-            : 'Crachá ou Nome do Colaborador';
+        // Identificação sempre por crachá/ponto, para todos os perfis: nome não é aceito no
+        // lugar do crachá (a resolução do colaborador é sempre feita pelo servidor, por crachá).
+        bi.placeholder = 'Crachá do colaborador';
         setTimeout(() => bi.focus(), 100);
       }
     } else {
@@ -598,37 +598,14 @@ export const AppScanner = {
   },
   processCheckout: function () {
     const typedValue = document.getElementById('checkout-user-badge')?.value.trim() || '';
-    const bV = window.Utils.removeAccents(typedValue).toLowerCase();
-    if (!bV || !this.currentTool) {
+    if (!typedValue || !this.currentTool) {
       return;
     }
-    // Perfil restrito: não tem a lista de colaboradores. Envia só o crachá exato digitado e o
-    // servidor resolve o colaborador; não há busca por nome nem por aproximação.
-    const restricted = window.App.Auth.isRestricted === true;
-    let u = null;
-    if (!restricted) {
-      u = window.App.Data.collaborators.find(
-        (x) =>
-          ((x.badge !== null &&
-            x.badge !== undefined &&
-            window.Utils.removeAccents(x.badge).toLowerCase() === bV) ||
-            window.Utils.removeAccents(x.name).toLowerCase() === bV)
-      );
-      if (!u) {
-        window.AudioSys.playBeep('error');
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate([200, 100, 200]);
-        }
-        return window.App.UI.showToast('Colaborador não localizado.', 'error');
-      }
-      if (u.status === 'inactive') {
-        window.AudioSys.playBeep('error');
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate([200, 100, 200]);
-        }
-        return window.App.UI.showToast('Colaborador bloqueado/inativo.', 'error');
-      }
-    }
+    // Identificação do colaborador é sempre por crachá/ponto, para todos os perfis (Admin,
+    // Standard, Restricted): o cliente nunca resolve o colaborador localmente (nem por badge, nem
+    // por nome) nem lê a coleção de colaboradores para o loan. O servidor resolve o crachá
+    // informado dentro da mesma transação da movimentação e devolve nome/função na resposta.
+    const tool = this.currentTool;
     ['scanner-checkout', 'scanner-status-box'].forEach((id) =>
       document.getElementById(id)?.classList.add('hidden')
     );
@@ -637,17 +614,15 @@ export const AppScanner = {
       try {
         const movement = await requestToolMovement({
           action: 'loan',
-          toolId: this.currentTool.firebaseId,
-          ...(restricted
-            ? { collaboratorBadge: typedValue }
-            : { collaboratorId: u.firebaseId }),
+          toolId: tool.firebaseId,
+          toolCode: tool.code,
+          collaboratorBadge: typedValue,
           device:
             window.App.Session.currentDevice ||
             window.navigator.userAgent ||
             'Navegador'
         });
-        // Restrito: nome e função vêm da resposta da própria movimentação autorizada.
-        const borrower = restricted ? movement.collaborator : u;
+        const borrower = movement.collaborator;
         window.AudioSys.playBeep('success');
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate(100);
@@ -655,16 +630,15 @@ export const AppScanner = {
         window.App.UI.showToast(`Autorizada para ${borrower.name}`, 'success');
 
         if (window.App.PDF && typeof window.App.PDF.generateReceipt === 'function') {
-          window.App.PDF.generateReceipt(
-            this.currentTool,
-            borrower.name,
-            restricted ? { badge: typedValue, role: borrower.role } : undefined
-          );
+          window.App.PDF.generateReceipt(tool, borrower.name, {
+            badge: typedValue,
+            role: borrower.role
+          });
         } else {
           window.Logger.warn('Módulo PDF ausente. O recibo não foi gerado.');
         }
 
-        metrics.trackAction('tools', 'checkout', this.currentTool.code);
+        metrics.trackAction('tools', 'checkout', tool.code);
         metrics.increment('tools.borrowed_total');
 
         document.getElementById('scanner-processing')?.classList.add('hidden');
@@ -679,8 +653,9 @@ export const AppScanner = {
         }
         setTimeout(() => this.reset(), 3000);
       } catch (err) {
-        if (err.code === LOAN_NOT_AUTHORIZED) {
-          // Resposta genérica do servidor (crachá desconhecido, inválido ou inativo): sem detalhes.
+        if (err.isMovementError) {
+          // Erro de negócio do servidor: crachá desconhecido/duplicado/inativo (genérico para o
+          // Restrito) ou mensagem específica (ferramenta, patrimônio, colaborador) para os demais.
           window.AudioSys.playBeep('error');
           if (typeof navigator !== 'undefined' && navigator.vibrate) {
             navigator.vibrate([200, 100, 200]);
@@ -697,7 +672,11 @@ export const AppScanner = {
       }
     }, 500);
   },
-  reset: function () {
+  // Limpa a operação corrente (ferramenta identificada, crachá digitado, formulários e estado
+  // visual transitório) sem mexer na câmera — usado tanto pelo reset() normal (sucesso/erro de
+  // leitura) quanto ao sair da aba Scanner, para que uma operação abandonada não sobreviva a uma
+  // troca de aba nem a uma falha de comunicação.
+  clearOperation: function () {
     this.currentTool = null;
     document.getElementById('scanner-result')?.classList.add('hidden');
     document.getElementById('scanner-waiting')?.classList.remove('hidden');
@@ -711,11 +690,21 @@ export const AppScanner = {
     if (msi) {
       msi.value = '';
     }
+    const badgeInput = document.getElementById('checkout-user-badge');
+    if (badgeInput) {
+      badgeInput.value = '';
+    }
+    ['scanner-checkout', 'scanner-return', 'scanner-status-box', 'scanner-processing'].forEach(
+      (id) => document.getElementById(id)?.classList.add('hidden')
+    );
     const sli = document.getElementById('scanner-line-indicator');
     if (sli) {
       sli.className =
         'absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-brand-500 via-indigo-500 to-brand-500';
     }
+  },
+  reset: function () {
+    this.clearOperation();
     if (this.currentMode === 'cam') {
       this.startCamera();
     }

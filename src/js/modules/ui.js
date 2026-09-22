@@ -501,6 +501,10 @@ export const AppUI = {
       } else {
         window.App.Scanner.stopCamera();
       }
+      // Limpa a ferramenta identificada, o crachá digitado e o estado operacional transitório:
+      // uma operação abandonada antes da troca de aba não pode sobreviver para ser confirmada
+      // depois, ao voltar para o Scanner.
+      window.App.Scanner.clearOperation();
     } else {
       window.App.Scanner.focus();
     }
