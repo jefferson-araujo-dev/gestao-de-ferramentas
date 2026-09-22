@@ -12,6 +12,7 @@
             id="btn-mode-usb"
             type="button"
             onclick="App.Scanner.setMode('usb')"
+            aria-pressed="true"
             class="btn btn-primary w-full sm:w-auto px-3 sm:px-4 py-2.5 text-sm min-h-11 hover:scale-105 active:scale-95"
           >
             <svg
@@ -35,6 +36,7 @@
             id="btn-mode-cam"
             type="button"
             onclick="App.Scanner.setMode('cam')"
+            aria-pressed="false"
             class="btn btn-secondary w-full sm:w-auto px-3 sm:px-4 py-2.5 text-sm min-h-11 hover:scale-105 active:scale-95"
           >
             <svg
@@ -94,19 +96,24 @@
               <rect width="14" height="14" x="5" y="5" rx="2" />
             </svg>
           </div>
-          <h3 class="text-xl font-extrabold text-slate-900 dark:text-white">
+          <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">
             Leitura Rápida
-          </h3>
+          </h2>
           <p class="text-slate-500 max-w-xs mx-auto" id="scanner-instruction-text">
-            Conecte o leitor USB e aponte para o código QR.
+            Leia ou informe o patrimônio da ferramenta.
           </p>
-          <div class="max-w-xs mx-auto">
+          <div class="max-w-xs mx-auto text-left">
+            <label for="manual-scan-input" class="ui-sr-only">Patrimônio da ferramenta</label>
             <input
               id="manual-scan-input"
               type="text"
               placeholder="Ou digite o código..."
+              aria-describedby="manual-scan-help"
               class="scanner-input w-full px-4 py-3 text-center text-lg font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 transition-all"
             />
+            <p id="manual-scan-help" class="text-xs text-slate-500 text-center mt-2">
+              Pressione Enter para confirmar a leitura manual.
+            </p>
           </div>
         </div>
         <div
@@ -118,8 +125,9 @@
             id="btn-toggle-torch"
             type="button"
             onclick="App.Scanner.toggleTorch()"
-            class="absolute top-4 right-16 z-20 p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-full transition-colors"
-            title="Ligar/Desligar Lanterna"
+            class="scanner-cam-control absolute top-4 right-16 z-20 min-w-11 min-h-11 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-white rounded-full transition-colors"
+            aria-label="Ligar lanterna"
+            aria-pressed="false"
           >
             <svg
               id="torch-icon"
@@ -131,6 +139,7 @@
               stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
+              aria-hidden="true"
             >
               <path
                 d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.3 1.5 1.5 2.5"
@@ -140,9 +149,11 @@
             </svg>
           </button>
           <button
+            id="btn-close-camera"
             type="button"
             onclick="App.Scanner.setMode('usb')"
-            class="absolute top-4 right-4 z-20 p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-full"
+            class="scanner-cam-control absolute top-4 right-4 z-20 min-w-11 min-h-11 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-white rounded-full"
+            aria-label="Fechar câmera"
           >
             <svg
               class="w-5 h-5"
@@ -153,6 +164,7 @@
               stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
+              aria-hidden="true"
             >
               <path d="M18 6 6 18" />
               <path d="m6 6 12 12" />
@@ -186,59 +198,100 @@
             ></span>
           </div>
           <div id="res-badge-container" class="flex justify-center"></div>
-  <div id="scanner-status-box" class="hidden"></div>
+  <div id="scanner-status-box" class="hidden" tabindex="-1" role="status" aria-live="polite"></div>
           <div
     id="scanner-checkout"
-    class="hidden bg-emerald-50 dark:bg-emerald-900/20 p-6 rounded-2xl border border-emerald-100 dark:border-emerald-900"
+    class="hidden bg-emerald-50 dark:bg-emerald-900/20 p-6 rounded-2xl border border-emerald-100 dark:border-emerald-900 text-left"
           >
-            <p class="text-sm font-bold text-emerald-800 dark:text-emerald-300 mb-3">
+            <p class="text-sm font-bold text-emerald-800 dark:text-emerald-300 mb-3 text-center">
               Autorizar Retirada Para:
             </p>
+            <label for="checkout-user-badge" class="ui-sr-only">Crachá / Ponto</label>
             <input
               id="checkout-user-badge"
               type="text"
               placeholder="Crachá do colaborador"
-              class="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-xl text-center font-bold mb-4 outline-none focus:ring-2 focus:ring-emerald-500"
+              inputmode="numeric"
+              aria-describedby="checkout-badge-help checkout-badge-error"
+              class="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-xl text-center font-bold outline-none focus:ring-2 focus:ring-emerald-500"
             />
+            <p id="checkout-badge-help" class="text-xs text-emerald-700 dark:text-emerald-400 mt-2">
+              Informe o crachá/ponto do colaborador. Nome não é aceito.
+            </p>
+            <p id="checkout-badge-error" class="hidden text-xs font-bold text-rose-600 dark:text-rose-400 mt-2" role="alert"></p>
+
+            <div id="loan-summary" class="mt-4 pt-4 border-t border-emerald-100 dark:border-emerald-900 text-xs space-y-1">
+              <p class="font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide mb-1">Resumo do empréstimo</p>
+              <p><span class="text-slate-500">Operação:</span> <strong>Empréstimo</strong></p>
+              <p><span class="text-slate-500">Ferramenta:</span> <strong id="loan-summary-name"></strong></p>
+              <p><span class="text-slate-500">Patrimônio:</span> <strong id="loan-summary-code"></strong></p>
+              <p><span class="text-slate-500">Crachá / Ponto:</span> <strong id="loan-summary-badge">—</strong></p>
+            </div>
+
             <button
+              id="btn-checkout-confirm"
               type="button"
               onclick="App.Scanner.processCheckout()"
-              class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+              class="w-full mt-4 py-3 min-h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Confirmar Empréstimo
             </button>
           </div>
           <div
     id="scanner-return"
-    class="hidden bg-amber-50 dark:bg-amber-900/20 p-6 rounded-2xl border border-amber-100 dark:border-amber-900"
+    class="hidden bg-amber-50 dark:bg-amber-900/20 p-6 rounded-2xl border border-amber-100 dark:border-amber-900 text-left"
           >
-            <p class="text-sm font-bold text-amber-800 dark:text-amber-300 mb-3">
+            <p class="text-sm font-bold text-amber-800 dark:text-amber-300 mb-3 text-center">
               Ferramenta Emprestada
             </p>
-            <p
-              id="return-user-info"
-              class="text-xs text-amber-700 dark:text-amber-400 mb-4"
-            ></p>
+            <div class="text-xs space-y-1 mb-4">
+              <p><span class="text-slate-500">Operação:</span> <strong>Devolução</strong></p>
+              <p id="return-user-info" class="text-amber-700 dark:text-amber-400"></p>
+            </div>
+            <p id="return-error" class="hidden text-xs font-bold text-rose-600 dark:text-rose-400 mb-4" role="alert"></p>
             <div class="grid grid-cols-2 gap-2 sm:gap-3">
               <button
                 type="button"
                 onclick="App.Scanner.reset()"
-                class="w-full py-3 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 font-bold rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                class="w-full py-3 min-h-11 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 font-bold rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
               >
                 Cancelar
               </button>
               <button
+                id="btn-return-confirm"
                 type="button"
                 onclick="App.Scanner.processReturn()"
-                class="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg shadow-amber-600/30 transition-all active:scale-95"
+                class="w-full py-3 min-h-11 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg shadow-amber-600/30 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Devolver
               </button>
             </div>
           </div>
           <div
+    id="scanner-blocked"
+    class="hidden bg-rose-50 dark:bg-rose-900/20 p-6 rounded-2xl border border-rose-100 dark:border-rose-900 text-center"
+    role="alert"
+    tabindex="-1"
+          >
+            <h3 id="scanner-blocked-title" class="font-black text-lg text-rose-800 dark:text-rose-300"></h3>
+            <p id="scanner-blocked-message" class="text-sm text-rose-700 dark:text-rose-400 mt-1"></p>
+          </div>
+          <div id="scanner-success-actions" class="hidden mt-4">
+            <button
+              id="btn-new-operation"
+              type="button"
+              onclick="App.Scanner.reset()"
+              class="w-full py-3 min-h-11 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-all active:scale-95"
+            >
+              Nova operação
+            </button>
+          </div>
+          <div
     id="scanner-processing"
     class="hidden flex items-center justify-center gap-3 py-4"
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
           >
             <svg
               class="w-6 h-6 animate-spin text-brand-600"
@@ -257,76 +310,33 @@
             >
           </div>
 
-          <!-- Ações Rápidas Após Leitura -->
+          <!-- Ação secundária após leitura -->
           <div
     id="scanner-quick-actions"
     class="hidden mt-6 pt-6 border-t border-slate-200 dark:border-slate-700"
           >
-            <p class="text-xs font-bold text-slate-500 uppercase mb-3 text-center">
-              Ações Rápidas
-            </p>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <button
-                id="btn-action-loan"
-                type="button"
-                onclick="App.Scanner.quickAction('loan')"
-                class="w-full px-2 sm:px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-[13px] sm:text-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+            <button
+              type="button"
+              onclick="App.Scanner.quickAction('details')"
+              class="w-full px-4 py-2.5 min-h-11 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-sm transition-all hover:scale-105 active:scale-95 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center gap-1.5"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
               >
-                <svg
-                  class="w-4 h-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M7 10h14l-4-4" />
-                  <path d="M17 14H3l4 4" />
-                </svg>
-                Emprestar
-              </button>
-              <button
-                id="btn-action-return"
-                type="button"
-                onclick="App.Scanner.quickAction('return')"
-                class="w-full px-2 sm:px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-[13px] sm:text-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
-              >
-                <svg
-                  class="w-4 h-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                  <polyline points="10 17 15 12 10 7" />
-                  <line x1="15" x2="3" y1="12" y2="12" />
-                </svg>
-                Devolver
-              </button>
-              <button
-                type="button"
-                onclick="App.Scanner.quickAction('details')"
-                class="w-full col-span-2 sm:col-span-1 px-2 sm:px-4 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-[13px] sm:text-sm transition-all hover:scale-105 active:scale-95 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center gap-1.5"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-                Detalhes
-              </button>
-            </div>
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              Detalhes
+            </button>
           </div>
         </div>
       </div>
@@ -416,7 +426,7 @@
             <p
               class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider mt-2"
             >
-              Taxa Sucesso
+              Leituras Reconhecidas
             </p>
           </div>
         </div>

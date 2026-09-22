@@ -1,5 +1,6 @@
 import { metrics } from '../core/MetricsManager.js';
 import { auth } from '../app.js';
+import { setBusy, isBusy } from '../components/index.js';
 
 async function requestToolMovement(body) {
   const currentUser = auth.currentUser;
@@ -127,7 +128,75 @@ export const AppScanner = {
     document.getElementById('manual-scan-input')?.addEventListener('keydown', mFn);
     document.getElementById('hidden-scanner')?.addEventListener('keydown', mFn);
 
+    document.getElementById('checkout-user-badge')?.addEventListener('input', () => {
+      this.clearBadgeError();
+      this.updateLoanSummary();
+    });
+
     this.loadStats();
+  },
+
+  showBadgeError: function (message, { invalid = true } = {}) {
+    const input = document.getElementById('checkout-user-badge');
+    const errEl = document.getElementById('checkout-badge-error');
+    if (input && invalid) {
+      input.setAttribute('aria-invalid', 'true');
+    }
+    if (errEl) {
+      errEl.textContent = message;
+      errEl.classList.remove('hidden');
+    }
+  },
+
+  clearBadgeError: function () {
+    const input = document.getElementById('checkout-user-badge');
+    const errEl = document.getElementById('checkout-badge-error');
+    if (input) {
+      input.removeAttribute('aria-invalid');
+    }
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.classList.add('hidden');
+    }
+  },
+
+  showReturnError: function (message) {
+    const errEl = document.getElementById('return-error');
+    if (errEl) {
+      errEl.textContent = message;
+      errEl.classList.remove('hidden');
+    }
+  },
+
+  clearReturnError: function () {
+    const errEl = document.getElementById('return-error');
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.classList.add('hidden');
+    }
+  },
+
+  updateLoanSummary: function () {
+    const badgeInput = document.getElementById('checkout-user-badge');
+    const el = document.getElementById('loan-summary-badge');
+    if (el) {
+      const val = badgeInput?.value.trim();
+      el.textContent = val ? val : '—';
+    }
+  },
+
+  showBlocked: function (title, message) {
+    const titleEl = document.getElementById('scanner-blocked-title');
+    const msgEl = document.getElementById('scanner-blocked-message');
+    if (titleEl) {
+      titleEl.textContent = title;
+    }
+    if (msgEl) {
+      msgEl.textContent = message;
+    }
+    document.getElementById('scanner-blocked')?.classList.remove('hidden');
+    document.getElementById('scanner-success-actions')?.classList.remove('hidden');
+    document.getElementById('scanner-blocked')?.focus();
   },
 
   loadStats: function () {
@@ -238,6 +307,9 @@ export const AppScanner = {
       .join('');
   },
   setMode: function (m) {
+    if (m !== this.currentMode) {
+      this.clearOperation();
+    }
     this.currentMode = m;
     const a =
         'w-full sm:w-auto flex items-center justify-center px-3 sm:px-4 py-2.5 bg-brand-600 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-brand-600/20 hover:scale-105 active:scale-95 min-h-11',
@@ -247,9 +319,11 @@ export const AppScanner = {
       c = document.getElementById('btn-mode-cam');
     if (u) {
       u.className = m === 'usb' ? a : ia;
+      u.setAttribute('aria-pressed', String(m === 'usb'));
     }
     if (c) {
       c.className = m === 'cam' ? a : ia;
+      c.setAttribute('aria-pressed', String(m === 'cam'));
     }
     const camContainer = document.getElementById('mode-cam-container');
     if (camContainer) {
@@ -369,6 +443,11 @@ export const AppScanner = {
       if (torchIcon) {
         torchIcon.classList.remove('text-yellow-400');
       }
+      const torchBtn = document.getElementById('btn-toggle-torch');
+      if (torchBtn) {
+        torchBtn.setAttribute('aria-pressed', 'false');
+        torchBtn.setAttribute('aria-label', 'Ligar lanterna');
+      }
     }
   },
   toggleTorch: async function () {
@@ -389,6 +468,11 @@ export const AppScanner = {
           torchIcon.classList.remove('text-yellow-400');
         }
       }
+      const torchBtn = document.getElementById('btn-toggle-torch');
+      if (torchBtn) {
+        torchBtn.setAttribute('aria-pressed', String(this.isTorchOn));
+        torchBtn.setAttribute('aria-label', this.isTorchOn ? 'Desligar lanterna' : 'Ligar lanterna');
+      }
     } catch (err) {
       window.Logger.warn('Lanterna não suportada neste dispositivo', err);
       window.App.UI.showToast(
@@ -399,6 +483,11 @@ export const AppScanner = {
       const torchIcon = document.getElementById('torch-icon');
       if (torchIcon) {
         torchIcon.classList.remove('text-yellow-400');
+      }
+      const torchBtn = document.getElementById('btn-toggle-torch');
+      if (torchBtn) {
+        torchBtn.setAttribute('aria-pressed', 'false');
+        torchBtn.setAttribute('aria-label', 'Ligar lanterna');
       }
     }
   },
@@ -494,12 +583,11 @@ export const AppScanner = {
         el.textContent = txt;
       }
     };
-    const rcat = document.getElementById('res-category');
-    if (rcat && rcat.querySelector('span')) {
-      rcat.querySelector('span').textContent = t.category;
-    }
+    sT('res-category', t.category);
     sT('res-name', t.name);
     sT('res-code', t.code);
+    sT('loan-summary-name', t.name);
+    sT('loan-summary-code', t.code);
     const rbdg = document.getElementById('res-badge-container');
     if (rbdg) {
       rbdg.innerHTML = window.Utils.getBadgeHTML(t.status);
@@ -510,17 +598,43 @@ export const AppScanner = {
       quickActions.classList.remove('hidden');
     }
 
-    ['scanner-status-box', 'scanner-checkout', 'scanner-processing', 'scanner-return'].forEach(
-      (id) => document.getElementById(id)?.classList.add('hidden')
-    );
+    [
+      'scanner-status-box',
+      'scanner-checkout',
+      'scanner-processing',
+      'scanner-return',
+      'scanner-blocked',
+      'scanner-success-actions'
+    ].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
+    this.clearBadgeError();
+    this.clearReturnError();
+
     if (t.status === 'borrowed') {
       const rui = document.getElementById('return-user-info');
       if (rui) {
-        rui.innerHTML = `Com: <strong>${window.Utils.escapeHTML(t.currentUser || '-')}</strong>`;
+        rui.innerHTML = t.currentUser
+          ? `Responsável atual: <strong>${window.Utils.escapeHTML(t.currentUser)}</strong>`
+          : '<strong>Responsável não informado</strong>';
       }
       document.getElementById('scanner-return')?.classList.remove('hidden');
-      setTimeout(() => document.getElementById('btn-return')?.focus(), 100);
+      setTimeout(() => document.getElementById('btn-return-confirm')?.focus(), 100);
     } else if (t.status === 'available') {
+      const overdue = t.nextMaintenance && new Date(t.nextMaintenance).getTime() < Date.now();
+      if (overdue) {
+        window.AudioSys.playBeep('error');
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]);
+        }
+        window.App.UI.showToast(
+          'Empréstimo bloqueado: Ferramenta com revisão/calibração vencida.',
+          'error'
+        );
+        return this.showBlocked(
+          'Empréstimo indisponível',
+          'A revisão/calibração desta ferramenta está vencida.'
+        );
+      }
+
       const bStat = document.getElementById('scanner-status-box');
       if (bStat) {
         bStat.innerHTML = '<div class="flex items-start text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 p-5 rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6 mr-4 mt-0.5 text-emerald-500"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div><p class="font-extrabold text-lg tracking-tight">Pronta para Uso</p><p class="text-sm font-medium mt-1">Autorize a retirada abaixo.</p></div></div>';
@@ -528,23 +642,12 @@ export const AppScanner = {
       }
       document.getElementById('scanner-checkout')?.classList.remove('hidden');
       const bi = document.getElementById('checkout-user-badge');
-
-      if (t.nextMaintenance && new Date(t.nextMaintenance).getTime() < Date.now()) {
-        window.AudioSys.playBeep('error');
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate([200, 100, 200]);
-        }
-        return window.App.UI.showToast(
-          'Empréstimo bloqueado: Ferramenta com revisão/calibração vencida.',
-          'error'
-        );
-      }
-
       if (bi) {
         bi.value = '';
         // Identificação sempre por crachá/ponto, para todos os perfis: nome não é aceito no
         // lugar do crachá (a resolução do colaborador é sempre feita pelo servidor, por crachá).
         bi.placeholder = 'Crachá do colaborador';
+        this.updateLoanSummary();
         setTimeout(() => bi.focus(), 100);
       }
     } else {
@@ -553,13 +656,16 @@ export const AppScanner = {
         navigator.vibrate([200, 100, 200]);
       }
       window.App.UI.showToast('Em Manutenção ativa.', 'warning');
-      setTimeout(() => this.reset(), 3000);
+      this.showBlocked('Operação indisponível', 'Esta ferramenta está em manutenção.');
     }
   },
   processReturn: function () {
-    if (!this.currentTool) {
+    const btn = document.getElementById('btn-return-confirm');
+    if (isBusy(btn) || !this.currentTool) {
       return;
     }
+    this.clearReturnError();
+    setBusy(btn, true);
     document.getElementById('scanner-return')?.classList.add('hidden');
     document.getElementById('scanner-processing')?.classList.remove('hidden');
     setTimeout(async () => {
@@ -577,6 +683,7 @@ export const AppScanner = {
           navigator.vibrate(100);
         }
         window.App.UI.showToast('Devolução registrada.', 'success');
+        setBusy(btn, false);
         document.getElementById('scanner-processing')?.classList.add('hidden');
         const rbc = document.getElementById('res-badge-container');
         if (rbc) {
@@ -586,18 +693,26 @@ export const AppScanner = {
         if (ssb) {
           ssb.innerHTML = '<div class="text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 p-6 rounded-2xl border border-emerald-200 dark:border-emerald-800 shadow-sm"><p class="font-black text-xl tracking-tight text-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Devolução Registrada</p></div>';
           ssb.classList.remove('hidden');
+          ssb.focus();
         }
-        setTimeout(() => this.reset(), 2000);
+        document.getElementById('scanner-success-actions')?.classList.remove('hidden');
       } catch (err) {
         window.Logger.error('Erro ao processar devolução', err);
-        window.App.UI.showToast('Falha de comunicação com o banco. Tente novamente.', 'error');
+        setBusy(btn, false);
         document.getElementById('scanner-processing')?.classList.add('hidden');
         document.getElementById('scanner-return')?.classList.remove('hidden');
+        this.showReturnError('Falha de comunicação com o banco. Tente novamente.');
+        document.getElementById('btn-return-confirm')?.focus();
       }
     }, 500);
   },
   processCheckout: function () {
-    const typedValue = document.getElementById('checkout-user-badge')?.value.trim() || '';
+    const btn = document.getElementById('btn-checkout-confirm');
+    if (isBusy(btn)) {
+      return;
+    }
+    const badgeInput = document.getElementById('checkout-user-badge');
+    const typedValue = badgeInput?.value.trim() || '';
     if (!typedValue || !this.currentTool) {
       return;
     }
@@ -606,6 +721,8 @@ export const AppScanner = {
     // por nome) nem lê a coleção de colaboradores para o loan. O servidor resolve o crachá
     // informado dentro da mesma transação da movimentação e devolve nome/função na resposta.
     const tool = this.currentTool;
+    this.clearBadgeError();
+    setBusy(btn, true);
     ['scanner-checkout', 'scanner-status-box'].forEach((id) =>
       document.getElementById(id)?.classList.add('hidden')
     );
@@ -641,6 +758,7 @@ export const AppScanner = {
         metrics.trackAction('tools', 'checkout', tool.code);
         metrics.increment('tools.borrowed_total');
 
+        setBusy(btn, false);
         document.getElementById('scanner-processing')?.classList.add('hidden');
         const rbc = document.getElementById('res-badge-container');
         if (rbc) {
@@ -650,9 +768,11 @@ export const AppScanner = {
         if (ssb) {
           ssb.innerHTML = `<div class="text-amber-900 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 p-6 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-sm text-center"><p class="font-black text-xl tracking-tight">Responsabilidade Transferida</p><p class="text-sm font-bold mt-2 opacity-80">Guarda: ${window.Utils.escapeHTML(borrower.name)}</p></div>`;
           ssb.classList.remove('hidden');
+          ssb.focus();
         }
-        setTimeout(() => this.reset(), 3000);
+        document.getElementById('scanner-success-actions')?.classList.remove('hidden');
       } catch (err) {
+        setBusy(btn, false);
         if (err.isMovementError) {
           // Erro de negócio do servidor: crachá desconhecido/duplicado/inativo (genérico para o
           // Restrito) ou mensagem específica (ferramenta, patrimônio, colaborador) para os demais.
@@ -663,12 +783,17 @@ export const AppScanner = {
           window.App.UI.showToast(err.message, 'error');
           document.getElementById('scanner-processing')?.classList.add('hidden');
           document.getElementById('scanner-checkout')?.classList.remove('hidden');
+          this.showBadgeError(err.message);
+          badgeInput?.focus();
           return;
         }
         window.Logger.error('Erro no processCheckout:', err);
-        window.App.UI.showToast('Falha de comunicação com o banco. Tente novamente.', 'error');
         document.getElementById('scanner-processing')?.classList.add('hidden');
         document.getElementById('scanner-checkout')?.classList.remove('hidden');
+        this.showBadgeError('Falha de comunicação com o banco. Tente novamente.', {
+          invalid: false
+        });
+        document.getElementById('btn-checkout-confirm')?.focus();
       }
     }, 500);
   },
@@ -694,9 +819,19 @@ export const AppScanner = {
     if (badgeInput) {
       badgeInput.value = '';
     }
-    ['scanner-checkout', 'scanner-return', 'scanner-status-box', 'scanner-processing'].forEach(
-      (id) => document.getElementById(id)?.classList.add('hidden')
-    );
+    this.clearBadgeError();
+    this.clearReturnError();
+    this.updateLoanSummary();
+    setBusy(document.getElementById('btn-checkout-confirm'), false);
+    setBusy(document.getElementById('btn-return-confirm'), false);
+    [
+      'scanner-checkout',
+      'scanner-return',
+      'scanner-status-box',
+      'scanner-processing',
+      'scanner-blocked',
+      'scanner-success-actions'
+    ].forEach((id) => document.getElementById(id)?.classList.add('hidden'));
     const sli = document.getElementById('scanner-line-indicator');
     if (sli) {
       sli.className =
@@ -716,13 +851,6 @@ export const AppScanner = {
     }
 
     switch (action) {
-      case 'loan':
-        document.getElementById('scanner-checkout')?.classList.remove('hidden');
-        document.getElementById('checkout-user-badge')?.focus();
-        break;
-      case 'return':
-        this.processReturn();
-        break;
       case 'details': {
         window.App.UI.switchTab('management');
         const searchInput = document.getElementById('tools-search');
