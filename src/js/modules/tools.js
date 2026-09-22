@@ -389,6 +389,12 @@ export const AppCRUDTools = {
 
     switch (action) {
       case 'status':
+        // 'borrowed' nunca é um destino aceitável em lote: mesma regra do ajuste individual
+        // (quickStatusUpdate) — só entra em empréstimo pelo fluxo oficial do Scanner.
+        if (!this.QUICK_STATUS_TARGETS.includes(payload)) {
+          window.App.UI.showToast('Status inválido para alteração em lote.', 'error');
+          return;
+        }
         if (
           !(await window.App.UI.confirmAction('Alterar status em lote?', `Alterar o status de ${tools.length} ferramenta(s) para ${payload === 'available' ? 'Disponível' : 'Manutenção'}?`, 'Alterar'))
         ) {
@@ -399,7 +405,7 @@ export const AppCRUDTools = {
             updateDoc(doc(db, DB_BASE_PATH, COLLECTIONS.TOOLS, t.firebaseId), { status: payload });
           }
         });
-        window.App.UI.showToast('Status atualizado em lote. (Ignora emprestadas)', 'success');
+        window.App.UI.showToast('Status atualizado em lote. (Ignora as já emprestadas)', 'success');
         this.clearSelection();
         break;
       case 'category':
@@ -454,31 +460,54 @@ export const AppCRUDTools = {
         break;
       }
 
-      case 'delete':
-        if (
-          await window.App.UI.confirmDanger('Excluir ferramentas?', `Tem certeza que deseja excluir ${tools.length} ferramenta(s)?`)
-        ) {
-          const promises = tools.map((t) =>
-            deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.TOOLS, t.firebaseId))
+      case 'delete': {
+        // Mesma regra do delete individual: ferramenta emprestada precisa ser devolvida
+        // oficialmente antes de excluir. Filtra em vez de abortar a seleção inteira.
+        const deletable = tools.filter((t) => t.status !== 'borrowed');
+        const skippedBorrowed = tools.length - deletable.length;
+        if (deletable.length === 0) {
+          window.App.UI.showToast(
+            'Nenhuma ferramenta selecionada pode ser excluída (todas emprestadas).',
+            'warning'
           );
-          Promise.all(promises)
-            .then(() => {
-              window.App.UI.showToast(`${tools.length} ferramenta(s) excluída(s).`, 'success');
-              this.selectedTools.clear();
-              this.updateBulkBar();
-            })
-            .catch((err) => {
-              window.Logger.error('Erro ao excluir ferramentas:', err);
-              window.App.UI.showToast('Erro ao excluir algumas ferramentas.', 'error');
-            });
+          return;
         }
+        if (
+          !(await window.App.UI.confirmDanger('Excluir ferramentas?', `Tem certeza que deseja excluir ${deletable.length} ferramenta(s)?`))
+        ) {
+          return;
+        }
+        const promises = deletable.map((t) =>
+          deleteDoc(doc(db, DB_BASE_PATH, COLLECTIONS.TOOLS, t.firebaseId))
+        );
+        Promise.all(promises)
+          .then(() => {
+            const suffix = skippedBorrowed > 0 ? ` (${skippedBorrowed} emprestada(s) ignorada(s))` : '';
+            window.App.UI.showToast(`${deletable.length} ferramenta(s) excluída(s).${suffix}`, 'success');
+            this.selectedTools.clear();
+            this.updateBulkBar();
+          })
+          .catch((err) => {
+            window.Logger.error('Erro ao excluir ferramentas:', err);
+            window.App.UI.showToast('Erro ao excluir algumas ferramentas.', 'error');
+          });
         break;
+      }
     }
   },
+
+  // Destinos legítimos de ajuste manual de status. 'borrowed' nunca é um destino válido aqui:
+  // entrar em empréstimo exige o fluxo oficial (Scanner -> Movement API), que valida ferramenta e
+  // colaborador no servidor e cria o movimento correspondente. Checagem programática, não só de UI.
+  QUICK_STATUS_TARGETS: ['available', 'maintenance'],
 
   quickStatusUpdate: function (id, newStatus) {
     if (!this.canManageTools()) {
       window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
+    if (!this.QUICK_STATUS_TARGETS.includes(newStatus)) {
+      window.App.UI.showToast('Status inválido para ajuste manual.', 'error');
       return;
     }
     const tool = window.App.Data.tools.find((t) => t.firebaseId === id);
@@ -486,7 +515,7 @@ export const AppCRUDTools = {
       return;
     }
 
-    if (tool.status === 'borrowed' && newStatus !== 'borrowed') {
+    if (tool.status === 'borrowed') {
       window.App.UI.showToast('Não é possível alterar status de ferramenta emprestada.', 'warning');
       return;
     }
@@ -1444,9 +1473,10 @@ export const AppCRUDTools = {
     items += item('history', 'Histórico');
 
     if (!borrowed) {
+      // 'borrowed' não é um destino de ajuste rápido: entrar em empréstimo exige o fluxo oficial
+      // (Scanner -> Movement API), com identidade de ferramenta e colaborador validadas no servidor.
       const targets = [
         ['available', 'Marcar como disponível'],
-        ['borrowed', 'Marcar como emprestada'],
         ['maintenance', 'Marcar como em manutenção']
       ].filter(([status]) => status !== t.status);
 
@@ -1655,7 +1685,13 @@ export const AppCRUDTools = {
           manualName: manualName,
         };
         if (tool && tool.status !== 'borrowed') {
-          u.status = document.getElementById('crud-status').value;
+          const nextStatus = document.getElementById('crud-status').value;
+          // Allow-list explícita: o valor vem de um <select>, mas não confiamos apenas no DOM
+          // (poderia ser adulterado via devtools/console). 'borrowed' nunca é aceito aqui — só
+          // pelo fluxo oficial de empréstimo.
+          if (this.QUICK_STATUS_TARGETS.includes(nextStatus)) {
+            u.status = nextStatus;
+          }
         }
         if (imgUrl) {
           u.imageUrl = imgUrl;
@@ -1692,6 +1728,14 @@ export const AppCRUDTools = {
   deleteTool: async function (id) {
     if (!this.canManageTools()) {
       window.App.UI.showToast('Acesso restrito a administradores.', 'error');
+      return;
+    }
+    const tool = window.App.Data.tools.find((t) => t.firebaseId === id);
+    if (tool && tool.status === 'borrowed') {
+      window.App.UI.showToast(
+        'Não é possível excluir uma ferramenta emprestada. Registre a devolução antes.',
+        'warning'
+      );
       return;
     }
     if (
@@ -1743,7 +1787,8 @@ export const AppCRUDTools = {
         }
         window.App.UI.showToast('Importando ferramentas... Aguarde.', 'info');
         let c = 0,
-          dup = 0;
+          dup = 0,
+          rejectedBorrowed = 0;
         const eC = new Set(window.App.Data.tools.map((t) => String(t.code).toLowerCase()));
         for (let i = 1; i < rows.length; i++) {
           const cols = rows[i];
@@ -1755,24 +1800,29 @@ export const AppCRUDTools = {
           const cat = cols[2] !== null && cols[2] !== undefined ? String(cols[2]).trim() : 'Outros';
           let status =
             cols[3] !== null && cols[3] !== undefined ? String(cols[3]).trim() : 'available';
-          const currentUser =
-            cols[4] !== null && cols[4] !== undefined ? String(cols[4]).trim() : null;
           if (name.startsWith('"') && name.endsWith('"')) {
             name = name.slice(1, -1);
           }
+          // Importação não pode criar ferramentas já emprestadas: entrar em empréstimo exige o
+          // fluxo oficial (Scanner -> Movement API), com colaborador validado no servidor e
+          // movimento registrado. A linha é rejeitada, nunca convertida silenciosamente para
+          // 'available'.
+          const requestedBorrowed = status === 'Emprestada' || status === 'borrowed';
           if (status === 'Disponível') {
             status = 'available';
-          } else if (status === 'Emprestada' || status === 'borrowed') {
-            status = 'borrowed';
           } else if (status === 'Manutenção' || status === 'maintenance') {
             status = 'maintenance';
-          } else {
+          } else if (!requestedBorrowed) {
             status = 'available';
           }
           if (code && name) {
             const lC = code.toLowerCase();
             if (eC.has(lC)) {
               dup++;
+              continue;
+            }
+            if (requestedBorrowed) {
+              rejectedBorrowed++;
               continue;
             }
             eC.add(lC);
@@ -1782,7 +1832,7 @@ export const AppCRUDTools = {
                 name,
                 category: cat,
                 status,
-                currentUser: status === 'borrowed' ? currentUser : null,
+                currentUser: null,
                 lastAction: new Date().toISOString(),
                 imageUrl: null,
               });
@@ -1792,9 +1842,16 @@ export const AppCRUDTools = {
             }
           }
         }
+        const notes = [];
+        if (dup > 0) {
+          notes.push(`${dup} duplicada(s) ignorada(s)`);
+        }
+        if (rejectedBorrowed > 0) {
+          notes.push(`${rejectedBorrowed} rejeitada(s) por status "Emprestada" (não suportado na importação)`);
+        }
         window.App.UI.showToast(
-          `${c} ferramentas importadas. ${dup > 0 ? `(${dup} ignoradas)` : ''}`,
-          'success'
+          `${c} ferramentas importadas.${notes.length ? ` (${notes.join('; ')})` : ''}`,
+          rejectedBorrowed > 0 ? 'warning' : 'success'
         );
       } catch {
         window.App.UI.showToast('Falha ao ler arquivo.', 'error');

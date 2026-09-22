@@ -36,9 +36,31 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // 'borrowed' só é um estado válido quando produzido pelo empréstimo oficial (Movement API,
+    // Admin SDK, que não é controlada por estas Rules). Nenhum cliente — nem Admin — pode criar
+    // ou levar uma ferramenta a 'borrowed' diretamente, e enquanto o documento estiver 'borrowed'
+    // os campos do próprio empréstimo (status, colaborador atual, usuário atual, última ação)
+    // ficam congelados: só a devolução oficial os altera. Metadados não operacionais (nome,
+    // categoria, imagem, observações, manual, condição, próxima manutenção) continuam editáveis
+    // normalmente mesmo com a ferramenta emprestada.
+    function isBorrowed(data) {
+      return data.get('status', null) == 'borrowed';
+    }
+
     match /artifacts/gestao-de-ferramentas-3f8f1/public/data/tools/{toolId} {
       allow read: if hasActiveProfile();
-      allow write: if isAdmin();
+
+      allow create: if isAdmin() && !isBorrowed(request.resource.data);
+
+      allow update: if isAdmin() && (
+        (!isBorrowed(resource.data) && !isBorrowed(request.resource.data)) ||
+        (isBorrowed(resource.data) && isBorrowed(request.resource.data)
+          && request.resource.data.get('currentCollaboratorId', null) == resource.data.get('currentCollaboratorId', null)
+          && request.resource.data.get('currentUser', null) == resource.data.get('currentUser', null)
+          && request.resource.data.get('lastAction', null) == resource.data.get('lastAction', null))
+      );
+
+      allow delete: if isAdmin() && !isBorrowed(resource.data);
     }
 
     match /artifacts/gestao-de-ferramentas-3f8f1/public/data/collaborators/{collaboratorId} {
