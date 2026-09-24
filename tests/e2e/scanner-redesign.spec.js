@@ -195,3 +195,101 @@ test.describe('SCANNER — redesign de UX (Gate 1-F3.3B)', () => {
     await expect(page.locator('#checkout-user-badge')).toHaveValue('');
   });
 });
+
+// Navegação exclusivamente por teclado (Addendum 1-F3.3B.1, Fase 2): nenhuma interação usa
+// .click()/.fill() — apenas Tab/Shift+Tab, digitação via keyboard.type() e ativação por
+// Enter/Espaço. `.focus()` só estabelece o ponto de partida de cada cenário (o campo em que um
+// usuário de teclado já pousaria após ler o patrimônio), nunca substitui uma ativação.
+test.describe('SCANNER — navegação exclusivamente por teclado (Addendum 1-F3.3B.1)', () => {
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, E2E_USERS.admin);
+    await openTab(page, 'scanner');
+    await expect
+      .poll(() => page.evaluate(() => window.App.Data.toolsLoaded && window.App.Data.tools.length))
+      .toBeGreaterThan(0);
+  });
+
+  test('teclado: inicial -> empréstimo -> sucesso -> nova operação, sem mouse', async ({ page }) => {
+    await stubMovement(page, () =>
+      json(200, {
+        success: true,
+        message: 'Empréstimo registrado.',
+        data: { collaborator: { name: 'Colaborador Teclado', role: 'Operador' } },
+      })
+    );
+
+    // Estado inicial: leitura manual via teclado (Tab até o campo + digitação + Enter).
+    await page.locator('#manual-scan-input').focus();
+    await page.keyboard.type('T-E2E-003');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#res-code')).toHaveText('T-E2E-003');
+
+    // Empréstimo: o foco já está no crachá (gerenciado pelo app); Tab deve levar ao botão real.
+    await expect(page.locator('#checkout-user-badge')).toBeFocused();
+    await page.keyboard.type('E2E-001');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#btn-checkout-confirm')).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    // Sucesso: painel persistente; Tab a partir dele deve alcançar "Nova operação".
+    await expect(page.locator('#scanner-status-box')).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator('#scanner-status-box')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#btn-new-operation')).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('#scanner-waiting')).toBeVisible();
+  });
+
+  test('teclado: crachá inválido — Enter no botão focado mostra erro e devolve o foco ao campo', async ({
+    page,
+    guard,
+  }) => {
+    await stubMovement(page, () =>
+      json(404, { success: false, message: 'Colaborador não encontrado.', code: 'BADGE_NOT_FOUND' })
+    );
+
+    await page.locator('#manual-scan-input').focus();
+    await page.keyboard.type('T-E2E-001');
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('#checkout-user-badge')).toBeFocused();
+    await page.keyboard.type('E2E-999');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#btn-checkout-confirm')).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('#checkout-badge-error')).toBeVisible();
+    await expect(page.locator('#checkout-user-badge')).toBeFocused();
+    allowDenial(guard, 404);
+
+    // Uma nova tentativa continua possível só com teclado.
+    await page.keyboard.press('Control+A');
+    await page.keyboard.type('E2E-001');
+    await expect(page.locator('#checkout-badge-error')).toBeHidden();
+  });
+
+  test('teclado: devolução — Enter no botão de devolução já focado automaticamente', async ({
+    page,
+  }) => {
+    await stubMovement(page, (body) =>
+      json(200, {
+        success: true,
+        message: 'Devolução registrada.',
+        data: { action: body.action, tool: { id: body.toolId, status: 'available' } },
+      })
+    );
+
+    await page.locator('#manual-scan-input').focus();
+    await page.keyboard.type('T-E2E-006');
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('#btn-return-confirm')).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('#scanner-status-box')).toBeVisible({ timeout: 8_000 });
+    await expect(page.locator('#scanner-status-box')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#btn-new-operation')).toBeFocused();
+  });
+});

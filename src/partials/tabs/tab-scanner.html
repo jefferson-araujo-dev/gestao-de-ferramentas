@@ -341,17 +341,19 @@
         </div>
       </div>
 
-      <!-- Grid Unificado de Estatísticas e Leituras Recentes -->
-      <div
-        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mt-6 items-stretch"
-      >
+      <!-- Grid Unificado de Estatísticas e Leituras Recentes (peso visual secundário: o painel
+           operacional acima é o foco da tela) -->
+      <p class="mt-6 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+        Histórico e métricas
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-2 items-stretch">
         <!-- Histórico de Leituras Recentes -->
         <div
-          class="sm:col-span-2 lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 flex flex-col min-h-[250px]"
+          class="sm:col-span-2 lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-4 flex flex-col min-h-[200px]"
           id="recent-scans-container"
         >
           <h4
-            class="text-sm md:text-base font-bold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-2 shrink-0"
+            class="text-xs font-bold text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2 shrink-0"
           >
             <svg
               class="w-4 h-4"
@@ -375,22 +377,22 @@
 
         <!-- Leituras Hoje -->
         <div
-          class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 flex flex-col items-center justify-center text-center gap-3 hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+          class="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-4 flex flex-col items-center justify-center text-center gap-2"
         >
           <div
-            class="w-12 h-12 bg-brand-50 dark:bg-brand-900/20 rounded-xl flex items-center justify-center text-brand-500 shrink-0"
+            class="w-9 h-9 bg-brand-50 dark:bg-brand-900/20 rounded-lg flex items-center justify-center text-brand-500 shrink-0"
           >
-            <svg class="w-6 h-6" aria-hidden="true"><use href="#icon-plus"></use></svg>
+            <svg class="w-4 h-4" aria-hidden="true"><use href="#icon-plus"></use></svg>
           </div>
           <div>
             <p
-              class="text-3xl font-black text-brand-600 leading-none"
+              class="text-xl font-bold text-brand-600 leading-none"
               id="stat-scans-today"
             >
               0
             </p>
             <p
-              class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider mt-2"
+              class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1.5"
             >
               Leituras Hoje
             </p>
@@ -399,13 +401,13 @@
 
         <!-- Taxa de Sucesso -->
         <div
-          class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 flex flex-col items-center justify-center text-center gap-3 hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+          class="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-4 flex flex-col items-center justify-center text-center gap-2"
         >
           <div
-            class="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center text-emerald-500 shrink-0"
+            class="w-9 h-9 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg flex items-center justify-center text-emerald-500 shrink-0"
           >
             <svg
-              class="w-6 h-6"
+              class="w-4 h-4"
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
               fill="none"
@@ -418,13 +420,13 @@
           </div>
           <div>
             <p
-              class="text-3xl font-black text-emerald-600 leading-none"
+              class="text-xl font-bold text-emerald-600 leading-none"
               id="stat-success-rate"
             >
               100%
             </p>
             <p
-              class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider mt-2"
+              class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1.5"
             >
               Leituras Reconhecidas
             </p>
@@ -433,13 +435,13 @@
 
         <!-- Tempo Médio -->
         <div
-          class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 sm:p-6 flex flex-col items-center justify-center text-center gap-3 hover:-translate-y-1 hover:shadow-lg transition-all duration-300"
+          class="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-4 flex flex-col items-center justify-center text-center gap-2"
         >
           <div
-            class="w-12 h-12 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-center justify-center text-amber-500 shrink-0"
+            class="w-9 h-9 bg-amber-50 dark:bg-amber-900/20 rounded-lg flex items-center justify-center text-amber-500 shrink-0"
           >
             <svg
-              class="w-6 h-6"
+              class="w-4 h-4"
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
               fill="none"
@@ -450,11 +452,11 @@
             </svg>
           </div>
           <div>
-            <p class="text-3xl font-black text-amber-600 leading-none" id="stat-avg-time">
+            <p class="text-xl font-bold text-amber-600 leading-none" id="stat-avg-time">
               --
             </p>
             <p
-              class="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider mt-2"
+              class="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1.5"
             >
               Tempo Médio
             </p>

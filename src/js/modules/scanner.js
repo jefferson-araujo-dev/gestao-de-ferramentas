@@ -133,6 +133,18 @@ export const AppScanner = {
       this.updateLoanSummary();
     });
 
+    // Mitigação mínima para teclado virtual (mobile): ao focar o crachá, garante que o campo e o
+    // botão de confirmar fiquem alcançáveis mesmo com o teclado ocupando parte da viewport. Não
+    // simula um teclado real (Playwright/Chromium não redimensionam a viewport para isso); a
+    // verificação em dispositivo físico continua pendente e está registrada no REPORT.
+    document.getElementById('checkout-user-badge')?.addEventListener('focus', (e) => {
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      e.target.scrollIntoView({
+        block: 'nearest',
+        behavior: reduceMotion ? 'auto' : 'smooth'
+      });
+    });
+
     this.loadStats();
   },
 
