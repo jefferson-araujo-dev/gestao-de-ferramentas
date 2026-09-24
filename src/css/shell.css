@@ -380,8 +380,11 @@
     bottom: calc(var(--shell-bottom-nav-h) + env(safe-area-inset-bottom) + 1rem);
   }
 
+  /* #back-to-top mede 48px (w-12/h-12 = 3rem) e fica a 1rem acima da barra inferior: seu topo está
+     em calc(nav + safe-area + 4rem). O toast precisa terminar acima disso (não só acima da barra),
+     senão os dois disputam o mesmo canto inferior direito (Addendum 1-F3.3B.3). */
   #toast-container {
-    bottom: calc(var(--shell-bottom-nav-h) + env(safe-area-inset-bottom) + 0.5rem);
+    bottom: calc(var(--shell-bottom-nav-h) + env(safe-area-inset-bottom) + 4.5rem);
   }
 }
 
