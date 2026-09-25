@@ -1,5 +1,9 @@
 @AGENTS.md
 
+## Orquestração de ferramentas Claude Code
+
+A skill local `.claude/skills/gestao-ferramentas-workflow/SKILL.md` define quando acionar Superpowers, Ponytail, Security Guidance, Frontend Design, playwright-cli e Humanizer neste repositório. Consultá-la antes de acionar qualquer uma dessas ferramentas em um gate.
+
 ## Ciclo de trabalho com o Cowork
 
 Este projeto segue o ciclo de governança:
