@@ -751,14 +751,26 @@ export const AppScanner = {
             window.navigator.userAgent ||
             'Navegador'
         });
-        const borrower = movement.collaborator;
+        // `collaborator` pode não vir da API (perfil Restrito, a partir do Gate 1-F4.C2): nenhum
+        // ponto deste fluxo pode presumir sua presença.
+        const borrower = movement.collaborator || null;
+        const isRestricted = window.App.Auth.isRestricted === true;
         window.AudioSys.playBeep('success');
         if (typeof navigator !== 'undefined' && navigator.vibrate) {
           navigator.vibrate(100);
         }
-        window.App.UI.showToast(`Autorizada para ${borrower.name}`, 'success');
+        window.App.UI.showToast(
+          !isRestricted && borrower?.name
+            ? `Autorizada para ${borrower.name}`
+            : 'Empréstimo registrado.',
+          'success'
+        );
 
-        if (window.App.PDF && typeof window.App.PDF.generateReceipt === 'function') {
+        if (!window.App.PDF) {
+          window.Logger.warn('Módulo PDF ausente. O recibo não foi gerado.');
+        } else if (isRestricted) {
+          window.App.PDF.generateOperationalReceipt(tool, 'Empréstimo');
+        } else if (borrower?.name) {
           window.App.PDF.generateReceipt(tool, borrower.name, {
             badge: typedValue,
             role: borrower.role
@@ -778,7 +790,10 @@ export const AppScanner = {
         }
         const ssb = document.getElementById('scanner-status-box');
         if (ssb) {
-          ssb.innerHTML = `<div class="text-amber-900 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 p-6 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-sm text-center"><p class="font-black text-xl tracking-tight">Responsabilidade Transferida</p><p class="text-sm font-bold mt-2 opacity-80">Guarda: ${window.Utils.escapeHTML(borrower.name)}</p></div>`;
+          ssb.innerHTML =
+            !isRestricted && borrower?.name
+              ? `<div class="text-amber-900 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 p-6 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-sm text-center"><p class="font-black text-xl tracking-tight">Responsabilidade Transferida</p><p class="text-sm font-bold mt-2 opacity-80">Guarda: ${window.Utils.escapeHTML(borrower.name)}</p></div>`
+              : '<div class="text-amber-900 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 p-6 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-sm text-center"><p class="font-black text-xl tracking-tight">Responsabilidade Transferida</p></div>';
           ssb.classList.remove('hidden');
           ssb.focus();
         }

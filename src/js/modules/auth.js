@@ -10,6 +10,32 @@ import { auth, db, DB_BASE_PATH, COLLECTIONS } from '../app.js';
 import { cacheManager } from '../core/CacheManager.js';
 import { metrics } from '../core/MetricsManager.js';
 
+// Guarda o uid da sessão atual nesta aba (não sobrevive ao fechamento da aba, diferente de
+// localStorage) para detectar troca de usuário mesmo sem logout explícito (E.3, item 2).
+const CURRENT_UID_STORAGE_KEY = 'current-user-uid';
+
+function getStoredUid() {
+  try {
+    return sessionStorage.getItem(CURRENT_UID_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredUid(uid) {
+  try {
+    if (uid) {
+      sessionStorage.setItem(CURRENT_UID_STORAGE_KEY, uid);
+    } else {
+      sessionStorage.removeItem(CURRENT_UID_STORAGE_KEY);
+    }
+  } catch {
+    // Sem sessionStorage disponível (ex.: navegação privada bloqueando storage): segue sem
+    // persistir o uid: a detecção de troca de usuário fica indisponível, mas o login/logout
+    // continuam funcionando normalmente.
+  }
+}
+
 export const AppAuth = {
   _initialized: false,
   isAdm: false,
@@ -106,10 +132,24 @@ export const AppAuth = {
     });
   },
   async _handleAuthenticatedUser(user) {
+    const previousUid = getStoredUid();
+    if (previousUid && previousUid !== user.uid) {
+      // Troca de usuário na mesma aba, sem logout explícito (ex.: token trocado por fora do app):
+      // atualiza o uid guardado antes de recarregar, para não repetir a recarga em loop no próximo
+      // carregamento com o mesmo (novo) usuário.
+      setStoredUid(user.uid);
+      window.App.Data.resetInMemoryState();
+      window.location.reload();
+      return;
+    }
     try {
       const userProfile = await this._fetchAndCacheUserProfile(user);
       const { uName, isAdm, isRestricted } = userProfile;
 
+      // Só grava o uid depois que o perfil é validado: uma tentativa rejeitada (usuário inativo,
+      // não autorizado, etc.) termina em signOut sem nunca ter carregado dados, então não deve
+      // acionar a recarga de "logout" abaixo nem apagar o toast de erro mostrado ao usuário.
+      setStoredUid(user.uid);
       await this._updateUserSession();
       this._updateUIForUser(uName, isAdm, isRestricted);
 
@@ -136,6 +176,16 @@ export const AppAuth = {
     }
   },
   _handleUnauthenticatedUser() {
+    // Uid gravado só depois de um perfil validado (ver _handleAuthenticatedUser): sua presença
+    // aqui indica um logout de sessão real, não a primeira carga sem ninguém logado nem uma
+    // tentativa de login rejeitada. Nesses dois últimos casos não há dado carregado para limpar.
+    const hadSession = getStoredUid() !== null;
+    setStoredUid(null);
+    if (hadSession) {
+      window.App.Data.resetInMemoryState();
+      window.location.reload();
+      return;
+    }
     this.isAdm = false;
     this.isRestricted = false;
     this._setPermissions(false, false);

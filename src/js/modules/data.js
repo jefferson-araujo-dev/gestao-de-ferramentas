@@ -107,6 +107,23 @@ export const AppData = {
     this.listeners = [];
     this.historyUnsub = null;
   },
+  // Zera os arrays de dados em memória de uma sessão anterior (não só `collaborators`), para que
+  // nenhum resíduo de outro usuário sobreviva à troca de usuário na mesma aba (E.3 do plano de
+  // contenção de privacidade). Chamado sempre antes de recarregar a página em logout ou login com
+  // uid diferente do anterior.
+  resetInMemoryState: function () {
+    this.destroyListeners();
+    this.tools = [];
+    this.history = [];
+    this.users = [];
+    this.collaborators = [];
+    this.allHistoryLogs = null;
+    this.toolsLoaded = false;
+    this.toolsError = false;
+    this.usersLoaded = false;
+    this.collaboratorsLoaded = false;
+    this.collaboratorsError = false;
+  },
   init: function (permissions) {
     this.destroyListeners();
     this.toolsLoaded = false;

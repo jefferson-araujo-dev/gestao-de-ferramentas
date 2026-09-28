@@ -119,8 +119,10 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     await input.fill('E2E-001');
     await page.getByRole('button', { name: 'Confirmar Empréstimo' }).click();
 
-    await expect(page.locator('#toast-container')).toContainText('Autorizada para Colaborador Alfa');
-    await expect(page.locator('#scanner-status-box')).toContainText('Colaborador Alfa');
+    // Restrito: comprovante operacional, sem nome do colaborador (E.1 do plano de contenção).
+    await expect(page.locator('#toast-container')).toContainText('Empréstimo registrado.');
+    await expect(page.locator('#toast-container')).not.toContainText('Colaborador');
+    await expect(page.locator('#scanner-status-box')).not.toContainText('Colaborador');
 
     expect(requests).toHaveLength(1);
     expect(requests[0].authorization).toMatch(/^Bearer \S+/);
@@ -137,7 +139,7 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     expect(await page.evaluate(() => window.App.Data.collaborators.length)).toBe(0);
   });
 
-  test('recibo: usa os dados da movimentação autorizada, sem depender da lista de colaboradores', async ({
+  test('recibo: comprovante operacional, sem nome/crachá/função/ID do colaborador (E.1)', async ({
     page,
   }) => {
     await stubMovement(page, () =>
@@ -151,13 +153,14 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     await page.locator('#checkout-user-badge').fill('E2E-001');
     await page.getByRole('button', { name: 'Confirmar Empréstimo' }).click();
 
-    expect((await download).suggestedFilename()).toBe('Termo_T-E2E-003_Colaborador_Alfa.pdf');
+    expect((await download).suggestedFilename()).toMatch(/^Comprovante_T-E2E-003_\d{8}-\d{4}\.pdf$/);
 
     const texts = await readReceiptTexts(page);
 
-    expect(texts).toEqual(expect.arrayContaining(['Colaborador Alfa', 'E2E-001', 'Operador']));
-    expect(texts).not.toContain('Não registrado');
-    expect(texts).not.toContain('Não registrada');
+    expect(texts).toEqual(expect.arrayContaining(['T-E2E-003', 'Martelo', 'Empréstimo']));
+    expect(texts).not.toContain('Colaborador Alfa');
+    expect(texts).not.toContain('E2E-001');
+    expect(texts).not.toContain('Operador');
     expect(await page.evaluate(() => window.App.Data.collaborators.length)).toBe(0);
   });
 
