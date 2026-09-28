@@ -119,6 +119,22 @@ const FIXED_TOOLS = () => ({
   'T-10': tool('T-10', 'Lima', 'available'),
   'T-11': tool('T-11', 'Serrote', 'available'),
   'T-12': tool('T-12', 'Nivelador', 'available'),
+  // Gate 1-F4.C3 — devolução: fixtures dedicadas para conferência de crachá.
+  'T-13': tool('T-13', 'Chave de Fenda', 'borrowed', {
+    currentUser: 'Colaborador Beta',
+    currentCollaboratorId: 'c2', // c2 é inativo: cobre a decisão 4 (inativo confere).
+    lastAction: '2026-09-01T10:00:00.000Z',
+  }),
+  'T-14': tool('T-14', 'Talhadeira', 'borrowed', {
+    currentUser: 'Não informado',
+    currentCollaboratorId: null, // empréstimo antigo sem ID: sempre NÃO CONFERE no fluxo comum.
+    lastAction: '2026-09-01T10:00:00.000Z',
+  }),
+  'T-15': tool('T-15', 'Marreta', 'borrowed', {
+    currentUser: 'Colaborador Alfa',
+    currentCollaboratorId: 'c1', // reservada para o teste de rate limit da devolução.
+    lastAction: '2026-09-01T10:00:00.000Z',
+  }),
 });
 
 const TOOLS = FIXED_TOOLS();
@@ -142,6 +158,29 @@ const loan = (toolId, collaboratorBadge, extra = {}) => ({
   device,
   ...extra,
 });
+
+// Gate 1-F4.C3: devolução comum, com conferência de crachá (Admin/Padrão/Restrito).
+const ret = (toolId, collaboratorBadge, extra = {}) => ({
+  action: 'return',
+  toolId,
+  collaboratorBadge,
+  device,
+  ...extra,
+});
+
+// Gate 1-F4.C3: devolução administrativa, sem conferência de crachá (Admin/Padrão, não Restrito).
+const retAdmin = (toolId, reason, extra = {}) => ({
+  action: 'return_admin',
+  toolId,
+  device,
+  reason,
+  ...extra,
+});
+
+// O rate limit do oráculo de crachá (empréstimo + devolução) é um único contador por uid; para
+// isolar os testes que exercitam o limite dos demais, zera o contador do uid antes de cada um.
+const resetBadgeRateLimit = (uid) =>
+  adminDb.doc(`${BASE}/badgeRateLimits/${uid}`).delete();
 
 async function seedOperational() {
   const batch = adminDb.batch();
@@ -177,18 +216,24 @@ const users = {};
 
 // Nada do que segue pode aparecer em respostas de falha nem em logs do perfil restrito. A partir
 // do Gate 1-F4.C2, também não pode aparecer em NENHUMA resposta ao Restrito, inclusive sucesso.
+// A partir do Gate 1-F4.C3, a resposta de CONFERE/NÃO CONFERE da devolução também não pode conter
+// nenhum destes valores, para NENHUM perfil (Admin, Padrão, Restrito).
 const SENSITIVE = [
   'Colaborador Alfa',
   'Colaborador Beta',
+  'Colaborador Gama',
   'Colaborador Delta',
   'Colaborador Zeta',
   'Operador',
   'Auxiliar',
+  'Supervisor',
   'B-100',
   'B-200',
+  'B-300',
   'B-DUP',
   'c1',
   'c2',
+  'c3',
   'c6',
 ];
 
@@ -546,10 +591,22 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     record('MOVEMENT_CONCURRENCY_ATOMIC', true);
   });
 
-  test('16 [R] devolução continua funcionando (contrato inalterado, sem crachá/toolCode)', async () => {
+  test('16 [R] devolução exige conferência de crachá (contrato reescrito no Gate 1-F4.C3)', async () => {
+    // Sem crachá: contrato antigo (sem collaboratorBadge) agora é rejeitado com 400, para todos os
+    // perfis — o teste 16 original ("devolução continua funcionando... sem crachá") é substituído
+    // por este, conforme a especificação da seção E.5.
+    const semCracha = await callMovement({
+      token: users.restricted.token,
+      body: { action: 'return', toolId: 'T-01', device },
+    });
+
+    assert.equal(semCracha.status, 400);
+    assert.equal((await readTool('T-01')).status, 'borrowed');
+
+    // Com crachá correto: CONFERE, devolução concluída.
     const result = await callMovement({
       token: users.restricted.token,
-      body: { action: 'return', toolId: 'T-03', device },
+      body: ret('T-01', 'B-100'),
     });
 
     assert.equal(result.status, 200);
@@ -557,25 +614,23 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     assert.deepEqual(Object.keys(result.body.data.tool).sort(), ['id', 'lastAction', 'status']);
     assert.equal(result.body.data.tool.status, 'available');
     assertNoLeak(result, 'restricted return');
-    assert.equal((await readTool('T-03')).status, 'available');
+    assert.equal((await readTool('T-01')).status, 'available');
 
-    const entries = (await historyDocs()).filter((entry) => entry.toolId === 'T-03');
+    // T-01 já tem um registro "out" do empréstimo (teste 05): filtra especificamente o "in" desta
+    // devolução, sem presumir ordem de retorno da consulta.
+    const entries = (await historyDocs()).filter(
+      (entry) => entry.toolId === 'T-01' && entry.type === 'in'
+    );
 
     assert.equal(entries.length, 1);
-    assert.equal(entries[0].type, 'in');
     assert.equal(entries[0].collaboratorId, 'c1');
     assert.equal(entries[0].operatorUid, users.restricted.uid);
-
-    const withBadge = await callMovement({
-      token: users.restricted.token,
-      body: { action: 'return', toolId: 'T-01', device, collaboratorBadge: 'B-100' },
-    });
-
-    assert.equal(withBadge.status, 400);
-    record('MOVEMENT_RETURN_CONTRACT_UNCHANGED', 'PASS');
+    assert.equal(entries[0].returnMethod, 'badge_verified');
+    record('MOVEMENT_RETURN_CONTRACT_REWRITTEN', 'PASS');
   });
 
   test('17 restrito: falhas de crachá são genéricas e idênticas (sem PII, sem escrita)', async () => {
+    await resetBadgeRateLimit(users.restricted.uid);
     const digestBefore = await collaboratorsDigest();
     const toolsBefore = JSON.stringify(await readTool('T-06'));
     const historyBefore = (await historyDocs()).length;
@@ -595,7 +650,11 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     };
     const results = {};
 
+    // Cada tentativa reseta o contador do rate limit antes de rodar: este teste cobre a
+    // genericidade/ausência de vazamento entre CAUSAS diferentes de falha, não o rate limit em si
+    // (coberto em testes dedicados) — sem o reset, a 6ª+ tentativa devolveria 429, não 422.
     for (const [label, body] of Object.entries(attempts)) {
+      await resetBadgeRateLimit(users.restricted.uid);
       results[label] = await callMovement({ token: users.restricted.token, body });
       assertNoLeak(results[label], label);
     }
@@ -685,7 +744,220 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     assert.equal(badgeAttempt.body.message, 'Colaborador não encontrado.');
   });
 
-  test('22 nenhuma conexão de rede não local durante os testes', () => {
+  // ------------------------------------------------------------------------------------------
+  // Gate 1-F4.C3 — conferência de crachá na devolução, devolução administrativa, rate limit.
+  // ------------------------------------------------------------------------------------------
+
+  test('22 [Gate 1-F4.C3] devolução CONFERE para Admin e Padrão (Restrito já coberto no teste 16)', async () => {
+    const admin = await callMovement({ token: users.admin.token, body: ret('T-10', 'B-100') });
+
+    assert.equal(admin.status, 200);
+    assert.deepEqual(Object.keys(admin.body.data).sort(), ['action', 'tool']);
+    assert.equal(admin.body.data.tool.status, 'available');
+    assertNoLeak(admin, 'admin return confere');
+    assert.equal((await readTool('T-10')).status, 'available');
+
+    const standard = await callMovement({ token: users.standard.token, body: ret('T-11', 'B-300') });
+
+    assert.equal(standard.status, 200);
+    assert.equal(standard.body.data.tool.status, 'available');
+    assertNoLeak(standard, 'standard return confere');
+    assert.equal((await readTool('T-11')).status, 'available');
+
+    // T-10/T-11 já têm um registro "out" dos empréstimos (testes 03/04): filtra o "in" desta
+    // devolução, sem presumir ordem de retorno da consulta.
+    const entriesAdmin = (await historyDocs()).filter(
+      (entry) => entry.toolId === 'T-10' && entry.type === 'in'
+    );
+    const entriesStandard = (await historyDocs()).filter(
+      (entry) => entry.toolId === 'T-11' && entry.type === 'in'
+    );
+
+    assert.equal(entriesAdmin[0].returnMethod, 'badge_verified');
+    assert.equal(entriesAdmin[0].collaboratorId, 'c1');
+    assert.equal(entriesStandard[0].returnMethod, 'badge_verified');
+    assert.equal(entriesStandard[0].collaboratorId, 'c3');
+    record('MOVEMENT_RETURN_CONFIRMED_ALL_PROFILES', 'PASS');
+  });
+
+  test('23 [Gate 1-F4.C3] devolução NÃO CONFERE para os três perfis: mesma resposta genérica, ferramenta permanece emprestada', async () => {
+    const restricted = await callMovement({
+      token: users.restricted.token,
+      body: ret('T-02', 'B-100'), // crachá de outra pessoa
+    });
+    const admin = await callMovement({
+      token: users.admin.token,
+      body: ret('T-07', 'B-999'), // crachá inexistente
+    });
+    const standard = await callMovement({
+      token: users.standard.token,
+      body: ret('T-12', 'B-300'), // crachá de outra pessoa
+    });
+
+    for (const [result, label, toolId] of [
+      [restricted, 'restricted', 'T-02'],
+      [admin, 'admin', 'T-07'],
+      [standard, 'standard', 'T-12'],
+    ]) {
+      assert.equal(result.status, 422, label);
+      assert.equal(result.body.success, false, label);
+      assert.equal(result.body.code, 'RETURN_NOT_CONFIRMED', label);
+      assert.equal(result.body.message, 'Crachá não confere com o registro do empréstimo.', label);
+      assert.deepEqual(Object.keys(result.body).sort(), ['code', 'message', 'success'], label);
+      assertNoLeak(result, label);
+      assert.equal((await readTool(toolId)).status, 'borrowed', label);
+    }
+
+    // As três respostas são idênticas byte a byte: nenhum perfil recebe mensagem diferenciada.
+    assert.deepEqual(restricted.body, admin.body);
+    assert.deepEqual(restricted.body, standard.body);
+    record('MOVEMENT_RETURN_NOT_CONFIRMED_ALL_PROFILES_IDENTICAL', true);
+  });
+
+  test('24 [Gate 1-F4.C3] devolução CONFERE com colaborador cadastrado como inativo (decisão 4)', async () => {
+    const result = await callMovement({ token: users.admin.token, body: ret('T-13', 'B-200') });
+
+    assert.equal(result.status, 200);
+    assert.equal(result.body.data.tool.status, 'available');
+    assertNoLeak(result, 'return inactive collaborator confere');
+    assert.equal((await readTool('T-13')).status, 'available');
+
+    const entries = (await historyDocs()).filter((entry) => entry.toolId === 'T-13');
+
+    assert.equal(entries[0].collaboratorId, 'c2');
+    assert.equal(entries[0].returnMethod, 'badge_verified');
+    record('MOVEMENT_RETURN_INACTIVE_COLLABORATOR_CONFIRMED', 'PASS');
+  });
+
+  test('25 [Gate 1-F4.C3] empréstimo sem currentCollaboratorId: fluxo comum de devolução sempre NÃO CONFERE', async () => {
+    const result = await callMovement({ token: users.restricted.token, body: ret('T-14', 'B-100') });
+
+    assert.equal(result.status, 422);
+    assert.equal(result.body.code, 'RETURN_NOT_CONFIRMED');
+    assertNoLeak(result, 'return legacy no id');
+    assert.equal((await readTool('T-14')).status, 'borrowed');
+    record('MOVEMENT_RETURN_LEGACY_NO_ID_ALWAYS_NOT_CONFIRMED', 'PASS');
+  });
+
+  test('26 [Gate 1-F4.C3] devolução administrativa: Admin e Padrão concluem sem conferência de crachá; reason obrigatório', async () => {
+    // Admin resolve o empréstimo antigo sem currentCollaboratorId (não confirmável pelo fluxo comum
+    // — teste 25) pela via administrativa.
+    const admin = await callMovement({
+      token: users.admin.token,
+      body: retAdmin('T-14', 'Colaborador não está presente; devolução por terceiro autorizado.'),
+    });
+
+    assert.equal(admin.status, 200);
+    assert.equal(admin.body.data.tool.status, 'available');
+    assertNoLeak(admin, 'admin return administrativo');
+    assert.equal((await readTool('T-14')).status, 'available');
+
+    const adminEntries = (await historyDocs()).filter(
+      (entry) => entry.toolId === 'T-14' && entry.type === 'in'
+    );
+
+    assert.equal(adminEntries[0].returnMethod, 'administrative');
+    assert.equal(
+      adminEntries[0].reason,
+      'Colaborador não está presente; devolução por terceiro autorizado.'
+    );
+    assert.equal(adminEntries[0].collaboratorId, null);
+    assert.equal(adminEntries[0].operatorUid, users.admin.uid);
+
+    // Padrão: mesmo caminho, disponível (decisão do Cowork) — ferramenta ainda emprestada após a
+    // tentativa de NÃO CONFERE do teste 23.
+    const standard = await callMovement({
+      token: users.standard.token,
+      body: retAdmin('T-07', 'Ferramenta devolvida por outro colaborador do setor.'),
+    });
+
+    assert.equal(standard.status, 200);
+    assert.equal(standard.body.data.tool.status, 'available');
+    assertNoLeak(standard, 'standard return administrativo');
+    assert.equal((await readTool('T-07')).status, 'available');
+
+    // T-07 já tem um registro "out" do empréstimo (teste 21): filtra o "in" desta devolução.
+    const standardEntries = (await historyDocs()).filter(
+      (entry) => entry.toolId === 'T-07' && entry.type === 'in'
+    );
+
+    assert.equal(standardEntries[0].returnMethod, 'administrative');
+    assert.equal(standardEntries[0].collaboratorId, 'c3');
+    assert.equal(standardEntries[0].operatorUid, users.standard.uid);
+
+    // Sem reason (curto demais): 400, nenhuma leitura de ferramenta chega a ocorrer com sucesso.
+    const semReason = await callMovement({
+      token: users.admin.token,
+      body: retAdmin('T-08', 'curto'),
+    });
+
+    assert.equal(semReason.status, 400);
+    assert.equal((await readTool('T-08')).status, 'available');
+    record('MOVEMENT_RETURN_ADMINISTRATIVE_ADMIN_AND_STANDARD', 'PASS');
+  });
+
+  test('27 [Gate 1-F4.C3] devolução administrativa é negada ao Restrito antes de qualquer leitura', async () => {
+    const before = await readTool('T-08');
+    const result = await callMovement({
+      token: users.restricted.token,
+      body: retAdmin('T-08', 'Motivo de teste com mais de dez caracteres.'),
+    });
+
+    assert.equal(result.status, 403);
+    assert.equal(result.body.message, 'Acesso não permitido para este perfil.');
+    assertNoLeak(result, 'restricted return administrativo negado');
+    assert.deepEqual(await readTool('T-08'), before);
+    record('MOVEMENT_RETURN_ADMINISTRATIVE_DENIED_RESTRICTED', 'PASS');
+  });
+
+  test('28 [Gate 1-F4.C3] rate limit do oráculo de crachá no empréstimo: bloqueia após exceder o limite', async () => {
+    // BADGE_RATE_LIMIT_MAX_ATTEMPTS em api/tools/movement.js: manter em sincronia.
+    const MAX_ATTEMPTS = 5;
+
+    await resetBadgeRateLimit(users.standard.uid);
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const result = await callMovement({ token: users.standard.token, body: loan('T-06', 'B-999') });
+
+      assert.equal(result.status, 404, `tentativa ${attempt}`);
+    }
+
+    const blocked = await callMovement({ token: users.standard.token, body: loan('T-06', 'B-999') });
+
+    assert.equal(blocked.status, 429);
+    assert.equal(blocked.body.code, 'BADGE_RATE_LIMITED');
+    assertNoLeak(blocked, 'loan rate limited');
+    assert.equal((await readTool('T-06')).status, 'available');
+    record('MOVEMENT_BADGE_RATE_LIMIT_LOAN_BLOCKS', 'PASS');
+  });
+
+  test('29 [Gate 1-F4.C3] rate limit do oráculo de crachá é compartilhado entre empréstimo e devolução', async () => {
+    await resetBadgeRateLimit(users.standard.uid);
+
+    // 2 falhas no empréstimo + 3 falhas na devolução = 5 falhas acumuladas no mesmo contador.
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const result = await callMovement({ token: users.standard.token, body: loan('T-06', 'B-999') });
+
+      assert.equal(result.status, 404, `empréstimo ${attempt}`);
+    }
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const result = await callMovement({ token: users.standard.token, body: ret('T-15', 'B-999') });
+
+      assert.equal(result.status, 422, `devolução ${attempt}`);
+    }
+
+    const blocked = await callMovement({ token: users.standard.token, body: ret('T-15', 'B-999') });
+
+    assert.equal(blocked.status, 429);
+    assert.equal(blocked.body.code, 'BADGE_RATE_LIMITED');
+    assertNoLeak(blocked, 'return rate limited (shared counter)');
+    assert.equal((await readTool('T-06')).status, 'available');
+    assert.equal((await readTool('T-15')).status, 'borrowed');
+    record('MOVEMENT_BADGE_RATE_LIMIT_SHARED_LOAN_AND_RETURN', 'PASS');
+  });
+
+  test('30 nenhuma conexão de rede não local durante os testes', () => {
     const remote = networkAttempts.filter((attempt) => attempt.remote);
 
     assert.equal(remote.length, 0);

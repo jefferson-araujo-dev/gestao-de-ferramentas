@@ -51,14 +51,16 @@ test.describe('SCANNER — redesign de UX (Gate 1-F3.3B)', () => {
     await expect(page.locator('#checkout-user-badge')).toBeFocused();
   });
 
-  test('borrowed mostra somente o fluxo de devolução, com responsável e foco no botão real', async ({
+  // Gate 1-F4.C3: a devolução passa a exigir o crachá de quem está devolvendo, então o foco
+  // inicial vai para o campo de crachá (antes ia direto para o botão "Devolver").
+  test('borrowed mostra somente o fluxo de devolução, com responsável e foco no crachá', async ({
     page,
   }) => {
     await scan(page, 'T-E2E-002');
     await expect(page.locator('#scanner-return')).toBeVisible();
     await expect(page.locator('#scanner-checkout')).toBeHidden();
     await expect(page.locator('#return-user-info')).toContainText('Colaborador Alfa');
-    await expect(page.locator('#btn-return-confirm')).toBeFocused();
+    await expect(page.locator('#return-user-badge')).toBeFocused();
   });
 
   test('maintenance mostra estado bloqueado persistente, sem ação de empréstimo/devolução', async ({
@@ -140,6 +142,7 @@ test.describe('SCANNER — redesign de UX (Gate 1-F3.3B)', () => {
       })
     );
     await scan(page, 'T-E2E-006');
+    await page.locator('#return-user-badge').fill('E2E-001');
     await page.locator('#btn-return-confirm').click();
 
     await expect(page.locator('#scanner-status-box')).toBeVisible({ timeout: 8_000 });
@@ -269,7 +272,9 @@ test.describe('SCANNER — navegação exclusivamente por teclado (Addendum 1-F3
     await expect(page.locator('#checkout-badge-error')).toBeHidden();
   });
 
-  test('teclado: devolução — Enter no botão de devolução já focado automaticamente', async ({
+  // Gate 1-F4.C3: o crachá de quem devolve é obrigatório, então o fluxo de teclado passa a digitar
+  // o crachá (foco automático) antes de alcançar o botão "Devolver" por Tab.
+  test('teclado: devolução — crachá focado automaticamente, Tab até o botão e Enter', async ({
     page,
   }) => {
     await stubMovement(page, (body) =>
@@ -284,6 +289,12 @@ test.describe('SCANNER — navegação exclusivamente por teclado (Addendum 1-F3
     await page.keyboard.type('T-E2E-006');
     await page.keyboard.press('Enter');
 
+    await expect(page.locator('#return-user-badge')).toBeFocused();
+    await page.keyboard.type('E2E-001');
+    // Ordem do DOM entre os dois botões: "Cancelar" vem antes de "Devolver".
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Cancelar' })).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(page.locator('#btn-return-confirm')).toBeFocused();
     await page.keyboard.press('Enter');
 

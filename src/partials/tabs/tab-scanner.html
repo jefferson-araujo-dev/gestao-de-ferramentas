@@ -249,22 +249,79 @@
               <p id="return-user-info" class="text-amber-700 dark:text-amber-400"></p>
             </div>
             <p id="return-error" class="hidden text-xs font-bold text-rose-600 dark:text-rose-400 mb-4" role="alert"></p>
-            <div class="grid grid-cols-2 gap-2 sm:gap-3">
+
+            <div id="return-badge-step">
+              <label for="return-user-badge" class="ui-sr-only">Crachá / Ponto de quem está devolvendo</label>
+              <input
+                id="return-user-badge"
+                type="text"
+                placeholder="Crachá de quem está devolvendo"
+                inputmode="numeric"
+                aria-describedby="return-badge-help return-error"
+                class="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 rounded-xl text-center font-bold outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <p id="return-badge-help" class="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                Confirme o crachá/ponto de quem está devolvendo a ferramenta.
+              </p>
+
+              <div class="grid grid-cols-2 gap-2 sm:gap-3 mt-4">
+                <button
+                  type="button"
+                  onclick="App.Scanner.reset()"
+                  class="w-full py-3 min-h-11 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 font-bold rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  id="btn-return-confirm"
+                  type="button"
+                  onclick="App.Scanner.processReturn()"
+                  class="w-full py-3 min-h-11 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg shadow-amber-600/30 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Devolver
+                </button>
+              </div>
+
               <button
+                id="btn-return-admin-open"
                 type="button"
-                onclick="App.Scanner.reset()"
-                class="w-full py-3 min-h-11 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 font-bold rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                onclick="App.Scanner.openAdminReturn()"
+                class="hidden w-full mt-3 py-2.5 min-h-11 text-amber-700 dark:text-amber-400 font-bold text-xs underline underline-offset-2 decoration-dotted"
               >
-                Cancelar
+                Devolução administrativa (sem conferência de crachá)
               </button>
-              <button
-                id="btn-return-confirm"
-                type="button"
-                onclick="App.Scanner.processReturn()"
-                class="w-full py-3 min-h-11 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg shadow-amber-600/30 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                Devolver
-              </button>
+            </div>
+
+            <div id="return-admin-step" class="hidden">
+              <label for="return-admin-reason" class="ui-sr-only">Motivo da devolução administrativa</label>
+              <textarea
+                id="return-admin-reason"
+                rows="3"
+                placeholder="Motivo da devolução administrativa (mínimo 10 caracteres)"
+                aria-describedby="return-error"
+                class="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500"
+              ></textarea>
+              <p class="text-xs text-amber-700 dark:text-amber-400 mt-2">
+                Use quando o colaborador não está fisicamente presente para conferência de crachá.
+              </p>
+
+              <div class="grid grid-cols-2 gap-2 sm:gap-3 mt-4">
+                <button
+                  type="button"
+                  onclick="App.Scanner.closeAdminReturn()"
+                  class="w-full py-3 min-h-11 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 font-bold rounded-xl hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                >
+                  Voltar
+                </button>
+                <button
+                  id="btn-return-admin-confirm"
+                  type="button"
+                  onclick="App.Scanner.processReturnAdmin()"
+                  class="w-full py-3 min-h-11 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-lg shadow-amber-600/30 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Confirmar devolução
+                </button>
+              </div>
             </div>
           </div>
           <div

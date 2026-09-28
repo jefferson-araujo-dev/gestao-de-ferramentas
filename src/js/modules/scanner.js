@@ -629,7 +629,18 @@ export const AppScanner = {
           : '<strong>Responsável não informado</strong>';
       }
       document.getElementById('scanner-return')?.classList.remove('hidden');
-      setTimeout(() => document.getElementById('btn-return-confirm')?.focus(), 100);
+      this.closeAdminReturn();
+      const rbi = document.getElementById('return-user-badge');
+      if (rbi) {
+        rbi.value = '';
+      }
+      // Devolução administrativa (Gate 1-F4.C3): disponível para Admin e Padrão, nunca para o
+      // Restrito — mesma regra de autorização já aplicada no servidor (api/tools/movement.js).
+      const adminReturnBtn = document.getElementById('btn-return-admin-open');
+      if (adminReturnBtn) {
+        adminReturnBtn.classList.toggle('hidden', window.App.Auth.isRestricted === true);
+      }
+      setTimeout(() => rbi?.focus(), 100);
     } else if (t.status === 'available') {
       const overdue = t.nextMaintenance && new Date(t.nextMaintenance).getTime() < Date.now();
       if (overdue) {
@@ -671,9 +682,19 @@ export const AppScanner = {
       this.showBlocked('Operação indisponível', 'Esta ferramenta está em manutenção.');
     }
   },
+  // Devolução comum (Gate 1-F4.C3): exige o crachá de quem está devolvendo, para todos os perfis —
+  // o servidor compara com o `currentCollaboratorId` do empréstimo e responde só CONFERE/NÃO
+  // CONFERE (err.message já vem pronto para exibição, sem dado pessoal, em qualquer dos dois casos).
   processReturn: function () {
     const btn = document.getElementById('btn-return-confirm');
     if (isBusy(btn) || !this.currentTool) {
+      return;
+    }
+    const badgeInput = document.getElementById('return-user-badge');
+    const typedBadge = badgeInput?.value.trim() || '';
+    if (!typedBadge) {
+      this.showReturnError('Informe o crachá de quem está devolvendo.');
+      badgeInput?.focus();
       return;
     }
     this.clearReturnError();
@@ -685,6 +706,7 @@ export const AppScanner = {
         await requestToolMovement({
           action: 'return',
           toolId: this.currentTool.firebaseId,
+          collaboratorBadge: typedBadge,
           device:
             window.App.Session.currentDevice ||
             window.navigator.userAgent ||
@@ -709,12 +731,109 @@ export const AppScanner = {
         }
         document.getElementById('scanner-success-actions')?.classList.remove('hidden');
       } catch (err) {
-        window.Logger.error('Erro ao processar devolução', err);
         setBusy(btn, false);
         document.getElementById('scanner-processing')?.classList.add('hidden');
         document.getElementById('scanner-return')?.classList.remove('hidden');
-        this.showReturnError('Falha de comunicação com o banco. Tente novamente.');
-        document.getElementById('btn-return-confirm')?.focus();
+
+        if (err.isMovementError) {
+          // NÃO CONFERE ou outra falha de negócio: mensagem já pronta para exibição pelo servidor,
+          // sem nome/crachá/função do colaborador em nenhum caso.
+          window.AudioSys.playBeep('error');
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate([200, 100, 200]);
+          }
+          this.showReturnError(err.message);
+        } else {
+          window.Logger.error('Erro ao processar devolução', err);
+          this.showReturnError('Falha de comunicação com o banco. Tente novamente.');
+        }
+
+        badgeInput?.focus();
+      }
+    }, 500);
+  },
+  // Devolução administrativa (Gate 1-F4.C3, decisão do Cowork): Admin e Padrão, nunca o Restrito
+  // (botão de acesso já fica oculto para o Restrito — ver identify()); ignora a conferência de
+  // crachá. `reason` é obrigatório (o servidor valida 10-500 caracteres; a checagem local só evita
+  // uma viagem ao servidor para o caso mais comum de campo vazio/curto demais).
+  openAdminReturn: function () {
+    this.clearReturnError();
+    document.getElementById('return-badge-step')?.classList.add('hidden');
+    document.getElementById('return-admin-step')?.classList.remove('hidden');
+    const reasonInput = document.getElementById('return-admin-reason');
+    if (reasonInput) {
+      reasonInput.value = '';
+    }
+    setTimeout(() => document.getElementById('return-admin-reason')?.focus(), 100);
+  },
+  closeAdminReturn: function () {
+    document.getElementById('return-admin-step')?.classList.add('hidden');
+    document.getElementById('return-badge-step')?.classList.remove('hidden');
+  },
+  processReturnAdmin: function () {
+    const btn = document.getElementById('btn-return-admin-confirm');
+    if (isBusy(btn) || !this.currentTool) {
+      return;
+    }
+    const reasonInput = document.getElementById('return-admin-reason');
+    const reason = reasonInput?.value.trim() || '';
+    if (reason.length < 10) {
+      this.showReturnError('Descreva o motivo com pelo menos 10 caracteres.');
+      reasonInput?.focus();
+      return;
+    }
+    this.clearReturnError();
+    setBusy(btn, true);
+    document.getElementById('scanner-return')?.classList.add('hidden');
+    document.getElementById('scanner-processing')?.classList.remove('hidden');
+    setTimeout(async () => {
+      try {
+        await requestToolMovement({
+          action: 'return_admin',
+          toolId: this.currentTool.firebaseId,
+          reason,
+          device:
+            window.App.Session.currentDevice ||
+            window.navigator.userAgent ||
+            'Navegador'
+        });
+        window.AudioSys.playBeep('success');
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(100);
+        }
+        window.App.UI.showToast('Devolução administrativa registrada.', 'success');
+        setBusy(btn, false);
+        document.getElementById('scanner-processing')?.classList.add('hidden');
+        const rbc = document.getElementById('res-badge-container');
+        if (rbc) {
+          rbc.innerHTML = window.Utils.getBadgeHTML('available');
+        }
+        const ssb = document.getElementById('scanner-status-box');
+        if (ssb) {
+          ssb.innerHTML = '<div class="text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 p-6 rounded-2xl border border-emerald-200 dark:border-emerald-800 shadow-sm"><p class="font-black text-xl tracking-tight text-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Devolução Registrada</p></div>';
+          ssb.classList.remove('hidden');
+          ssb.focus();
+        }
+        document.getElementById('scanner-success-actions')?.classList.remove('hidden');
+      } catch (err) {
+        setBusy(btn, false);
+        document.getElementById('scanner-processing')?.classList.add('hidden');
+        document.getElementById('scanner-return')?.classList.remove('hidden');
+        document.getElementById('return-badge-step')?.classList.add('hidden');
+        document.getElementById('return-admin-step')?.classList.remove('hidden');
+
+        if (err.isMovementError) {
+          window.AudioSys.playBeep('error');
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate([200, 100, 200]);
+          }
+          this.showReturnError(err.message);
+        } else {
+          window.Logger.error('Erro ao processar devolução administrativa', err);
+          this.showReturnError('Falha de comunicação com o banco. Tente novamente.');
+        }
+
+        reasonInput?.focus();
       }
     }, 500);
   },
@@ -846,11 +965,21 @@ export const AppScanner = {
     if (badgeInput) {
       badgeInput.value = '';
     }
+    const returnBadgeInput = document.getElementById('return-user-badge');
+    if (returnBadgeInput) {
+      returnBadgeInput.value = '';
+    }
+    const returnAdminReason = document.getElementById('return-admin-reason');
+    if (returnAdminReason) {
+      returnAdminReason.value = '';
+    }
+    this.closeAdminReturn();
     this.clearBadgeError();
     this.clearReturnError();
     this.updateLoanSummary();
     setBusy(document.getElementById('btn-checkout-confirm'), false);
     setBusy(document.getElementById('btn-return-confirm'), false);
+    setBusy(document.getElementById('btn-return-admin-confirm'), false);
     [
       'scanner-checkout',
       'scanner-return',

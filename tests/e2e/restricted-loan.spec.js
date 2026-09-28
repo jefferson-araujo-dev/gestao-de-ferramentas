@@ -207,7 +207,12 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     allowDenial(guard, 422);
   });
 
-  test('devolução continua disponível e não envia colaborador nem toolCode', async ({ page }) => {
+  // Gate 1-F4.C3: a devolução passa a exigir a conferência de crachá de quem está devolvendo,
+  // para todos os perfis — substitui o teste anterior ("devolução continua disponível e não envia
+  // colaborador nem toolCode"), que exercitava o contrato antigo (sem crachá).
+  test('devolução: exige o crachá de quem está devolvendo; envia collaboratorBadge, sem toolCode', async ({
+    page,
+  }) => {
     const requests = await stubMovement(page, (body) =>
       json(200, {
         success: true,
@@ -219,6 +224,11 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     await scanTool(page, 'T-E2E-002');
     await expect(page.locator('#scanner-return')).toBeVisible();
     await expect(page.locator('#return-user-info')).toContainText('Colaborador Alfa');
+
+    // Restrito: sem caminho de devolução administrativa (decisão do Cowork em 1-F4.C3).
+    await expect(page.locator('#btn-return-admin-open')).toBeHidden();
+
+    await page.locator('#return-user-badge').fill('E2E-001');
     await page
       .locator('#scanner-return')
       .getByRole('button', { name: 'Devolver', exact: true })
@@ -229,8 +239,33 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     expect(requests[0].body).toEqual({
       action: 'return',
       toolId: 'T-E2E-002',
+      collaboratorBadge: 'E2E-001',
       device: expect.any(String),
     });
+  });
+
+  test('devolução: NÃO CONFERE mostra mensagem operacional, sem dado pessoal, e reabre o formulário', async ({
+    page,
+    guard,
+  }) => {
+    const NOT_CONFIRMED = 'Crachá não confere com o registro do empréstimo.';
+    const requests = await stubMovement(page, () =>
+      json(422, { success: false, message: NOT_CONFIRMED, code: 'RETURN_NOT_CONFIRMED' })
+    );
+
+    await scanTool(page, 'T-E2E-002');
+    await page.locator('#return-user-badge').fill('E2E-999');
+    await page
+      .locator('#scanner-return')
+      .getByRole('button', { name: 'Devolver', exact: true })
+      .click();
+
+    await expect(page.locator('#return-error')).toContainText(NOT_CONFIRMED);
+    await expect(page.locator('#return-error')).not.toContainText('Colaborador');
+    await expect(page.locator('#scanner-return')).toBeVisible();
+    await expect(page.locator('#scanner-processing')).toBeHidden();
+    expect(requests).toHaveLength(1);
+    allowDenial(guard, 422);
   });
 });
 
@@ -293,5 +328,47 @@ test.describe('PADRÃO — mesmo contrato por crachá (sem resolução local, se
     expect(requests[0].body.collaboratorBadge).toBe('Colaborador Gama');
     expect(requests[0].body).not.toHaveProperty('collaboratorId');
     allowDenial(guard, 404);
+  });
+
+  // Gate 1-F4.C3: devolução administrativa — disponível para Padrão (decisão do Cowork), ignora a
+  // conferência de crachá e exige motivo.
+  test('devolução administrativa: disponível para Padrão, sem conferência de crachá, com motivo obrigatório', async ({
+    page,
+  }) => {
+    const requests = await stubMovement(page, (body) =>
+      json(200, {
+        success: true,
+        message: 'Devolução registrada.',
+        data: { action: body.action, tool: { id: body.toolId, status: 'available' } },
+      })
+    );
+
+    await scanTool(page, 'T-E2E-002');
+    await expect(page.locator('#scanner-return')).toBeVisible();
+    await expect(page.locator('#btn-return-admin-open')).toBeVisible();
+
+    await page.locator('#btn-return-admin-open').click();
+    await expect(page.locator('#return-admin-step')).toBeVisible();
+    await expect(page.locator('#return-badge-step')).toBeHidden();
+
+    await page.getByRole('button', { name: 'Confirmar devolução' }).click();
+    await expect(page.locator('#return-error')).toContainText('pelo menos 10 caracteres');
+    expect(requests).toHaveLength(0);
+
+    await page
+      .locator('#return-admin-reason')
+      .fill('Colaborador de férias; devolução feita pelo supervisor do setor.');
+    await page.getByRole('button', { name: 'Confirmar devolução' }).click();
+
+    await expect(page.locator('#toast-container')).toContainText(
+      'Devolução administrativa registrada.'
+    );
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).toEqual({
+      action: 'return_admin',
+      toolId: 'T-E2E-002',
+      reason: 'Colaborador de férias; devolução feita pelo supervisor do setor.',
+      device: expect.any(String),
+    });
   });
 });
