@@ -233,6 +233,19 @@ function getMaintenanceDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+// Resposta HTTP de `data.tool`: lista fechada, igual para todos os perfis (Gate 1-F4.C2). Os
+// campos são selecionados um a um a partir do objeto interno — nunca por remoção — para que um
+// campo novo adicionado no futuro a `updatedTool` não vaze por omissão de filtro. `currentUser` e
+// `currentCollaboratorId` continuam gravados normalmente no Firestore (recordLoan/registerReturn);
+// eles só deixam de retornar no corpo HTTP, que nenhum cliente lê.
+function buildToolResponse(tool) {
+  return {
+    id: tool.id,
+    status: tool.status,
+    lastAction: tool.lastAction
+  };
+}
+
 function isTransactionConflict(error) {
   const code = String(error?.code || '').toLowerCase();
 
@@ -473,15 +486,21 @@ export default async function handler(req, res) {
         ip,
         restricted
       );
+      const data = {
+        action: movement.action,
+        tool: buildToolResponse(tool)
+      };
+
+      // Restrito: requisito C.1 (docs/design/USERS_AUDIT_SCREEN.md, seção C.1) — a resposta da
+      // própria API que o Restrito chamou não pode conter nome/função do colaborador.
+      if (!restricted) {
+        data.collaborator = collaborator;
+      }
 
       return res.status(200).json({
         success: true,
         message: 'Empréstimo registrado.',
-        data: {
-          action: movement.action,
-          tool,
-          collaborator
-        }
+        data
       });
     }
 
@@ -492,7 +511,7 @@ export default async function handler(req, res) {
       message: 'Devolução registrada.',
       data: {
         action: movement.action,
-        tool
+        tool: buildToolResponse(tool)
       }
     });
   } catch (error) {

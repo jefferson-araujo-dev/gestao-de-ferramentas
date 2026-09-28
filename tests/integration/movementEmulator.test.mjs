@@ -175,11 +175,13 @@ const collaboratorsDigest = async () =>
 
 const users = {};
 
-// Nada do que segue pode aparecer em respostas de falha nem em logs do perfil restrito.
+// Nada do que segue pode aparecer em respostas de falha nem em logs do perfil restrito. A partir
+// do Gate 1-F4.C2, também não pode aparecer em NENHUMA resposta ao Restrito, inclusive sucesso.
 const SENSITIVE = [
   'Colaborador Alfa',
   'Colaborador Beta',
   'Colaborador Delta',
+  'Colaborador Zeta',
   'Operador',
   'Auxiliar',
   'B-100',
@@ -187,6 +189,7 @@ const SENSITIVE = [
   'B-DUP',
   'c1',
   'c2',
+  'c6',
 ];
 
 function assertNoLeak(result, label) {
@@ -197,17 +200,29 @@ function assertNoLeak(result, label) {
   }
 }
 
-function assertLoanSuccessShape(result, label) {
+// Gate 1-F4.C2: lista fechada de campos por perfil. Restrito não recebe `collaborator` na
+// resposta (Divergência 1 de C.2); `data.tool` fica reduzido a `id`/`status`/`lastAction` para
+// todos os perfis, porque nenhum cliente lê `currentUser`/`currentCollaboratorId` da resposta.
+function assertLoanSuccessShape(result, label, { restricted = false } = {}) {
   assert.equal(result.status, 200, label);
   assert.equal(result.body.success, true, label);
-  assert.deepEqual(Object.keys(result.body.data).sort(), ['action', 'collaborator', 'tool'], label);
+  assert.deepEqual(
+    Object.keys(result.body.data).sort(),
+    restricted ? ['action', 'tool'] : ['action', 'collaborator', 'tool'],
+    label
+  );
   assert.deepEqual(
     Object.keys(result.body.data.tool).sort(),
-    ['currentCollaboratorId', 'currentUser', 'id', 'lastAction', 'status'],
+    ['id', 'lastAction', 'status'],
     label
   );
   assert.equal(result.body.data.tool.status, 'borrowed', label);
-  assert.deepEqual(Object.keys(result.body.data.collaborator).sort(), ['name', 'role'], label);
+
+  if (restricted) {
+    assertNoLeak(result, label);
+  } else {
+    assert.deepEqual(Object.keys(result.body.data.collaborator).sort(), ['name', 'role'], label);
+  }
 }
 
 describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)', () => {
@@ -346,8 +361,7 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
       body: loan('T-01', 'B-100'),
     });
 
-    assertLoanSuccessShape(result, 'restricted');
-    assert.deepEqual(result.body.data.collaborator, { name: 'Colaborador Alfa', role: 'Operador' });
+    assertLoanSuccessShape(result, 'restricted', { restricted: true });
 
     const stored = await readTool('T-01');
 
@@ -362,7 +376,7 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     assert.equal(entries[0].collaboratorId, 'c1');
     assert.equal(entries[0].operatorUid, users.restricted.uid);
     record('MOVEMENT_RESTRICTED_VALID_BADGE', 'PASS');
-    record('MOVEMENT_RESTRICTED_RESPONSE_FIELDS', 'data.collaborator{name,role}');
+    record('MOVEMENT_RESTRICTED_RESPONSE_FIELDS', 'data.tool{id,lastAction,status}');
   });
 
   test('06 restrito + crachá com espaços nas pontas: aparado e aceito; sem função = string vazia', async () => {
@@ -371,8 +385,11 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
       body: loan('T-02', '  B-600  '),
     });
 
-    assertLoanSuccessShape(result, 'restricted trim');
-    assert.deepEqual(result.body.data.collaborator, { name: 'Colaborador Zeta', role: '' });
+    assertLoanSuccessShape(result, 'restricted trim', { restricted: true });
+
+    const stored = await readTool('T-02');
+
+    assert.equal(stored.currentUser, 'Colaborador Zeta');
   });
 
   test('07 [D] collaboratorId em loan é rejeitado (400) para todos os perfis', async () => {
@@ -537,7 +554,9 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
 
     assert.equal(result.status, 200);
     assert.deepEqual(Object.keys(result.body.data).sort(), ['action', 'tool']);
+    assert.deepEqual(Object.keys(result.body.data.tool).sort(), ['id', 'lastAction', 'status']);
     assert.equal(result.body.data.tool.status, 'available');
+    assertNoLeak(result, 'restricted return');
     assert.equal((await readTool('T-03')).status, 'available');
 
     const entries = (await historyDocs()).filter((entry) => entry.toolId === 'T-03');
@@ -641,6 +660,9 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     });
 
     assertLoanSuccessShape(result, 'legacy');
+    // Colaborador sem `role` cadastrado: cobertura da resolução role-ausente -> string vazia,
+    // antes verificada via perfil Restrito (teste 06), que deixou de receber `collaborator`.
+    assert.deepEqual(result.body.data.collaborator, { name: 'Colaborador Zeta', role: '' });
     assert.equal((await readTool('T-12')).currentCollaboratorId, 'c6');
     record('MOVEMENT_LEGACY_PROFILE_PRESERVED', 'PASS');
   });
