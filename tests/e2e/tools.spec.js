@@ -674,7 +674,10 @@ test.describe('ADMIN — Ferramentas: estados da interface', () => {
   });
 });
 
-for (const profile of ['standard', 'restricted']) {
+// Gate 1-F4.C4, Decisão 2(a): a tela Ferramentas deixou de existir para o Restrito (só o Scanner
+// continua acessível) — o guard de rota é coberto em auth-restricted.spec.js e navigation.spec.js.
+// Este bloco cobre só o Padrão, único perfil não-admin que ainda chega à tela.
+for (const profile of ['standard']) {
   test.describe(`${profile.toUpperCase()} — Ferramentas somente leitura`, () => {
     test.beforeEach(async ({ page }) => {
       await openTools(page, E2E_USERS[profile]);
@@ -740,30 +743,6 @@ for (const profile of ['standard', 'restricted']) {
     });
   });
 }
-
-test.describe('RESTRITO — Ferramentas não lê colaboradores', () => {
-  test('a tela não carrega nem consulta colaboradores para o perfil restrito', async ({ page }) => {
-    await openTools(page, E2E_USERS.restricted);
-
-    const state = await page.evaluate(() => ({
-      collaborators: window.App.Data.collaborators.length,
-      listeners: window.App.Data.listeners.length,
-      permissions: {
-        read: window.App.Auth.permissions.canReadCollaborators,
-        manage: window.App.Auth.permissions.canManageCollaborators,
-      },
-    }));
-
-    // Só o listener de ferramentas (mesmo contrato do auth-restricted): nenhum de colaboradores.
-    expect(state).toEqual({
-      collaborators: 0,
-      listeners: 1,
-      permissions: { read: false, manage: false },
-    });
-    // O responsável mostrado vem do próprio documento da ferramenta (currentUser), não de consulta.
-    await expect(row(page, 'Esmerilhadeira')).toContainText('Colaborador Beta');
-  });
-});
 
 // Responsividade: a lista é tabela a partir de 1024 e cartões abaixo, com os mesmos dados.
 const WIDTHS = [320, 375, 390, 430, 767, 768, 1024, 1280, 1440, 1536];

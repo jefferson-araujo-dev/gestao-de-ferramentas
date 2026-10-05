@@ -819,9 +819,11 @@ test.describe('ADMIN — limpar histórico e importar Excel (confirmação, sem 
   });
 });
 
-for (const [label, user] of [
-  ['PADRÃO', E2E_USERS.standard],
-  ['RESTRITO', E2E_USERS.restricted],
+// Gate 1-F4.C4, Decisão 2(a): o destino padrão do Restrito deixou de ser o Painel (agora
+// inacessível a esse perfil) e passou a ser o Scanner — ver getDefaultItem em navigation.js.
+for (const [label, user, defaultTab, defaultRoute] of [
+  ['PADRÃO', E2E_USERS.standard, 'dashboard', 'painel'],
+  ['RESTRITO', E2E_USERS.restricted, 'scanner', 'scanner'],
 ]) {
   test.describe(`${label} — sem acesso a Dados e backup`, () => {
     test.beforeEach(async ({ page }) => {
@@ -842,7 +844,7 @@ for (const [label, user] of [
       await expect(page.locator('#login-screen')).toBeVisible();
       await loginAs(page, user, { hash: '#/dados' });
 
-      await expectActiveTab(page, 'dashboard');
+      await expectActiveTab(page, defaultTab);
       await expect(page.locator('#tab-data')).toBeHidden();
       await expect(
         page.locator('.toast-item').filter({ hasText: 'Acesso restrito a administradores' }).first()
@@ -861,11 +863,11 @@ for (const [label, user] of [
 
     test('editar o hash para #/dados e switchTab programático são recusados', async ({ page }) => {
       await gotoHash(page, '#/dados');
-      await expectActiveTab(page, 'dashboard');
-      await expect(page).toHaveURL(/#\/painel$/);
+      await expectActiveTab(page, defaultTab);
+      await expect(page).toHaveURL(new RegExp(`#/${defaultRoute}$`));
 
       await page.evaluate(() => window.App.UI.switchTab('data'));
-      await expectActiveTab(page, 'dashboard');
+      await expectActiveTab(page, defaultTab);
       await expect(page.locator('#data-screen')).toBeEmpty();
     });
 

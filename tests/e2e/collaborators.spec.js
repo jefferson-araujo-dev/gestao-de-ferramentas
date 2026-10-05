@@ -865,26 +865,26 @@ test.describe('Colaboradores por perfil', () => {
       canManageCollaborators: false,
     });
 
-    // Só o listener de ferramentas (mesmo contrato do auth-restricted).
+    // Gate 1-F4.C4, Decisão 1 (B1): `canReadTools: false` também fecha o listener de `tools` para
+    // o Restrito — nenhum listener é aberto (nem colaboradores, nem ferramentas).
     expect(
       await page.evaluate(() => ({
         collaborators: window.App.Data.collaborators.length,
         listeners: window.App.Data.listeners.length,
       }))
-    ).toEqual({ collaborators: 0, listeners: 1 });
+    ).toEqual({ collaborators: 0, listeners: 0 });
 
     // Navegação programática é recusada e a tela não renderiza nada.
     await page.evaluate(() => window.App.UI.switchTab('collaborators'));
     await expect(page.locator('#tab-collaborators')).toBeHidden();
-    expect(await page.evaluate(() => window.App.UI.activeTab)).toBe('dashboard');
+    expect(await page.evaluate(() => window.App.UI.activeTab)).toBe('scanner');
     expect(await page.evaluate(() => document.getElementById('collab-list').textContent.trim())).toBe(
       ''
     );
 
-    // Nenhum dado exclusivo do documento do colaborador (crachá, telefone) chega ao cliente. O
-    // nome do responsável que aparece em Ferramentas vem do próprio documento da ferramenta
-    // (currentUser), não de uma leitura da coleção: é o contrato já existente do perfil restrito.
-    // O patrimônio das ferramentas ("T-E2E-001") é visível e não é dado de colaborador.
+    // Nenhum dado exclusivo do documento do colaborador (crachá, telefone) chega ao cliente. A
+    // tela Ferramentas também não existe mais para o Restrito (Gate 1-F4.C4, Decisão 2a), então o
+    // nome do responsável de uma ferramenta emprestada não é mais alcançável por essa via.
     expect(
       await page.evaluate(() => {
         const text = document.getElementById('main-app').textContent;
@@ -906,14 +906,14 @@ test.describe('Colaboradores por perfil', () => {
   }) => {
     await loginAs(page, E2E_USERS.restricted, { hash: '#/colaboradores' });
 
-    await expect(page.locator('#topbar-title')).toHaveText('Painel');
+    await expect(page.locator('#topbar-title')).toHaveText('Retirar/Devolver');
     await expect(page.locator('#tab-collaborators')).toBeHidden();
     expect(
       await page.evaluate(() => ({
         collaborators: window.App.Data.collaborators.length,
         listeners: window.App.Data.listeners.length,
       }))
-    ).toEqual({ collaborators: 0, listeners: 1 });
+    ).toEqual({ collaborators: 0, listeners: 0 });
 
     // Forçar a renderização também não traz dado nenhum.
     await page.evaluate(() => window.App.CRUDCollaborators.render());

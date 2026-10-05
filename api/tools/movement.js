@@ -3,6 +3,7 @@ import {
   getHttpStatus,
   requireActiveUser
 } from '../../server/admin-authorization.js';
+import { logOutdatedClientVersion } from '../../server/app-version.js';
 
 const DB_BASE_PATH =
   'artifacts/gestao-de-ferramentas-3f8f1/public/data';
@@ -689,6 +690,10 @@ export default async function handler(req, res) {
 
   try {
     const authorization = await requireActiveUser(req);
+
+    // Só observação (Gate 1-F4.C4, Decisão 7/D4): nunca altera status nem corpo desta resposta.
+    logOutdatedClientVersion('tools/movement', authorization.uid, req.headers?.['x-app-version']);
+
     const restricted = isRestrictedOperator(authorization.profile);
     const movement = parseMovement(req);
     const ip = getRequestIp(req);

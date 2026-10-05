@@ -7,6 +7,9 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.node,
+        // Substituída em build pelo Vite (vite.config.js `define`), a partir de package.json
+        // (Gate 1-F4.C4, Decisão 7: versão do app enviada em requisições instrumentadas).
+        __APP_VERSION__: "readonly",
       },
     },
   },

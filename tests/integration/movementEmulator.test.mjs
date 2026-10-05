@@ -23,6 +23,7 @@ import {
   networkAttempts,
   signIn,
 } from './support/emulator.mjs';
+import { MIN_APP_VERSION } from '../../server/app-version.js';
 
 const THIS_FILE = fileURLToPath(import.meta.url);
 const movementApi = (await import('../../api/tools/movement.js')).default;
@@ -51,12 +52,15 @@ function createResponse() {
 }
 
 // Captura tudo que o handler escreve em console durante a chamada (verificação de PII em logs).
-async function callMovement({ method = 'POST', token, authorization, body } = {}) {
+async function callMovement({ method = 'POST', token, authorization, body, appVersion } = {}) {
   const headers = {};
   const header = authorization ?? (token ? `Bearer ${token}` : undefined);
 
   if (header) {
     headers.authorization = header;
+  }
+  if (appVersion !== undefined) {
+    headers['x-app-version'] = appVersion;
   }
 
   const res = createResponse();
@@ -238,7 +242,13 @@ const SENSITIVE = [
 ];
 
 function assertNoLeak(result, label) {
-  const serialized = JSON.stringify(result.body ?? {}) + result.logged;
+  // Gate 1-F4.C4: o log de versão (cliente sem X-App-Version) leva o uid aleatório do emulator,
+  // que pode conter por acaso 'c1', 'c2'... da lista: o uid é mascarado antes da busca.
+  const logged = Object.values(users).reduce(
+    (text, user) => text.replaceAll(user.uid, '<uid>'),
+    result.logged
+  );
+  const serialized = JSON.stringify(result.body ?? {}) + logged;
 
   for (const value of SENSITIVE) {
     assert.ok(!serialized.includes(value), `${label}: vazou dado sensível`);
@@ -702,13 +712,35 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
   });
 
   test('19 restrito: sem PII nos logs do servidor em qualquer falha de crachá', async () => {
+    // Cliente atual (envia X-App-Version >= mínima): nenhuma saída de console.
     const result = await callMovement({
       token: users.restricted.token,
       body: loan('T-08', 'B-200'),
+      appVersion: MIN_APP_VERSION,
     });
 
     assert.equal(result.status, 422);
     assert.equal(result.logged, '', 'nenhuma saída de console em falha de crachá');
+
+    // Gate 1-F4.C4 (Decisão 7/D4): cliente sem o cabeçalho (anterior ao C4) gera SÓ o evento de
+    // versão, com uid de autenticação e nenhum dado do colaborador nem do operador.
+    const legacyClient = await callMovement({
+      token: users.restricted.token,
+      body: loan('T-08', 'B-200'),
+    });
+
+    assert.equal(legacyClient.status, 422);
+    assert.deepEqual(legacyClient.body, result.body);
+    assert.deepEqual(JSON.parse(legacyClient.logged), {
+      event: 'client_app_version_outdated',
+      endpoint: 'tools/movement',
+      uid: users.restricted.uid,
+      reason: 'absent',
+      appVersion: null,
+      minAppVersion: MIN_APP_VERSION,
+    });
+    assertNoLeak(legacyClient, 'log de versão na falha de crachá');
+    assert.ok(!legacyClient.logged.includes(users.restricted.email));
     record('MOVEMENT_RESTRICTED_NO_PII_LOGS', true);
   });
 
@@ -955,6 +987,61 @@ describe('POST /api/tools/movement contra Firebase Emulator (Firestore + Auth)',
     assert.equal((await readTool('T-06')).status, 'available');
     assert.equal((await readTool('T-15')).status, 'borrowed');
     record('MOVEMENT_BADGE_RATE_LIMIT_SHARED_LOAN_AND_RETURN', 'PASS');
+  });
+
+  test('29.1 [Gate 1-F4.C4] versão mínima: só registra ausente/inválida/desatualizada; nunca altera status ou corpo', async () => {
+    const cases = [
+      [undefined, 'absent'],
+      ['abc', 'invalid'],
+      ['0.0.1', 'outdated'],
+      [MIN_APP_VERSION, null],
+    ];
+    const requests = [
+      // Restrito na devolução administrativa: 403 antes de qualquer leitura (invariante do C3).
+      [users.restricted, retAdmin('T-08', 'Motivo de teste com mais de dez caracteres.')],
+      // Corpo inválido: 400.
+      [users.standard, { action: 'loan' }],
+    ];
+
+    for (const [user, body] of requests) {
+      const reference = await callMovement({ token: user.token, body, appVersion: MIN_APP_VERSION });
+
+      for (const [appVersion, reason] of cases) {
+        const label = `${body.action} ${JSON.stringify(appVersion)}`;
+        const result = await callMovement({ token: user.token, body, appVersion });
+
+        assert.equal(result.status, reference.status, label);
+        assert.deepEqual(result.body, reference.body, label);
+        assertNoLeak(result, label);
+
+        const lines = result.logged
+          .split('\n')
+          .filter((line) => line.includes('client_app_version'));
+
+        if (reason) {
+          assert.equal(lines.length, 1, label);
+          assert.deepEqual(JSON.parse(lines[0]), {
+            event: 'client_app_version_outdated',
+            endpoint: 'tools/movement',
+            uid: user.uid,
+            reason,
+            appVersion: appVersion ?? null,
+            minAppVersion: MIN_APP_VERSION,
+          });
+          assert.ok(!lines[0].includes(user.email), label);
+        } else {
+          assert.deepEqual(lines, [], label);
+        }
+      }
+    }
+
+    // Cliente sem cabeçalho (anterior ao C4) continua emprestando normalmente.
+    await resetBadgeRateLimit(users.standard.uid);
+    assertLoanSuccessShape(
+      await callMovement({ token: users.standard.token, body: loan('T-08', 'B-300') }),
+      'loan sem X-App-Version'
+    );
+    record('MOVEMENT_APP_VERSION_OBSERVE_ONLY', 'PASS');
   });
 
   test('30 nenhuma conexão de rede não local durante os testes', () => {

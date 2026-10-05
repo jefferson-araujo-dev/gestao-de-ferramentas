@@ -8,6 +8,7 @@ import {
   NAV_GROUPS,
   NAV_ITEMS,
   getAllowedItems,
+  getDefaultItem,
   getGroupedItems,
   getItemByRoute,
   getItemByTab,
@@ -49,11 +50,11 @@ const PROFILES = {
     canReadTools: true,
     canReadCollaborators: true,
   },
+  // Gate 1-F4.C4, Decisão 2(a): o Restrito só enxerga o Scanner — Painel e Ferramentas saem da
+  // navegação (e `canReadTools: false` também fecha o listener de `tools` em data.js).
   restricted: {
     ...ALL_FALSE,
-    canAccessDashboard: true,
     canAccessScanner: true,
-    canReadTools: true,
   },
 };
 
@@ -147,7 +148,7 @@ describe('modelo de navegação: visibilidade por perfil', () => {
     assert.deepEqual(getGroupedItems(ALL_FALSE), []);
   });
 
-  test('admin vê os 7 destinos; padrão não vê Auditoria/Usuários; restrito também não vê Colaboradores', () => {
+  test('admin vê os 7 destinos; padrão não vê Auditoria/Usuários; restrito só vê o Scanner', () => {
     assert.deepEqual(ids(getAllowedItems(PROFILES.admin)), [
       'dashboard',
       'scanner',
@@ -163,7 +164,7 @@ describe('modelo de navegação: visibilidade por perfil', () => {
       'tools',
       'collaborators',
     ]);
-    assert.deepEqual(ids(getAllowedItems(PROFILES.restricted)), ['dashboard', 'scanner', 'tools']);
+    assert.deepEqual(ids(getAllowedItems(PROFILES.restricted)), ['scanner']);
   });
 
   test('Dados e backup: rota #/dados, grupo Administração, só com canBackupData', () => {
@@ -194,10 +195,7 @@ describe('modelo de navegação: visibilidade por perfil', () => {
       'control:history',
       'admin:users,data',
     ]);
-    assert.deepEqual(summary(PROFILES.restricted), [
-      'overview:dashboard',
-      'operation:scanner,tools',
-    ]);
+    assert.deepEqual(summary(PROFILES.restricted), ['operation:scanner']);
   });
 
   test('mobile: no máximo 4 destinos primários e "Mais" com os restantes autorizados', () => {
@@ -215,7 +213,7 @@ describe('modelo de navegação: visibilidade por perfil', () => {
       primary: ['dashboard', 'scanner', 'tools', 'collaborators'],
       more: [],
     });
-    assert.deepEqual(split('restricted'), { primary: ['dashboard', 'scanner', 'tools'], more: [] });
+    assert.deepEqual(split('restricted'), { primary: ['scanner'], more: [] });
 
     for (const profile of Object.keys(PROFILES)) {
       assert.ok(splitForMobile(PROFILES[profile]).primary.length <= MOBILE_PRIMARY_MAX);
@@ -230,6 +228,31 @@ describe('modelo de navegação: visibilidade por perfil', () => {
     for (const item of [...primary, ...more]) {
       assert.equal(isItemAllowed(item, PROFILES.restricted), true, item.id);
     }
+  });
+
+  // Gate 1-F4.C4, Decisão 2(a): destino padrão por perfil. O comportamento resultante em
+  // switchTab/applyRoute é coberto em routeFallback.test.mjs.
+  test('destino padrão: Painel para Admin/Padrão, Scanner para o Restrito, null sem permissões', () => {
+    assert.equal(getDefaultItem(PROFILES.admin).route, DEFAULT_ROUTE);
+    assert.equal(getDefaultItem(PROFILES.standard).route, DEFAULT_ROUTE);
+    assert.equal(getDefaultItem(PROFILES.restricted).id, 'scanner');
+
+    for (const permissions of [ALL_FALSE, {}, null, undefined]) {
+      assert.equal(getDefaultItem(permissions), null, JSON.stringify(permissions));
+    }
+  });
+
+  test('destino padrão é sempre um item permitido, o primeiro por ordem quando o Painel falta', () => {
+    for (const profile of Object.keys(PROFILES)) {
+      const item = getDefaultItem(PROFILES[profile]);
+
+      assert.equal(isItemAllowed(item, PROFILES[profile]), true, profile);
+    }
+
+    const historyOnly = { ...ALL_FALSE, canAccessHistory: true, canReadTools: true };
+
+    assert.equal(getDefaultItem(historyOnly).id, getAllowedItems(historyOnly)[0].id);
+    assert.notEqual(getDefaultItem(historyOnly).route, DEFAULT_ROUTE);
   });
 });
 

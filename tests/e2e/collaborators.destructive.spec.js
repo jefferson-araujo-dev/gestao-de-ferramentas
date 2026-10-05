@@ -327,7 +327,7 @@ test('o perfil restrito continua sem rota e sem dado de colaborador, mesmo após
 }) => {
   await loginAs(page, E2E_USERS.restricted, { hash: '#/colaboradores' });
 
-  await expect(page.locator('#topbar-title')).toHaveText('Painel');
+  await expect(page.locator('#topbar-title')).toHaveText('Retirar/Devolver');
   await expect(page.locator('#tab-collaborators')).toBeHidden();
   await expect(page.locator('[data-nav-id="collaborators"]')).toHaveCount(0);
 
@@ -337,7 +337,7 @@ test('o perfil restrito continua sem rota e sem dado de colaborador, mesmo após
       listeners: window.App.Data.listeners.length,
       read: window.App.Auth.permissions.canReadCollaborators,
     }))
-  ).toEqual({ collaborators: 0, listeners: 1, read: false });
+  ).toEqual({ collaborators: 0, listeners: 0, read: false });
 
   // Nenhum dos colaboradores criados por este spec vazou para o cliente restrito.
   expect(

@@ -2,6 +2,11 @@ import { metrics } from '../core/MetricsManager.js';
 import { auth } from '../app.js';
 import { setBusy, isBusy } from '../components/index.js';
 
+// Gate 1-F4.C4, Decisão 7: versão do app enviada em toda requisição à Movement API e ao endpoint
+// de status, só para registro no servidor (nenhum bloqueio nesta etapa). __APP_VERSION__ é
+// substituída em build pelo Vite (vite.config.js) a partir de package.json.
+const APP_VERSION_HEADERS = { 'X-App-Version': __APP_VERSION__ };
+
 async function requestToolMovement(body) {
   const currentUser = auth.currentUser;
 
@@ -22,7 +27,8 @@ async function requestToolMovement(body) {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...APP_VERSION_HEADERS
     },
     body: JSON.stringify(body),
     cache: 'no-store'
@@ -48,6 +54,65 @@ async function requestToolMovement(body) {
   }
 
   return payload.data || null;
+}
+
+// Gate 1-F4.C4, Decisão 1 (B1): caminho do Restrito para obter status/dados da ferramenta, sem
+// abrir o listener de `tools` (que grava `currentUser`/`currentCollaboratorId`, docs/design/
+// USERS_AUDIT_SCREEN.md, seção C.2). Sempre POST com `cache: 'no-store'` (E.2 do mesmo documento):
+// o service worker grava todo GET da mesma origem em CacheStorage, compartilhado entre usuários.
+// Resultado: `{ tool }` no sucesso, com os campos de B1 no formato que Admin/Padrão recebem pelo
+// listener (miniatura e manutenção vencida funcionam igual); `{ tool: null, message }` em qualquer
+// falha. `message` só vem das respostas 409 (patrimônio duplicado) e 429 (excesso de consultas sem
+// resultado), textos fixos do servidor sem dado pessoal; nas demais falhas (rede, 404, formato
+// inválido) fica nulo e o chamador mostra "Patrimônio não localizado.", como no caminho local.
+async function fetchRestrictedToolStatus(code) {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    return { tool: null, message: null };
+  }
+
+  try {
+    const token = await currentUser.getIdToken();
+    const response = await fetch('/api/tools/status', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...APP_VERSION_HEADERS
+      },
+      body: JSON.stringify({ code }),
+      cache: 'no-store'
+    });
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok || payload?.success !== true || !payload.data?.tool) {
+      const message =
+        [409, 429].includes(response.status) && typeof payload?.message === 'string'
+          ? payload.message
+          : null;
+
+      return { tool: null, message };
+    }
+
+    const tool = payload.data.tool;
+
+    return {
+      tool: {
+        firebaseId: tool.id,
+        code: tool.code,
+        name: tool.name,
+        category: tool.category,
+        status: tool.status,
+        imageUrl: tool.imageUrl ?? null,
+        nextMaintenance: tool.nextMaintenance ?? null
+      },
+      message: null
+    };
+  } catch (err) {
+    window.Logger.warn('Erro ao consultar status da ferramenta (Restrito)', err);
+    return { tool: null, message: null };
+  }
 }
 
 export const AppScanner = {
@@ -509,15 +574,45 @@ export const AppScanner = {
       h.focus();
     }
   },
+  // Ponto de entrada dos leitores (USB, campo manual, câmera), que não aguardam a promessa: nunca
+  // rejeita (Gate 1-F4.C4). Erro inesperado só é registrado, como antes, quando a busca era
+  // síncrona e o erro não chegava a nenhuma mensagem de tela.
   processCode: function (c) {
+    return this._processCode(c).catch((err) => {
+      window.Logger.error('Erro ao processar o código lido.', err);
+    });
+  },
+  _lookupSeq: 0,
+  _processCode: async function (c) {
     const startTime = Date.now();
+    const isRestricted = window.App.Auth.isRestricted === true;
+    // Restrito (Gate 1-F4.C4, Decisão 1/B1): consulta o endpoint dedicado, nunca o cache local de
+    // `tools` (que o Restrito não recebe mais, ver auth.js `_setPermissions`). Admin e Padrão
+    // continuam com a busca local, síncrona, igual a antes.
     const searchCode = window.Utils.removeAccents(c).toLowerCase();
-    const t = window.App.Data.tools.find(
-      (x) =>
-        x.code !== null &&
-        x.code !== undefined &&
-        window.Utils.removeAccents(x.code).toLowerCase() === searchCode
-    );
+    const findLocalTool = () =>
+      window.App.Data.tools.find(
+        (x) =>
+          x.code !== null &&
+          x.code !== undefined &&
+          window.Utils.removeAccents(x.code).toLowerCase() === searchCode
+      );
+    const lookupSeq = ++this._lookupSeq;
+    const lookup = isRestricted
+      ? await fetchRestrictedToolStatus(c.trim())
+      : { tool: findLocalTool(), message: null };
+
+    // Restrito (único caminho assíncrono): resposta que chega depois de outra leitura, de uma troca
+    // de aba ou do fim da operação (clearOperation) é descartada — não pode reabrir uma operação
+    // abandonada. A busca local de Admin/Padrão é síncrona e segue sem essa verificação.
+    if (
+      isRestricted &&
+      (lookupSeq !== this._lookupSeq || window.App.UI.activeTab !== 'scanner')
+    ) {
+      return;
+    }
+
+    const t = lookup.tool;
 
     if (!t) {
       window.AudioSys.playBeep('error');
@@ -526,7 +621,7 @@ export const AppScanner = {
         navigator.vibrate([200, 100, 200]);
       }
 
-      window.App.UI.showToast('Patrimônio não localizado.', 'error');
+      window.App.UI.showToast(lookup.message || 'Patrimônio não localizado.', 'error');
 
       this.scanStats.today++;
       this.scanStats.errors++;
@@ -607,7 +702,9 @@ export const AppScanner = {
 
     const quickActions = document.getElementById('scanner-quick-actions');
     if (quickActions) {
-      quickActions.classList.remove('hidden');
+      // "Ver detalhes" leva à tela Ferramentas, oculta e bloqueada para o Restrito (Gate 1-F4.C4,
+      // Decisão 2a): sem isso, o botão ficaria visível apontando para uma tela inacessível.
+      quickActions.classList.toggle('hidden', isRestricted);
     }
 
     [
@@ -624,9 +721,16 @@ export const AppScanner = {
     if (t.status === 'borrowed') {
       const rui = document.getElementById('return-user-info');
       if (rui) {
-        rui.innerHTML = t.currentUser
-          ? `Responsável atual: <strong>${window.Utils.escapeHTML(t.currentUser)}</strong>`
-          : '<strong>Responsável não informado</strong>';
+        // Restrito (Gate 1-F4.C4, Decisão 1/B1): `t.currentUser` nunca existe (o endpoint de
+        // status não devolve dado de colaborador), então nada é exibido aqui — nem o rótulo
+        // "Responsável atual", nem um texto de fallback — em vez do nome do colaborador.
+        rui.innerHTML = isRestricted
+          ? ''
+          : t.currentUser
+            ? `Responsável atual: <strong>${window.Utils.escapeHTML(t.currentUser)}</strong>`
+            : '<strong>Responsável não informado</strong>';
+        // Vazio no Restrito: oculto, para não deixar linha vazia no bloco da devolução.
+        rui.classList.toggle('hidden', isRestricted);
       }
       document.getElementById('scanner-return')?.classList.remove('hidden');
       this.closeAdminReturn();
@@ -638,7 +742,7 @@ export const AppScanner = {
       // Restrito — mesma regra de autorização já aplicada no servidor (api/tools/movement.js).
       const adminReturnBtn = document.getElementById('btn-return-admin-open');
       if (adminReturnBtn) {
-        adminReturnBtn.classList.toggle('hidden', window.App.Auth.isRestricted === true);
+        adminReturnBtn.classList.toggle('hidden', isRestricted);
       }
       setTimeout(() => rbi?.focus(), 100);
     } else if (t.status === 'available') {
@@ -949,6 +1053,8 @@ export const AppScanner = {
   // troca de aba nem a uma falha de comunicação.
   clearOperation: function () {
     this.currentTool = null;
+    // Invalida consulta ao endpoint de status ainda em andamento (ver _processCode).
+    this._lookupSeq += 1;
     document.getElementById('scanner-result')?.classList.add('hidden');
     document.getElementById('scanner-waiting')?.classList.remove('hidden');
 

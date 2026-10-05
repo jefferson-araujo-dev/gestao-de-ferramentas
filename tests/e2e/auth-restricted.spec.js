@@ -39,10 +39,13 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
   test('login: perfil Usuário sem privilégios de admin', async ({ page }) => {
     await expect(page.locator('#user-role')).toHaveText('Usuário');
     await expect(page.locator('#user-name')).toHaveText('Rita Restrita');
-    await expectActiveTab(page, 'dashboard', { initialLoad: true });
+    // Gate 1-F4.C4, Decisão 2(a): Painel não é mais destino do Restrito — o login cai no Scanner.
+    await expectActiveTab(page, 'scanner');
 
     expect(await readPermissions(page)).toMatchObject({
       isAdm: false,
+      canAccessDashboard: false,
+      canReadTools: false,
       canAccessUsers: false,
       canAccessHistory: false,
       canBackupData: false,
@@ -52,39 +55,39 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
     });
   });
 
-  test('navegação: dashboard, scanner e ferramentas; sem Colaboradores', async ({ page }) => {
+  test('navegação: só o Scanner; sem Painel, Ferramentas ou Colaboradores', async ({ page }) => {
     const sidebar = page.locator('#main-sidebar');
 
     await expect(sidebar.getByRole('link', { name: 'Colaboradores', exact: true })).toHaveCount(0);
-    await expect(page.locator('#nav-collaborators')).toHaveCount(0);
-
-    for (const tab of ['scanner', 'management', 'dashboard']) {
-      await openTab(page, tab);
-      await expectActiveTab(page, tab);
+    await expect(page.locator('[data-nav-id]:visible')).toHaveText(['Retirar/Devolver']);
+    for (const id of ['dashboard', 'tools', 'collaborators']) {
+      await expect(page.locator(`[data-nav-id="${id}"]`)).toHaveCount(0);
     }
+
+    await openTab(page, 'scanner');
+    await expectActiveTab(page, 'scanner');
   });
 
-  test('ausência das áreas administrativas (nav, menu e ações)', async ({ page }) => {
+  test('ausência das áreas administrativas (nav e menu)', async ({ page }) => {
     const sidebar = page.locator('#main-sidebar');
 
-    for (const name of ['Auditoria', 'Usuários e acessos', 'Dados e backup']) {
+    for (const name of ['Painel', 'Ferramentas', 'Auditoria', 'Usuários e acessos', 'Dados e backup']) {
       await expect(sidebar.getByRole('link', { name, exact: true })).toHaveCount(0);
     }
 
     await openUserMenu(page);
     await expect(page.locator('#admin-tools')).toHaveCount(0);
     await page.keyboard.press('Escape');
-
-    await openTab(page, 'management');
-    await expect(page.locator('#tools-action-new')).toBeHidden();
   });
 
-  test('não apenas oculto: telas administrativas recusam navegação programática', async ({
+  // Gate 1-F4.C4, Decisão 2(a): Painel e Ferramentas somem da navegação do Restrito. Regra do
+  // Firestore de `tools` não muda nesta etapa (isso é C8) — o guard abaixo é só do cliente.
+  test('não apenas oculto: telas administrativas e Painel/Ferramentas recusam navegação programática', async ({
     page,
   }) => {
-    for (const tab of ['users', 'history', 'data']) {
+    for (const tab of ['users', 'history', 'data', 'dashboard', 'management']) {
       await page.evaluate((target) => window.App.UI.switchTab(target), tab);
-      await expect(page.locator('#topbar-title')).toHaveText('Painel');
+      await expect(page.locator('#topbar-title')).toHaveText('Retirar/Devolver');
       await expect(page.locator(`#tab-${tab}`)).toBeHidden();
     }
   });
@@ -99,24 +102,27 @@ test.describe('RESTRITO — login, navegação e ausência de áreas administrat
 
     for (const attempt of [() => window.App.UI.switchTab('collaborators')]) {
       await page.evaluate(attempt);
-      await expect(page.locator('#topbar-title')).toHaveText('Painel');
+      await expect(page.locator('#topbar-title')).toHaveText('Retirar/Devolver');
       await expect(page.locator('#tab-collaborators')).toBeHidden();
-      await expect(page.locator('#tab-dashboard')).toBeVisible();
+      await expect(page.locator('#tab-scanner')).toBeVisible();
     }
 
-    expect(await page.evaluate(() => window.App.UI.activeTab)).toBe('dashboard');
+    expect(await page.evaluate(() => window.App.UI.activeTab)).toBe('scanner');
   });
 
-  test('perfil restrito: coleção de colaboradores não é carregada nem escutada', async ({
+  // Gate 1-F4.C4, Decisão 1 (B1): `canReadTools: false` fecha, no cliente, o listener de `tools`
+  // que hoje grava `currentUser`/`currentCollaboratorId` (Divergência 2 de C.2) — o Restrito não
+  // abre nenhum listener; consulta ferramentas por `/api/tools/status` (ver restricted-loan.spec.js).
+  test('perfil restrito: nenhum listener é aberto (nem tools, nem colaboradores)', async ({
     page,
   }) => {
     const state = await page.evaluate(() => ({
       collaborators: window.App.Data.collaborators.length,
+      tools: window.App.Data.tools.length,
       listeners: window.App.Data.listeners.length,
     }));
 
-    // Somente o listener de ferramentas (Scanner/devolução). Sem colaboradores, usuários ou histórico.
-    expect(state).toEqual({ collaborators: 0, listeners: 1 });
+    expect(state).toEqual({ collaborators: 0, tools: 0, listeners: 0 });
 
     // Mesmo após tentar abrir a tela, nada é carregado.
     await page.evaluate(() => window.App.UI.switchTab('collaborators'));

@@ -440,20 +440,17 @@ test.describe('MOBILE < 768 — barra inferior + "Mais"', () => {
     ).toBeVisible();
   });
 
-  test('RESTRITO: 3 destinos + Mais; Colaboradores e áreas administrativas inexistentes', async ({
+  // Gate 1-F4.C4, Decisão 2(a): Painel e Ferramentas somem da navegação do Restrito — só o Scanner.
+  test('RESTRITO: só o Scanner + Mais; sem Painel, Ferramentas ou áreas administrativas', async ({
     page,
   }) => {
     await resize(page, 390, 800);
     await loginAs(page, E2E_USERS.restricted);
-    await expect(page.locator('#bottom-nav a[data-nav-id]')).toHaveText([
-      'Painel',
-      'Retirar/Devolver',
-      'Ferramentas',
-    ]);
+    await expect(page.locator('#bottom-nav a[data-nav-id]')).toHaveText(['Retirar/Devolver']);
     await page.locator('#bnav-more').click();
     await expect(page.locator('#more-nav [data-nav-id]')).toHaveCount(0);
 
-    for (const id of ['collaborators', 'history', 'users', 'data']) {
+    for (const id of ['dashboard', 'tools', 'collaborators', 'history', 'users', 'data']) {
       await expect(page.locator(`[data-nav-id="${id}"]`)).toHaveCount(0);
     }
   });

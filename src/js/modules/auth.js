@@ -57,9 +57,14 @@ export const AppAuth = {
   _setPermissions: function (isAdm, isAuthenticated = true, isRestricted = false) {
     const canAccessStandardModules = isAuthenticated === true;
 
-    this.permissions.canAccessDashboard = canAccessStandardModules;
+    // Gate 1-F4.C4, Decisão 2(a): o Restrito só enxerga o Scanner — Painel e Ferramentas somem da
+    // navegação (docs/design/USERS_AUDIT_SCREEN.md, seção C.2/E.2). `canReadTools` também controla
+    // a abertura do listener de `tools` em data.js: negá-lo ao Restrito fecha, no cliente, o canal
+    // que hoje vaza `currentUser`/`currentCollaboratorId` (Divergência 2 de C.2). O Restrito passa a
+    // consultar `/api/tools/status` no Scanner, que nunca devolve dado de colaborador.
+    this.permissions.canAccessDashboard = canAccessStandardModules && isRestricted !== true;
     this.permissions.canAccessScanner = canAccessStandardModules;
-    this.permissions.canReadTools = canAccessStandardModules;
+    this.permissions.canReadTools = canAccessStandardModules && isRestricted !== true;
     // Perfil restrito não lê colaboradores (nem lista, nem tela): empresta pelo crachá no servidor.
     this.permissions.canReadCollaborators = canAccessStandardModules && isRestricted !== true;
     this.permissions.canAccessInventory = isAdm;
@@ -183,6 +188,10 @@ export const AppAuth = {
     setStoredUid(null);
     if (hadSession) {
       window.App.Data.resetInMemoryState();
+      // Limpa o hash ANTES da recarga: depois dela o roteamento já não está ativo e stopRouting()
+      // não faria nada, então a rota da sessão anterior (ex.: #/auditoria) sobreviveria como deep
+      // link do próximo login.
+      window.App.UI?.stopRouting();
       window.location.reload();
       return;
     }

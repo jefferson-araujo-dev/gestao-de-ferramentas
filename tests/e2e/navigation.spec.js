@@ -255,57 +255,55 @@ test.describe('PADRÃO — rotas permitidas e recusa das administrativas', () =>
 });
 
 test.describe('RESTRITO — Colaboradores e áreas administrativas inacessíveis', () => {
-  test('scanner e ferramentas funcionam; sem Colaboradores/Auditoria/Usuários na navegação', async ({
+  // Gate 1-F4.C4, Decisão 2(a): Painel e Ferramentas somem da navegação do Restrito — só o Scanner
+  // continua acessível. Substitui o teste anterior, que ainda esperava os três itens.
+  test('só o Scanner na navegação; sem Painel, Ferramentas, Colaboradores/Auditoria/Usuários', async ({
     page,
   }) => {
     await loginAs(page, E2E_USERS.restricted);
 
-    await expect(page.locator('[data-nav-id]:visible')).toHaveText([
-      'Painel',
-      'Retirar/Devolver',
-      'Ferramentas',
-    ]);
+    await expect(page.locator('[data-nav-id]:visible')).toHaveText(['Retirar/Devolver']);
     // Em nenhum lugar do DOM (sidebar, barra inferior ou "Mais").
-    for (const id of ['collaborators', 'history', 'users', 'data']) {
+    for (const id of ['dashboard', 'tools', 'collaborators', 'history', 'users', 'data']) {
       await expect(page.locator(`[data-nav-id="${id}"]`)).toHaveCount(0);
     }
 
-    for (const tab of ['scanner', 'management', 'dashboard']) {
-      await openTab(page, tab);
-      await expectActiveTab(page, tab);
-    }
+    await openTab(page, 'scanner');
+    await expectActiveTab(page, 'scanner');
   });
 
-  test('deep link #/colaboradores é recusado e a coleção não é carregada', async ({ page }) => {
+  test('deep link #/colaboradores é recusado e nenhum listener é aberto', async ({ page }) => {
     await loginAs(page, E2E_USERS.restricted, { hash: '#/colaboradores' });
-    await expectActiveTab(page, 'dashboard');
+    await expectActiveTab(page, 'scanner');
     await expect(page.locator('#tab-collaborators')).toBeHidden();
     await expect(
       page.locator('.toast-item').filter({ hasText: 'Acesso não permitido' }).first()
     ).toBeVisible();
+    // Gate 1-F4.C4, Decisão 1 (B1): `canReadTools: false` também fecha o listener de `tools` para
+    // o Restrito — nenhum listener é aberto (nem colaboradores, nem ferramentas).
     expect(
       await page.evaluate(() => ({
         collaborators: window.App.Data.collaborators.length,
         listeners: window.App.Data.listeners.length,
       }))
-    ).toEqual({ collaborators: 0, listeners: 1 });
+    ).toEqual({ collaborators: 0, listeners: 0 });
   });
 
-  for (const route of ['colaboradores', 'auditoria', 'usuarios']) {
+  for (const route of ['colaboradores', 'auditoria', 'usuarios', 'painel', 'ferramentas']) {
     test(`editar o hash para #/${route} durante a sessão é recusado`, async ({ page }) => {
       await loginAs(page, E2E_USERS.restricted);
       await openTab(page, 'scanner');
       await gotoHash(page, `#/${route}`);
-      await expectActiveTab(page, 'dashboard');
-      await expect(page).toHaveURL(/#\/painel$/);
+      await expectActiveTab(page, 'scanner');
+      await expect(page).toHaveURL(/#\/scanner$/);
     });
   }
 
   test('switchTab programático de Colaboradores continua recusado', async ({ page }) => {
     await loginAs(page, E2E_USERS.restricted);
     await page.evaluate(() => window.App.UI.switchTab('collaborators'));
-    await expectActiveTab(page, 'dashboard');
-    expect(await page.evaluate(() => window.App.UI.activeTab)).toBe('dashboard');
+    await expectActiveTab(page, 'scanner');
+    expect(await page.evaluate(() => window.App.UI.activeTab)).toBe('scanner');
   });
 });
 

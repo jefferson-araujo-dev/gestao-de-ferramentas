@@ -11,7 +11,7 @@ import {
   initModals
 } from '../components/index.js';
 import {
-  DEFAULT_ROUTE,
+  getDefaultItem,
   getItemByRoute,
   getItemByTab,
   isItemAllowed
@@ -453,18 +453,23 @@ export const AppUI = {
   // guarda continua recusando rotas/telas proibidas), atualiza a URL e executa o lifecycle da tela.
   switchTab: function (tab, { replace = false } = {}) {
     const item = getItemByTab(tab);
+    const permissions = window.App?.Auth?.permissions;
 
     if (!item) {
-      if (tab !== 'dashboard') {
-        this.switchTab('dashboard', { replace: true });
+      const fallback = getDefaultItem(permissions);
+      if (fallback && fallback.tab !== tab) {
+        this.switchTab(fallback.tab, { replace: true });
       }
       return;
     }
 
-    if (!isItemAllowed(item, window.App?.Auth?.permissions)) {
-      // Tela do perfil não autorizado (admin-only, colaboradores do perfil restrito): volta ao Painel.
-      if (item.tab !== 'dashboard') {
-        this.switchTab('dashboard', { replace: true });
+    if (!isItemAllowed(item, permissions)) {
+      // Tela do perfil não autorizado (admin-only, colaboradores/Ferramentas/Painel do Restrito,
+      // Gate 1-F4.C4): volta ao destino padrão desse perfil (Painel, ou Scanner quando o Painel
+      // também não for permitido — ver getDefaultItem).
+      const fallback = getDefaultItem(permissions);
+      if (fallback && fallback.tab !== item.tab) {
+        this.switchTab(fallback.tab, { replace: true });
         this.showToast(item.deniedMessage || 'Acesso não permitido para o seu perfil.', 'error');
       }
       return;
@@ -537,13 +542,17 @@ export const AppUI = {
     window.App?.Shell?.setActive(null);
     window.App?.Shell?.resetTitle();
   },
-  // Aplica uma rota vinda da URL. Rota vazia/desconhecida cai no Painel sem criar entrada de
-  // histórico; rota conhecida mas não autorizada é recusada por switchTab (Painel + aviso).
+  // Aplica uma rota vinda da URL. Rota vazia/desconhecida cai no destino padrão do perfil (Painel,
+  // ou Scanner quando o Painel não for permitido, ver getDefaultItem) sem criar entrada de
+  // histórico; rota conhecida mas não autorizada é recusada por switchTab (destino padrão + aviso).
   applyRoute: function (route) {
     const item = getItemByRoute(route);
 
     if (!item) {
-      this.switchTab(getItemByRoute(DEFAULT_ROUTE).tab, { replace: true });
+      const fallback = getDefaultItem(window.App?.Auth?.permissions);
+      if (fallback) {
+        this.switchTab(fallback.tab, { replace: true });
+      }
       return;
     }
 

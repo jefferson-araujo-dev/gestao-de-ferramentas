@@ -120,6 +120,20 @@ export const isItemAllowed = (item, permissions) => permissions?.[item.permissio
 export const getAllowedItems = (permissions) =>
   NAV_ITEMS.filter((item) => isItemAllowed(item, permissions)).sort(byOrder);
 
+// Destino seguro para redirecionar quando uma rota é desconhecida ou não autorizada. Prefere
+// DEFAULT_ROUTE (Painel); se o perfil não o alcança (ex.: Restrito, Gate 1-F4.C4, Decisão 2a), usa
+// o primeiro item permitido por ordem. `null` só ocorre sem nenhuma permissão concedida (ex.: antes
+// do login).
+export function getDefaultItem(permissions) {
+  const preferred = getItemByRoute(DEFAULT_ROUTE);
+
+  if (preferred && isItemAllowed(preferred, permissions)) {
+    return preferred;
+  }
+
+  return getAllowedItems(permissions)[0] ?? null;
+}
+
 // Agrupa itens permitidos por grupo, na ordem dos grupos; grupos sem itens não aparecem.
 export function getGroupedItems(permissions) {
   const allowed = getAllowedItems(permissions);
