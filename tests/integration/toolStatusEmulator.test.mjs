@@ -194,6 +194,48 @@ async function seedTools() {
     nextMaintenance: '2020-01-01',
     imageUrl: { owner: 'Colaborador Sigma' },
   });
+  // Gate 1-F4.C4-FIX1: `name` e `category` com tipo não textual viram null; `status` não textual
+  // é inconsistência de dados (500 genérico, nunca devolvido). Os objetos aninhados carregam dado
+  // sensível de propósito, para o assertNoLeak pegar qualquer repasse.
+  batch.set(adminDb.doc(`${BASE}/tools/ts-bad-fields-1`), {
+    code: 'TS-04',
+    name: 123,
+    category: { owner: 'Colaborador Sigma' },
+    status: 'available',
+    currentUser: null,
+    currentCollaboratorId: null,
+    lastAction: null,
+    nextMaintenance: null,
+  });
+  batch.set(adminDb.doc(`${BASE}/tools/ts-bad-status-1`), {
+    code: 'TS-05',
+    name: 'Status Objeto',
+    category: 'Manual',
+    status: { holder: 'Colaborador Sigma', id: 'cs1' },
+    currentUser: 'Colaborador Sigma',
+    currentCollaboratorId: 'cs1',
+    lastAction: null,
+    nextMaintenance: null,
+  });
+  batch.set(adminDb.doc(`${BASE}/tools/ts-bad-status-2`), {
+    code: 'TS-06',
+    name: 'Status Numérico',
+    category: 'Manual',
+    status: 1,
+    currentUser: null,
+    currentCollaboratorId: null,
+    lastAction: null,
+    nextMaintenance: null,
+  });
+  batch.set(adminDb.doc(`${BASE}/tools/ts-no-status-1`), {
+    code: 'TS-07',
+    name: 'Sem Status',
+    category: 'Manual',
+    currentUser: null,
+    currentCollaboratorId: null,
+    lastAction: null,
+    nextMaintenance: null,
+  });
   batch.set(adminDb.doc(`${BASE}/tools/ts-dup-a`), {
     code: 'TS-DUP',
     name: 'Duplicada A',
@@ -533,5 +575,58 @@ describe('POST /api/tools/status contra Firebase Emulator (Firestore + Auth)', (
     assert.equal((await lookupRateLimitDoc(users.restricted.uid).get()).exists, false);
 
     await resetRateLimits();
+  });
+
+  test('14 tipos: name e category não textuais viram null; code e status textuais preservados', async () => {
+    for (const key of ['admin', 'standard', 'restricted']) {
+      const result = await callStatus({ token: users[key].token, body: { code: 'TS-04' } });
+
+      assertToolShape(result, key);
+      assert.equal(result.body.data.tool.code, 'TS-04', key);
+      assert.equal(result.body.data.tool.name, null, key);
+      assert.equal(result.body.data.tool.category, null, key);
+      assert.equal(result.body.data.tool.status, 'available', key);
+      assertNoLeak(result, key);
+    }
+  });
+
+  test('15 status não textual ou ausente: 500 genérico, log só com o id, sem contar no rate limit', async () => {
+    await resetRateLimits();
+
+    const cases = [
+      ['TS-05', 'ts-bad-status-1'],
+      ['TS-06', 'ts-bad-status-2'],
+      ['TS-07', 'ts-no-status-1'],
+    ];
+
+    for (const [code, id] of cases) {
+      for (const key of ['admin', 'standard', 'restricted']) {
+        const label = `${code} ${key}`;
+        const result = await callStatus({ token: users[key].token, body: { code } });
+
+        assert.equal(result.status, 500, label);
+        assert.deepEqual(
+          result.body,
+          { success: false, message: 'Erro interno ao consultar a ferramenta.' },
+          label
+        );
+        assert.ok(!('data' in result.body), label);
+
+        const errorLines = result.logged
+          .split('\n')
+          .filter((line) => line.startsWith('Status inválido no documento da ferramenta:'));
+
+        assert.deepEqual(errorLines, [`Status inválido no documento da ferramenta: ${id}`], label);
+        assertNoLeak(result, label);
+        // Nem o nome da ferramenta nem o valor do status aparecem no log.
+        assert.ok(!result.logged.includes('Status Objeto'), label);
+        assert.ok(!result.logged.includes('holder'), label);
+      }
+    }
+
+    // 500 por inconsistência de dados não é falha de enumeração: não grava contador.
+    for (const key of ['admin', 'standard', 'restricted']) {
+      assert.equal((await lookupRateLimitDoc(users[key].uid).get()).exists, false, key);
+    }
   });
 });

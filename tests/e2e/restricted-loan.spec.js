@@ -260,6 +260,271 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     }
   });
 
+  // Gate 1-F4.C4-FIX1: leitura repetida do mesmo código depois de 404/409/429 é ignorada por um
+  // intervalo (cooldown), para a câmera parada diante de uma etiqueta não cadastrada não esgotar o
+  // limite do servidor. Leitura ignorada não gera requisição, toast, Recentes nem estatística.
+  test('cooldown: mesmo código sem resultado não gera nova consulta; outro código passa; reset libera', async ({
+    page,
+    guard,
+  }) => {
+    const input = page.locator('#manual-scan-input');
+    const scan = async (code) => {
+      await input.fill(code);
+      await input.press('Enter');
+    };
+    const requestedCodes = () => statusRequests.map((request) => request.body.code);
+    const recentItems = page.locator('#recent-scans-list .recent-scan-item');
+    const notFoundToasts = page.locator('.toast-item').filter({ hasText: 'Patrimônio não localizado.' });
+
+    await scan('T-NAO-EXISTE');
+    await expect(notFoundToasts).toHaveCount(1);
+    await expect(recentItems).toHaveCount(1);
+    await expect(page.locator('#stat-scans-today')).toHaveText('1');
+
+    for (let index = 0; index < 4; index += 1) {
+      await scan('T-NAO-EXISTE');
+    }
+
+    // Código diferente segue normalmente; quando ele aparece, as leituras anteriores já terminaram.
+    await scanTool(page, 'T-E2E-001');
+    expect(requestedCodes()).toEqual(['T-NAO-EXISTE', 'T-E2E-001']);
+    await expect(notFoundToasts).toHaveCount(1);
+    await expect(recentItems).toHaveCount(2);
+    await expect(page.locator('#stat-scans-today')).toHaveText('2');
+
+    // "Nova operação"/"Cancelar" (reset) libera o cooldown: a mesma leitura volta a consultar.
+    await page.evaluate(() => window.App.Scanner.reset());
+    await scan('T-NAO-EXISTE');
+    await expect.poll(requestedCodes).toEqual(['T-NAO-EXISTE', 'T-E2E-001', 'T-NAO-EXISTE']);
+    await expect(recentItems).toHaveCount(3);
+
+    // Dentro do intervalo, ignorada de novo; vencido o intervalo, consulta outra vez.
+    await scan('T-NAO-EXISTE');
+    const cooldown = await page.evaluate(() => {
+      const until = window.App.Scanner._lookupCooldown.get('T-NAO-EXISTE');
+
+      window.App.Scanner._lookupCooldown.set('T-NAO-EXISTE', Date.now() - 1);
+      return until - Date.now();
+    });
+
+    expect(cooldown).toBeGreaterThan(7000);
+    expect(cooldown).toBeLessThanOrEqual(10000);
+    await scan('T-NAO-EXISTE');
+    await expect.poll(requestedCodes).toHaveLength(4);
+    await expect(recentItems).toHaveCount(4);
+
+    allowDenial(guard, 404, '/api/tools/status');
+  });
+
+  test('cooldown só depois de 404/409/429; Recentes só registra "Não encontrado" para 404', async ({
+    page,
+    guard,
+  }) => {
+    const RATE_LIMITED = 'Muitas consultas sem resultado. Aguarde e tente novamente.';
+    const DUPLICATED = 'Patrimônio duplicado. Contate o administrador.';
+    const ACCESS_DENIED = 'Sessão expirada ou acesso não permitido. Entre novamente.';
+    const LOOKUP_FAILED = 'Falha ao consultar a ferramenta. Tente novamente.';
+
+    const requests = await stubToolStatus(page, {
+      failures: {
+        'T-DUP': json(409, { success: false, message: DUPLICATED }),
+        // Ferramenta REAL barrada pelo limite: não pode virar "Não encontrado".
+        'T-E2E-001': json(429, { success: false, message: RATE_LIMITED, code: 'TOOL_LOOKUP_RATE_LIMITED' }),
+        'T-401': json(401, { success: false, message: 'DETALHE-INTERNO-401' }),
+        'T-403': json(403, { success: false, message: 'DETALHE-INTERNO-403' }),
+        'T-500': json(500, { success: false, message: 'DETALHE-INTERNO-500' }),
+        'T-503': json(503, { success: false, message: 'DETALHE-INTERNO-503' }),
+      },
+    });
+
+    // Falha de rede: a requisição nem chega a uma resposta.
+    await page.route('**/api/tools/status', async (route) => {
+      if (route.request().postDataJSON().code === 'T-REDE') {
+        requests.push({ body: { code: 'T-REDE' } });
+        await route.abort('failed');
+        return;
+      }
+      await route.fallback();
+    });
+
+    const input = page.locator('#manual-scan-input');
+    const recentList = page.locator('#recent-scans-list');
+    const countFor = (code) => requests.filter((request) => request.body.code === code).length;
+
+    const cases = [
+      ['T-DUP', DUPLICATED, 1],
+      ['T-E2E-001', RATE_LIMITED, 1],
+      ['T-401', ACCESS_DENIED, 2],
+      ['T-403', ACCESS_DENIED, 2],
+      ['T-500', LOOKUP_FAILED, 2],
+      ['T-503', LOOKUP_FAILED, 2],
+      ['T-REDE', LOOKUP_FAILED, 2],
+    ];
+
+    for (const [code, message, expectedRequests] of cases) {
+      const toasts = page.locator('.toast-item').filter({ hasText: message });
+
+      // Lido duas vezes: só 409/429 entram em cooldown (a segunda leitura não consulta).
+      for (let read = 0; read < 2; read += 1) {
+        await input.fill(code);
+        await input.press('Enter');
+        await expect(toasts).toHaveCount(Math.min(read + 1, expectedRequests));
+      }
+
+      await expect.poll(() => countFor(code), { message: code }).toBe(expectedRequests);
+      await expect(page.locator('#scanner-result')).toBeHidden();
+      await expect(recentList).not.toContainText(code);
+      await expect(page.locator('#toast-container')).not.toContainText('Patrimônio não localizado.');
+      await expect(page.locator('#toast-container')).not.toContainText('DETALHE-INTERNO');
+
+      // O contêiner mostra no máximo 5 toasts por vez (NotificationManager): fecha os deste caso.
+      for (const button of await page.locator('.toast-item [data-dismiss]').all()) {
+        await button.click();
+      }
+      await expect(page.locator('.toast-item')).toHaveCount(0);
+    }
+
+    await expect(page.locator('#recent-scans-list .recent-scan-item')).toHaveCount(0);
+
+    // 404: único caso registrado como "Não encontrado".
+    await input.fill('T-NAO-EXISTE');
+    await input.press('Enter');
+    await expect(page.locator('.toast-item').filter({ hasText: 'Patrimônio não localizado.' })).toHaveCount(1);
+    await expect(page.locator('#recent-scans-list .recent-scan-item')).toHaveCount(1);
+    await expect(recentList).toContainText('T-NAO-EXISTE');
+    await expect(recentList).toContainText('Não Encontrado');
+
+    for (const status of [401, 403, 404, 409, 429, 500, 503]) {
+      allowDenial(guard, status, '/api/tools/status');
+    }
+    guard.allow(/ERR_FAILED/, 'falha de rede simulada de propósito em /api/tools/status (T-REDE)');
+  });
+
+  // O cooldown só nasce com a resposta: com rede lenta, releituras do mesmo código enquanto a
+  // consulta está pendente também não podem gerar novas consultas (nem novas falhas no servidor).
+  test('consulta pendente: releitura do mesmo código não gera nova consulta; resposta tardia segue valendo', async ({
+    page,
+    guard,
+  }) => {
+    const requests = [];
+
+    await page.route('**/api/tools/status', async (route) => {
+      requests.push(route.request().postDataJSON().code);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false, message: 'Ferramenta não encontrada.' }),
+      });
+    });
+
+    const input = page.locator('#manual-scan-input');
+
+    for (let read = 0; read < 3; read += 1) {
+      await input.fill('T-LENTO');
+      await input.press('Enter');
+      await page.waitForTimeout(200);
+    }
+
+    await expect(page.locator('.toast-item').filter({ hasText: 'Patrimônio não localizado.' })).toHaveCount(1);
+    await expect(page.locator('#recent-scans-list .recent-scan-item')).toHaveCount(1);
+    await expect(page.locator('#stat-scans-today')).toHaveText('1');
+
+    // Já respondido: segue em cooldown.
+    await input.fill('T-LENTO');
+    await input.press('Enter');
+    await page.waitForTimeout(300);
+    expect(requests).toEqual(['T-LENTO']);
+
+    allowDenial(guard, 404, '/api/tools/status');
+  });
+
+  // A câmera para a cada leitura; leitura ignorada pelo cooldown religa a câmera só quando não há
+  // operação aberta nem consulta em andamento, e nunca duas religações simultâneas. Sem câmera real
+  // no E2E: startCamera é substituída por um contador só dentro deste teste.
+  test('cooldown com câmera: leitura ignorada religa a câmera uma vez, sem operação nem consulta pendente', async ({
+    page,
+    guard,
+  }) => {
+    await page.locator('#manual-scan-input').fill('T-NAO-EXISTE');
+    await page.locator('#manual-scan-input').press('Enter');
+    await expect(page.locator('.toast-item').filter({ hasText: 'Patrimônio não localizado.' })).toHaveCount(1);
+
+    const starts = await page.evaluate(async () => {
+      const scanner = window.App.Scanner;
+      const originalStart = scanner.startCamera;
+      const result = {};
+      let count = 0;
+
+      scanner.startCamera = () => {
+        count += 1;
+        return new Promise((resolve) => setTimeout(resolve, 300));
+      };
+      scanner.currentMode = 'cam';
+
+      // Duas leituras ignoradas seguidas: só uma religação enquanto a primeira está em curso.
+      await scanner.processCode('T-NAO-EXISTE');
+      await scanner.processCode('T-NAO-EXISTE');
+      result.idle = count;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      scanner._lookupsInFlight += 1;
+      await scanner.processCode('T-NAO-EXISTE');
+      scanner._lookupsInFlight -= 1;
+      result.lookupPending = count;
+
+      scanner.currentTool = { code: 'T-OUTRA' };
+      await scanner.processCode('T-NAO-EXISTE');
+      scanner.currentTool = null;
+      result.operationOpen = count;
+
+      await scanner.processCode('T-NAO-EXISTE');
+      result.idleAgain = count;
+
+      scanner.startCamera = originalStart;
+      scanner.currentMode = 'usb';
+      return result;
+    });
+
+    expect(starts).toEqual({ idle: 1, lookupPending: 1, operationOpen: 1, idleAgain: 2 });
+    expect(statusRequests.map((request) => request.body.code)).toEqual(['T-NAO-EXISTE']);
+    await expect(page.locator('#recent-scans-list .recent-scan-item')).toHaveCount(1);
+
+    allowDenial(guard, 404, '/api/tools/status');
+  });
+
+  test('429 durante uma operação em andamento: volta à espera, sem operação aberta nem Recentes', async ({
+    page,
+    guard,
+  }) => {
+    const RATE_LIMITED = 'Muitas consultas sem resultado. Aguarde e tente novamente.';
+
+    await stubToolStatus(page, {
+      failures: {
+        'T-LIMITE': json(429, { success: false, message: RATE_LIMITED, code: 'TOOL_LOOKUP_RATE_LIMITED' }),
+      },
+    });
+
+    await scanTool(page, 'T-E2E-001');
+    await expect(page.locator('#scanner-checkout')).toBeVisible();
+    await page.locator('#checkout-user-badge').fill('e2e-002');
+
+    // Leitura que chega com a operação aberta (ex.: leitor USB) e é barrada pelo limite.
+    await page.evaluate(() => window.App.Scanner.processCode('T-LIMITE'));
+
+    await expect(page.locator('.toast-item').filter({ hasText: RATE_LIMITED })).toHaveCount(1);
+    await expect(page.locator('#scanner-result')).toBeHidden();
+    await expect(page.locator('#scanner-waiting')).toBeVisible();
+    await expect(page.locator('#scanner-checkout')).toBeHidden();
+    await expect(page.locator('#scanner-processing')).toBeHidden();
+    await expect(page.locator('#checkout-user-badge')).toHaveValue('');
+    expect(await page.evaluate(() => window.App.Scanner.currentTool)).toBeNull();
+    await expect(page.locator('#recent-scans-list .recent-scan-item')).toHaveCount(1);
+    await expect(page.locator('#recent-scans-list')).not.toContainText('T-LIMITE');
+
+    allowDenial(guard, 429, '/api/tools/status');
+  });
+
   test('empréstimo: pede o crachá exato e envia toolCode + collaboratorBadge (sem lista, sem ID)', async ({
     page,
   }) => {
@@ -536,3 +801,43 @@ test.describe('PADRÃO — mesmo contrato por crachá (sem resolução local, se
     });
   });
 });
+
+// Gate 1-F4.C4-FIX1: o cooldown de leitura e as mensagens por status valem só para o caminho do
+// Restrito. Admin e Padrão continuam com a busca local síncrona: código desconhecido lido de novo
+// gera nova mensagem e nova entrada "Não encontrado", sem nenhuma chamada a /api/tools/status (o
+// guard falharia o teste com "chamada de API inesperada").
+for (const profile of ['admin', 'standard']) {
+  test.describe(`${profile.toUpperCase()} — busca local sem cooldown (Gate 1-F4.C4-FIX1)`, () => {
+    test('código desconhecido repetido: toast e "Não encontrado" a cada leitura, sem endpoint', async ({
+      page,
+      guard,
+    }) => {
+      await loginAs(page, E2E_USERS[profile]);
+      await openTab(page, 'scanner');
+      await expectActiveTab(page, 'scanner');
+      await expect
+        .poll(() => page.evaluate(() => window.App.Data.toolsLoaded && window.App.Data.tools.length))
+        .toBeGreaterThan(0);
+
+      const input = page.locator('#manual-scan-input');
+
+      for (let read = 1; read <= 3; read += 1) {
+        await input.fill('T-NAO-EXISTE');
+        await input.press('Enter');
+        await expect(
+          page.locator('.toast-item').filter({ hasText: 'Patrimônio não localizado.' })
+        ).toHaveCount(read);
+        await expect(page.locator('#recent-scans-list .recent-scan-item')).toHaveCount(read);
+        await expect(page.locator('#stat-scans-today')).toHaveText(String(read));
+      }
+
+      await expect(page.locator('#recent-scans-list')).toContainText('Não Encontrado');
+      expect(await page.evaluate(() => window.App.Scanner._lookupCooldown.size)).toBe(0);
+      expect(guard.apiCalls.filter((call) => call.endsWith('/api/tools/status'))).toEqual([]);
+
+      // Ferramenta válida segue pela busca local, com o mesmo fluxo de antes.
+      await scanTool(page, 'T-E2E-001');
+      await expect(page.locator('#scanner-checkout')).toBeVisible();
+    });
+  });
+}

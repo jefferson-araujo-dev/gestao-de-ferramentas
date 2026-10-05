@@ -56,20 +56,46 @@ async function requestToolMovement(body) {
   return payload.data || null;
 }
 
+// Gate 1-F4.C4-FIX1: depois de uma resposta 404, 409 ou 429, novas leituras do MESMO código pelo
+// Restrito são ignoradas por este intervalo (sem requisição, toast, Recentes nem estatística). Sem
+// isso, uma etiqueta não cadastrada parada diante da câmera gera ~1 consulta/s e esgota o limite do
+// servidor (10 falhas / 60 s, api/tools/status.js) em ~10 s, bloqueando também ferramentas válidas.
+// Precisa ser de pelo menos 7 s: abaixo de 6 s, uma leitura contínua ainda estouraria o limite.
+const RESTRICTED_LOOKUP_COOLDOWN_MS = 10 * 1000;
+const RESTRICTED_LOOKUP_COOLDOWN_STATUSES = [404, 409, 429];
+const LOOKUP_NOT_FOUND_MESSAGE = 'Patrimônio não localizado.';
+const LOOKUP_ACCESS_DENIED_MESSAGE = 'Sessão expirada ou acesso não permitido. Entre novamente.';
+const LOOKUP_FAILURE_MESSAGE = 'Falha ao consultar a ferramenta. Tente novamente.';
+
+// Mensagem de tela para cada falha da consulta do Restrito, sem dado pessoal nem detalhe interno:
+// só 404 é "não localizado"; 409 e 429 usam o texto fixo do servidor; 401/403 indicam sessão ou
+// acesso; qualquer outra falha (5xx, rede, resposta inválida) é uma falha genérica da consulta.
+function restrictedLookupFailureMessage(status, payload) {
+  if (status === 404) {
+    return LOOKUP_NOT_FOUND_MESSAGE;
+  }
+  if ((status === 409 || status === 429) && typeof payload?.message === 'string') {
+    return payload.message;
+  }
+  if (status === 401 || status === 403) {
+    return LOOKUP_ACCESS_DENIED_MESSAGE;
+  }
+  return LOOKUP_FAILURE_MESSAGE;
+}
+
 // Gate 1-F4.C4, Decisão 1 (B1): caminho do Restrito para obter status/dados da ferramenta, sem
 // abrir o listener de `tools` (que grava `currentUser`/`currentCollaboratorId`, docs/design/
 // USERS_AUDIT_SCREEN.md, seção C.2). Sempre POST com `cache: 'no-store'` (E.2 do mesmo documento):
 // o service worker grava todo GET da mesma origem em CacheStorage, compartilhado entre usuários.
 // Resultado: `{ tool }` no sucesso, com os campos de B1 no formato que Admin/Padrão recebem pelo
-// listener (miniatura e manutenção vencida funcionam igual); `{ tool: null, message }` em qualquer
-// falha. `message` só vem das respostas 409 (patrimônio duplicado) e 429 (excesso de consultas sem
-// resultado), textos fixos do servidor sem dado pessoal; nas demais falhas (rede, 404, formato
-// inválido) fica nulo e o chamador mostra "Patrimônio não localizado.", como no caminho local.
+// listener (miniatura e manutenção vencida funcionam igual); `{ tool: null, message, status }` em
+// qualquer falha, com `status` HTTP (null sem sessão ou sem resposta) e `message` de
+// restrictedLookupFailureMessage.
 async function fetchRestrictedToolStatus(code) {
   const currentUser = auth.currentUser;
 
   if (!currentUser) {
-    return { tool: null, message: null };
+    return { tool: null, message: LOOKUP_ACCESS_DENIED_MESSAGE, status: null };
   }
 
   try {
@@ -87,12 +113,11 @@ async function fetchRestrictedToolStatus(code) {
     const payload = await response.json().catch(() => null);
 
     if (!response.ok || payload?.success !== true || !payload.data?.tool) {
-      const message =
-        [409, 429].includes(response.status) && typeof payload?.message === 'string'
-          ? payload.message
-          : null;
-
-      return { tool: null, message };
+      return {
+        tool: null,
+        message: restrictedLookupFailureMessage(response.status, payload),
+        status: response.status
+      };
     }
 
     const tool = payload.data.tool;
@@ -107,11 +132,12 @@ async function fetchRestrictedToolStatus(code) {
         imageUrl: tool.imageUrl ?? null,
         nextMaintenance: tool.nextMaintenance ?? null
       },
-      message: null
+      message: null,
+      status: response.status
     };
   } catch (err) {
     window.Logger.warn('Erro ao consultar status da ferramenta (Restrito)', err);
-    return { tool: null, message: null };
+    return { tool: null, message: LOOKUP_FAILURE_MESSAGE, status: null };
   }
 }
 
@@ -583,9 +609,54 @@ export const AppScanner = {
     });
   },
   _lookupSeq: 0,
+  // Restrito (Gate 1-F4.C4-FIX1): código -> instante até o qual novas leituras dele são ignoradas
+  // (ver RESTRICTED_LOOKUP_COOLDOWN_MS). Só em memória, só o código lido — nunca dado de pessoa;
+  // logout e troca de usuário recarregam a página (auth.js) e o descartam junto.
+  _lookupCooldown: new Map(),
+  _lookupsInFlight: 0,
+  // Códigos com consulta ainda sem resposta: releitura do mesmo código nesse intervalo também é
+  // ignorada (o cooldown só nasce com a resposta; com rede lenta, cada releitura viraria uma nova
+  // consulta e uma nova falha contada pelo servidor).
+  _pendingLookupCodes: new Set(),
+  _cooldownCameraRestart: false,
+  _isLookupCoolingDown: function (code) {
+    const until = this._lookupCooldown.get(code);
+    if (until === undefined) {
+      return false;
+    }
+    if (until > Date.now()) {
+      return true;
+    }
+    this._lookupCooldown.delete(code);
+    return false;
+  },
   _processCode: async function (c) {
     const startTime = Date.now();
     const isRestricted = window.App.Auth.isRestricted === true;
+    const lookupCode = c.trim();
+
+    // Leitura repetida de um código em cooldown: ignorada por inteiro. A câmera para a cada leitura
+    // (callback em startCamera), então é religada — sem limpar nada — só no Scanner, sem operação
+    // aberta, sem consulta em andamento (a resposta dela decide o que fazer com a câmera) e sem
+    // outra religação desta mesma origem ainda em curso (startCamera espera 500 ms antes de ligar).
+    if (isRestricted && this._pendingLookupCodes.has(lookupCode)) {
+      return;
+    }
+    if (isRestricted && this._isLookupCoolingDown(lookupCode)) {
+      if (
+        this.currentMode === 'cam' &&
+        !this.currentTool &&
+        window.App.UI.activeTab === 'scanner' &&
+        this._lookupsInFlight === 0 &&
+        !this._cooldownCameraRestart
+      ) {
+        this._cooldownCameraRestart = true;
+        Promise.resolve(this.startCamera()).finally(() => {
+          this._cooldownCameraRestart = false;
+        });
+      }
+      return;
+    }
     // Restrito (Gate 1-F4.C4, Decisão 1/B1): consulta o endpoint dedicado, nunca o cache local de
     // `tools` (que o Restrito não recebe mais, ver auth.js `_setPermissions`). Admin e Padrão
     // continuam com a busca local, síncrona, igual a antes.
@@ -598,9 +669,24 @@ export const AppScanner = {
           window.Utils.removeAccents(x.code).toLowerCase() === searchCode
       );
     const lookupSeq = ++this._lookupSeq;
-    const lookup = isRestricted
-      ? await fetchRestrictedToolStatus(c.trim())
-      : { tool: findLocalTool(), message: null };
+    let lookup;
+    if (isRestricted) {
+      this._lookupsInFlight += 1;
+      this._pendingLookupCodes.add(lookupCode);
+      try {
+        lookup = await fetchRestrictedToolStatus(lookupCode);
+      } finally {
+        this._lookupsInFlight -= 1;
+        this._pendingLookupCodes.delete(lookupCode);
+      }
+    } else {
+      lookup = { tool: findLocalTool(), message: null };
+    }
+
+    // Antes do descarte abaixo: a falha já contou no servidor mesmo que a resposta chegue atrasada.
+    if (isRestricted && RESTRICTED_LOOKUP_COOLDOWN_STATUSES.includes(lookup.status)) {
+      this._lookupCooldown.set(lookupCode, Date.now() + RESTRICTED_LOOKUP_COOLDOWN_MS);
+    }
 
     // Restrito (único caminho assíncrono): resposta que chega depois de outra leitura, de uma troca
     // de aba ou do fim da operação (clearOperation) é descartada — não pode reabrir uma operação
@@ -621,21 +707,26 @@ export const AppScanner = {
         navigator.vibrate([200, 100, 200]);
       }
 
-      window.App.UI.showToast(lookup.message || 'Patrimônio não localizado.', 'error');
+      window.App.UI.showToast(lookup.message || LOOKUP_NOT_FOUND_MESSAGE, 'error');
 
       this.scanStats.today++;
       this.scanStats.errors++;
       this.saveStats();
       this.updateStatsDisplay();
 
-      this.addRecentScan(
-        {
-          code: c,
-          name: 'Não encontrado',
-          status: 'error'
-        },
-        false
-      );
+      // Restrito (Gate 1-F4.C4-FIX1): "Não encontrado" só quando o servidor respondeu 404. Em 409,
+      // 429, 401/403, 5xx ou falha de rede o código pode ser de uma ferramenta real, então nada
+      // entra em Últimas Leituras. Admin/Padrão: busca local, sem mudança.
+      if (!isRestricted || lookup.status === 404) {
+        this.addRecentScan(
+          {
+            code: c,
+            name: 'Não encontrado',
+            status: 'error'
+          },
+          false
+        );
+      }
 
       const resultEl = document.getElementById('scanner-result');
       if (resultEl) {
@@ -643,7 +734,7 @@ export const AppScanner = {
         setTimeout(() => resultEl.classList.remove('scan-error'), 500);
       }
 
-      return this.reset();
+      return this._restart();
     }
 
     window.AudioSys.playBeep('success');
@@ -1100,7 +1191,14 @@ export const AppScanner = {
         'absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-brand-500 via-indigo-500 to-brand-500';
     }
   },
+  // Ação explícita do usuário ("Nova operação", "Cancelar"): além de reiniciar, libera o cooldown
+  // de leitura do Restrito (Gate 1-F4.C4-FIX1). Para Admin/Padrão o cooldown está sempre vazio.
   reset: function () {
+    this._lookupCooldown.clear();
+    this._restart();
+  },
+  // Reinício após falha de leitura: igual a reset(), mas mantém o cooldown recém-registrado.
+  _restart: function () {
     this.clearOperation();
     if (this.currentMode === 'cam') {
       this.startCamera();

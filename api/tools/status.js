@@ -16,6 +16,7 @@ const MAX_CODE_LENGTH = 128;
 const TOOL_NOT_FOUND_MESSAGE = 'Ferramenta não encontrada.';
 const TOOL_CODE_DUPLICATED_MESSAGE = 'Patrimônio duplicado. Contate o administrador.';
 const INVALID_REQUEST_MESSAGE = 'Dados da consulta inválidos.';
+const INTERNAL_ERROR_MESSAGE = 'Erro interno ao consultar a ferramenta.';
 const LOOKUP_RATE_LIMIT_REASON = 'TOOL_LOOKUP_RATE_LIMITED';
 const LOOKUP_RATE_LIMIT_MESSAGE =
   'Muitas consultas sem resultado. Aguarde e tente novamente.';
@@ -62,13 +63,15 @@ function optionalString(value) {
 // Campos selecionados um a um a partir do documento, nunca por remoção, para que um campo novo em
 // `tools` não vaze por omissão de filtro. `imageUrl` (data URL JPEG gerado por canvas em
 // tools.js) e `nextMaintenance` ('AAAA-MM-DD') seguem o mesmo valor que Admin/Padrão recebem pelo
-// listener; qualquer tipo que não seja texto vira `null`, para não repassar objeto aninhado.
+// listener; qualquer tipo que não seja texto vira `null`, para não repassar objeto aninhado — o
+// mesmo vale para `code`, `name` e `category` (Gate 1-F4.C4-FIX1). `status` é sempre texto: o
+// handler responde 500 antes de chegar aqui quando não é.
 function buildToolStatusResponse(id, tool) {
   return {
     id,
-    code: tool.code,
-    name: tool.name,
-    category: tool.category,
+    code: optionalString(tool.code),
+    name: optionalString(tool.name),
+    category: optionalString(tool.category),
     status: tool.status,
     imageUrl: optionalString(tool.imageUrl),
     nextMaintenance: optionalString(tool.nextMaintenance)
@@ -178,10 +181,24 @@ export default async function handler(req, res) {
       throw error;
     }
 
+    const tool = toolDoc.data();
+
+    // Inconsistência de dados (Gate 1-F4.C4-FIX1): `status` não textual nunca é devolvido. Mesma
+    // resposta 500 genérica de qualquer erro interno; o log leva só o id do documento da
+    // ferramenta, nunca o conteúdo dele (que tem dados de colaborador).
+    if (typeof tool.status !== 'string') {
+      console.error('Status inválido no documento da ferramenta:', toolDoc.id);
+
+      return res.status(500).json({
+        success: false,
+        message: INTERNAL_ERROR_MESSAGE
+      });
+    }
+
     return res.status(200).json({
       success: true,
       data: {
-        tool: buildToolStatusResponse(toolDoc.id, toolDoc.data())
+        tool: buildToolStatusResponse(toolDoc.id, tool)
       }
     });
   } catch (error) {
@@ -199,7 +216,7 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       success: false,
-      message: 'Erro interno ao consultar a ferramenta.'
+      message: INTERNAL_ERROR_MESSAGE
     });
   }
 }
