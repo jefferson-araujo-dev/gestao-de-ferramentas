@@ -33,3 +33,6 @@ firebase-data-export.json
 
 # Logs de debug do Firebase Emulator (podem conter documentos usados nos testes)
 *-debug.log
+
+# Capturas de tela da validacao visual 1-F4.C3 (artefatos locais)
+visual-1-f4-c3/*.png
