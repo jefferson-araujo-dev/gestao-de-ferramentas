@@ -57,6 +57,30 @@ function optionalString(value) {
   return typeof value === 'string' ? value : null;
 }
 
+// `nextMaintenance` (Gate 1-F4.C4-FIX2): texto passa como está. Timestamp do Firestore (tem
+// `toDate()`, como aceito em getMaintenanceDate de api/tools/movement.js) vira 'AAAA-MM-DD' pelo dia
+// UTC — o mesmo referencial do cliente, que lê 'AAAA-MM-DD' como meia-noite UTC
+// (`new Date(nextMaintenance)` em scanner.js). Como o servidor compara o instante exato
+// (movement.js), o aviso do cliente aparece no máximo antes do bloqueio, nunca depois. Qualquer
+// outro tipo (objeto, número, array, data inválida) vira `null`.
+function serializeNextMaintenance(value) {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value?.toDate !== 'function') {
+    return null;
+  }
+
+  const date = value.toDate();
+
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
 // Resposta: lista fechada de campos de B1 (docs/design/USERS_AUDIT_SCREEN.md, seção E.2), igual
 // para qualquer perfil que chame este endpoint (Gate 1-F4.C4, Decisões 1 e D2) — nunca
 // `currentUser`, `currentCollaboratorId`, `lastMaintenanceBy` nem qualquer outro dado de pessoa.
@@ -64,7 +88,8 @@ function optionalString(value) {
 // `tools` não vaze por omissão de filtro. `imageUrl` (data URL JPEG gerado por canvas em
 // tools.js) e `nextMaintenance` ('AAAA-MM-DD') seguem o mesmo valor que Admin/Padrão recebem pelo
 // listener; qualquer tipo que não seja texto vira `null`, para não repassar objeto aninhado — o
-// mesmo vale para `code`, `name` e `category` (Gate 1-F4.C4-FIX1). `status` é sempre texto: o
+// mesmo vale para `code`, `name` e `category` (Gate 1-F4.C4-FIX1). Única exceção: Timestamp em
+// `nextMaintenance` vira 'AAAA-MM-DD' (serializeNextMaintenance, Gate 1-F4.C4-FIX2). `status` é sempre texto: o
 // handler responde 500 antes de chegar aqui quando não é.
 function buildToolStatusResponse(id, tool) {
   return {
@@ -74,7 +99,7 @@ function buildToolStatusResponse(id, tool) {
     category: optionalString(tool.category),
     status: tool.status,
     imageUrl: optionalString(tool.imageUrl),
-    nextMaintenance: optionalString(tool.nextMaintenance)
+    nextMaintenance: serializeNextMaintenance(tool.nextMaintenance)
   };
 }
 

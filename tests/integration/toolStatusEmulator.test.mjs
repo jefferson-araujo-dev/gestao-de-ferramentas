@@ -20,6 +20,7 @@ import { after, before, describe, test } from 'node:test';
 
 import {
   BASE,
+  Timestamp,
   adminDb,
   closeEmulatorClients,
   createUserFixture,
@@ -627,6 +628,127 @@ describe('POST /api/tools/status contra Firebase Emulator (Firestore + Auth)', (
     // 500 por inconsistência de dados não é falha de enumeração: não grava contador.
     for (const key of ['admin', 'standard', 'restricted']) {
       assert.equal((await lookupRateLimitDoc(users[key].uid).get()).exists, false, key);
+    }
+  });
+
+  // Gate 1-F4.C4-FIX2: Timestamp (gravado pelo Admin SDK) vira 'AAAA-MM-DD' pelo dia UTC, o mesmo
+  // referencial do cliente (`new Date('AAAA-MM-DD')` = meia-noite UTC, scanner.js). O bloqueio de
+  // empréstimo da Movement API compara o instante exato (getMaintenanceDate em movement.js): os dois
+  // concordam no passado e no futuro; no mesmo dia, o cliente pode avisar antes do bloqueio, nunca
+  // depois.
+  test('16 nextMaintenance Timestamp: dia UTC "AAAA-MM-DD", coerente com o bloqueio da Movement API', async () => {
+    await resetRateLimits();
+
+    const now = Date.now();
+    const startOfTodayUtc = Date.UTC(
+      new Date(now).getUTCFullYear(),
+      new Date(now).getUTCMonth(),
+      new Date(now).getUTCDate()
+    );
+    const today = new Date(startOfTodayUtc).toISOString().slice(0, 10);
+    const cases = [
+      ['TS-TSP-PAST', 'ts-timestamp-past', Timestamp.fromMillis(Date.UTC(2020, 0, 15, 12)), '2020-01-15'],
+      ['TS-TSP-FUTURE', 'ts-timestamp-future', Timestamp.fromMillis(Date.UTC(2099, 11, 31, 12)), '2099-12-31'],
+      ['TS-TSP-TODAY-START', 'ts-timestamp-today-start', Timestamp.fromMillis(startOfTodayUtc), today],
+      [
+        'TS-TSP-TODAY-END',
+        'ts-timestamp-today-end',
+        Timestamp.fromMillis(startOfTodayUtc + 24 * 60 * 60 * 1000 - 1),
+        today,
+      ],
+    ];
+
+    for (const [code, id, nextMaintenance] of cases) {
+      await adminDb.doc(`${BASE}/tools/${id}`).set({
+        code,
+        name: `Timestamp ${code}`,
+        category: 'Manual',
+        status: 'available',
+        currentUser: 'Colaborador Sigma',
+        currentCollaboratorId: 'cs1',
+        lastAction: null,
+        nextMaintenance,
+        lastMaintenanceBy: 'Admin Sigma Manutencao',
+      });
+    }
+
+    for (const [code, id, nextMaintenance, expected] of cases) {
+      for (const key of ['admin', 'standard', 'restricted']) {
+        const label = `${code} ${key}`;
+        const result = await callStatus({ token: users[key].token, body: { code } });
+
+        assertToolShape(result, label);
+        assert.equal(result.body.data.tool.nextMaintenance, expected, label);
+        assertNoLeak(result, label);
+      }
+
+      // Regra do cliente sobre o texto devolvido x bloqueio real do servidor para o mesmo Timestamp
+      // (crachá inexistente: a manutenção é verificada antes do crachá, movement.js registerLoan).
+      const clientOverdue = new Date(expected).getTime() < Date.now();
+      const movement = await callHandler(movementApi, {
+        token: users.admin.token,
+        body: {
+          action: 'loan',
+          toolId: id,
+          toolCode: code,
+          collaboratorBadge: 'B-INEXISTENTE',
+          device: 'Navegador de Teste',
+        },
+      });
+      const serverBlocks = movement.body?.message === 'Ferramenta com manutenção vencida.';
+
+      assert.equal(serverBlocks, nextMaintenance.toMillis() < Date.now(), `${code} servidor`);
+      if (code === 'TS-TSP-TODAY-END') {
+        // Mesmo dia, instante ainda futuro: o cliente já avisa; o servidor ainda não bloqueia.
+        assert.equal(clientOverdue, true, code);
+        assert.equal(serverBlocks, false, code);
+      } else {
+        assert.equal(clientOverdue, serverBlocks, code);
+      }
+      assert.ok(!serverBlocks || clientOverdue, `${code}: servidor bloqueia sem aviso no cliente`);
+    }
+
+    for (const [, id] of cases) {
+      await adminDb.doc(`${BASE}/tools/${id}`).delete();
+    }
+    await resetRateLimits();
+  });
+
+  test('17 nextMaintenance de outro tipo: objeto, número, array e data inválida viram null; texto passa', async () => {
+    const cases = [
+      ['TS-NM-OBJECT', { owner: 'Colaborador Sigma', toDate: 'cs1' }, null],
+      ['TS-NM-NUMBER', 1700000000000, null],
+      ['TS-NM-ARRAY', ['2020-01-01', 'Colaborador Sigma'], null],
+      ['TS-NM-MAP-DATE', { seconds: 1700000000, nanoseconds: 0 }, null],
+      ['TS-NM-TEXT', '2031-05-20', '2031-05-20'],
+    ];
+
+    for (const [code, nextMaintenance] of cases) {
+      await adminDb.doc(`${BASE}/tools/${code.toLowerCase()}`).set({
+        code,
+        name: `Tipo ${code}`,
+        category: 'Manual',
+        status: 'available',
+        currentUser: null,
+        currentCollaboratorId: null,
+        lastAction: null,
+        nextMaintenance,
+      });
+    }
+
+    for (const [code, , expected] of cases) {
+      for (const key of ['admin', 'standard', 'restricted']) {
+        const label = `${code} ${key}`;
+        const result = await callStatus({ token: users[key].token, body: { code } });
+
+        assertToolShape(result, label);
+        assert.equal(result.body.data.tool.nextMaintenance, expected, label);
+        assertNoLeak(result, label);
+      }
+    }
+
+    for (const [code] of cases) {
+      await adminDb.doc(`${BASE}/tools/${code.toLowerCase()}`).delete();
     }
   });
 });

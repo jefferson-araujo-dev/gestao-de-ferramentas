@@ -1,6 +1,7 @@
 import { metrics } from '../core/MetricsManager.js';
 import { auth } from '../app.js';
 import { setBusy, isBusy } from '../components/index.js';
+import { restrictedLookupCooldownMs } from '../utils/restrictedLookupCooldown.js';
 
 // Gate 1-F4.C4, Decisão 7: versão do app enviada em toda requisição à Movement API e ao endpoint
 // de status, só para registro no servidor (nenhum bloqueio nesta etapa). __APP_VERSION__ é
@@ -56,13 +57,6 @@ async function requestToolMovement(body) {
   return payload.data || null;
 }
 
-// Gate 1-F4.C4-FIX1: depois de uma resposta 404, 409 ou 429, novas leituras do MESMO código pelo
-// Restrito são ignoradas por este intervalo (sem requisição, toast, Recentes nem estatística). Sem
-// isso, uma etiqueta não cadastrada parada diante da câmera gera ~1 consulta/s e esgota o limite do
-// servidor (10 falhas / 60 s, api/tools/status.js) em ~10 s, bloqueando também ferramentas válidas.
-// Precisa ser de pelo menos 7 s: abaixo de 6 s, uma leitura contínua ainda estouraria o limite.
-const RESTRICTED_LOOKUP_COOLDOWN_MS = 10 * 1000;
-const RESTRICTED_LOOKUP_COOLDOWN_STATUSES = [404, 409, 429];
 const LOOKUP_NOT_FOUND_MESSAGE = 'Patrimônio não localizado.';
 const LOOKUP_ACCESS_DENIED_MESSAGE = 'Sessão expirada ou acesso não permitido. Entre novamente.';
 const LOOKUP_FAILURE_MESSAGE = 'Falha ao consultar a ferramenta. Tente novamente.';
@@ -610,7 +604,7 @@ export const AppScanner = {
   },
   _lookupSeq: 0,
   // Restrito (Gate 1-F4.C4-FIX1): código -> instante até o qual novas leituras dele são ignoradas
-  // (ver RESTRICTED_LOOKUP_COOLDOWN_MS). Só em memória, só o código lido — nunca dado de pessoa;
+  // (ver src/js/utils/restrictedLookupCooldown.js). Só em memória, só o código lido — nunca dado de pessoa;
   // logout e troca de usuário recarregam a página (auth.js) e o descartam junto.
   _lookupCooldown: new Map(),
   _lookupsInFlight: 0,
@@ -684,8 +678,12 @@ export const AppScanner = {
     }
 
     // Antes do descarte abaixo: a falha já contou no servidor mesmo que a resposta chegue atrasada.
-    if (isRestricted && RESTRICTED_LOOKUP_COOLDOWN_STATUSES.includes(lookup.status)) {
-      this._lookupCooldown.set(lookupCode, Date.now() + RESTRICTED_LOOKUP_COOLDOWN_MS);
+    // 10 s para 404/409/429; 5 s para falha sem resultado (Gate 1-F4.C4-FIX2); sucesso, nenhum.
+    const cooldownMs = isRestricted
+      ? restrictedLookupCooldownMs(lookup.status, Boolean(lookup.tool))
+      : 0;
+    if (cooldownMs > 0) {
+      this._lookupCooldown.set(lookupCode, Date.now() + cooldownMs);
     }
 
     // Restrito (único caminho assíncrono): resposta que chega depois de outra leitura, de uma troca

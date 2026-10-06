@@ -316,7 +316,9 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     allowDenial(guard, 404, '/api/tools/status');
   });
 
-  test('cooldown só depois de 404/409/429; Recentes só registra "Não encontrado" para 404', async ({
+  // Gate 1-F4.C4-FIX2: toda falha sem resultado (401, 403, 5xx, rede) também entra em cooldown
+  // (curto, ver o teste seguinte); antes do FIX2 a segunda leitura dessas falhas consultava de novo.
+  test('cooldown em toda falha; Recentes só registra "Não encontrado" para 404', async ({
     page,
     guard,
   }) => {
@@ -352,26 +354,27 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     const countFor = (code) => requests.filter((request) => request.body.code === code).length;
 
     const cases = [
-      ['T-DUP', DUPLICATED, 1],
-      ['T-E2E-001', RATE_LIMITED, 1],
-      ['T-401', ACCESS_DENIED, 2],
-      ['T-403', ACCESS_DENIED, 2],
-      ['T-500', LOOKUP_FAILED, 2],
-      ['T-503', LOOKUP_FAILED, 2],
-      ['T-REDE', LOOKUP_FAILED, 2],
+      ['T-DUP', DUPLICATED],
+      ['T-E2E-001', RATE_LIMITED],
+      ['T-401', ACCESS_DENIED],
+      ['T-403', ACCESS_DENIED],
+      ['T-500', LOOKUP_FAILED],
+      ['T-503', LOOKUP_FAILED],
+      ['T-REDE', LOOKUP_FAILED],
     ];
 
-    for (const [code, message, expectedRequests] of cases) {
+    for (const [code, message] of cases) {
       const toasts = page.locator('.toast-item').filter({ hasText: message });
 
-      // Lido duas vezes: só 409/429 entram em cooldown (a segunda leitura não consulta).
+      // Lido duas vezes: toda falha entra em cooldown (a segunda leitura não consulta).
       for (let read = 0; read < 2; read += 1) {
         await input.fill(code);
         await input.press('Enter');
-        await expect(toasts).toHaveCount(Math.min(read + 1, expectedRequests));
+        await expect(toasts).toHaveCount(1);
       }
 
-      await expect.poll(() => countFor(code), { message: code }).toBe(expectedRequests);
+      await expect.poll(() => countFor(code), { message: code }).toBe(1);
+      expect(await page.evaluate((c) => window.App.Scanner._lookupCooldown.has(c), code)).toBe(true);
       await expect(page.locator('#scanner-result')).toBeHidden();
       await expect(recentList).not.toContainText(code);
       await expect(page.locator('#toast-container')).not.toContainText('Patrimônio não localizado.');
@@ -395,6 +398,153 @@ test.describe('RESTRITO — empréstimo por crachá exato e devolução no Scann
     await expect(recentList).toContainText('Não Encontrado');
 
     for (const status of [401, 403, 404, 409, 429, 500, 503]) {
+      allowDenial(guard, status, '/api/tools/status');
+    }
+    guard.allow(/ERR_FAILED/, 'falha de rede simulada de propósito em /api/tools/status (T-REDE)');
+  });
+
+  // Gate 1-F4.C4-FIX2: falha SEM resultado (rede, 400, 401, 403, 5xx) entra num cooldown curto
+  // (5 s, src/js/utils/restrictedLookupCooldown.js): sem ele, a etiqueta parada diante da câmera
+  // repete ~1 consulta/s com bipe, toast e contagem de erro. O 400 é alcançável em uso real: o
+  // servidor recusa código acima de 128 caracteres (QR com URL comprida). Leitura ignorada não gera
+  // requisição, toast, Recentes nem estatística; 404/409/429 seguem com 10 s (teste anterior).
+  test('falha sem resultado: cooldown curto por código; vencido, consulta de novo; recupera com sucesso', async ({
+    page,
+    guard,
+  }) => {
+    const ACCESS_DENIED = 'Sessão expirada ou acesso não permitido. Entre novamente.';
+    const LOOKUP_FAILED = 'Falha ao consultar a ferramenta. Tente novamente.';
+    const LONG_CODE = `HTTPS://EXEMPLO.INVALID/${'Q'.repeat(130)}`;
+    const failing = new Map([
+      ['T-REDE', 'abort'],
+      [LONG_CODE, json(400, { success: false, message: 'Dados da consulta inválidos.' })],
+      ['T-401', json(401, { success: false, message: 'DETALHE-INTERNO-401' })],
+      ['T-403', json(403, { success: false, message: 'DETALHE-INTERNO-403' })],
+      ['T-500', json(500, { success: false, message: 'DETALHE-INTERNO-500' })],
+      ['T-503', json(503, { success: false, message: 'DETALHE-INTERNO-503' })],
+      ['T-E2E-001', json(500, { success: false, message: 'DETALHE-INTERNO-500' })],
+    ]);
+    const requests = [];
+
+    // Registrado depois do stub do beforeEach: tem precedência; o resto segue para ele (fallback).
+    await page.route('**/api/tools/status', async (route) => {
+      const { code } = route.request().postDataJSON();
+      const failure = failing.get(code);
+
+      requests.push(code);
+      if (!failure) {
+        await route.fallback();
+        return;
+      }
+      if (failure === 'abort') {
+        await route.abort('failed');
+        return;
+      }
+      await route.fulfill({
+        status: failure.status,
+        contentType: 'application/json',
+        body: JSON.stringify(failure.payload),
+      });
+    });
+
+    const input = page.locator('#manual-scan-input');
+    const scan = async (code) => {
+      await input.fill(code);
+      await input.press('Enter');
+    };
+    const countFor = (code) => requests.filter((requested) => requested === code).length;
+    const cooldownLeft = (code) =>
+      page.evaluate((c) => window.App.Scanner._lookupCooldown.get(c) - Date.now(), code);
+    const expireCooldown = (code) =>
+      page.evaluate((c) => window.App.Scanner._lookupCooldown.set(c, Date.now() - 1), code);
+    const recentItems = page.locator('#recent-scans-list .recent-scan-item');
+    const dismissToasts = async () => {
+      for (const button of await page.locator('.toast-item [data-dismiss]').all()) {
+        await button.click();
+      }
+      await expect(page.locator('.toast-item')).toHaveCount(0);
+    };
+
+    const cases = [
+      ['T-REDE', LOOKUP_FAILED],
+      [LONG_CODE, LOOKUP_FAILED],
+      ['T-401', ACCESS_DENIED],
+      ['T-403', ACCESS_DENIED],
+      ['T-500', LOOKUP_FAILED],
+      ['T-503', LOOKUP_FAILED],
+    ];
+    let scansToday = 0;
+
+    for (const [code, message] of cases) {
+      const label = code.slice(0, 24);
+      const toasts = page.locator('.toast-item').filter({ hasText: message });
+
+      // Três leituras seguidas (câmera parada na etiqueta): uma consulta, um toast, uma estatística.
+      for (let read = 0; read < 3; read += 1) {
+        await scan(code);
+        await expect(toasts).toHaveCount(1);
+      }
+      await expect.poll(() => countFor(code), { message: label }).toBe(1);
+      scansToday += 1;
+      await expect(page.locator('#stat-scans-today')).toHaveText(String(scansToday));
+
+      const left = await cooldownLeft(code);
+
+      // Teto separa do cooldown de 10 s; piso folgado (leituras, poll e estatística já consumiram parte).
+      expect(left, label).toBeGreaterThan(1000);
+      expect(left, label).toBeLessThanOrEqual(5000);
+
+      // Vencido o cooldown, a mesma leitura consulta outra vez (e falha outra vez).
+      await expireCooldown(code);
+      await scan(code);
+      await expect.poll(() => countFor(code), { message: label }).toBe(2);
+      await expect(toasts).toHaveCount(2);
+      scansToday += 1;
+      await expect(page.locator('#stat-scans-today')).toHaveText(String(scansToday));
+
+      await expect(recentItems).toHaveCount(0);
+      await expect(page.locator('#scanner-result')).toBeHidden();
+      await expect(page.locator('#toast-container')).not.toContainText('Patrimônio não localizado.');
+      await expect(page.locator('#toast-container')).not.toContainText('DETALHE-INTERNO');
+      await expect(page.locator('#toast-container')).not.toContainText('Dados da consulta inválidos.');
+      await dismissToasts();
+    }
+
+    // Código diferente passa durante o cooldown de outro; "Nova operação"/"Cancelar" (reset) libera.
+    await expireCooldown('T-500');
+    await scan('T-500');
+    await expect.poll(() => countFor('T-500')).toBe(3);
+    await scan('T-500');
+    expect(countFor('T-500')).toBe(3);
+    await scanTool(page, 'T-E2E-003');
+    expect(countFor('T-E2E-003')).toBe(1);
+    await page.evaluate(() => window.App.Scanner.reset());
+    expect(await page.evaluate(() => window.App.Scanner._lookupCooldown.size)).toBe(0);
+    await scan('T-500');
+    await expect.poll(() => countFor('T-500')).toBe(4);
+    await dismissToasts();
+
+    // Recuperação: ferramenta real com falha passageira; recuperado o servidor, a leitura depois do
+    // cooldown abre a operação normalmente, e sucesso não deixa cooldown.
+    await scan('T-E2E-001');
+    await expect.poll(() => countFor('T-E2E-001')).toBe(1);
+    failing.delete('T-E2E-001');
+    await scan('T-E2E-001');
+    expect(countFor('T-E2E-001')).toBe(1);
+    await expireCooldown('T-E2E-001');
+    await scanTool(page, 'T-E2E-001');
+    expect(countFor('T-E2E-001')).toBe(2);
+    expect(await page.evaluate(() => window.App.Scanner._lookupCooldown.has('T-E2E-001'))).toBe(false);
+
+    // Nenhuma falha sem resultado entrou em Últimas Leituras: só as duas leituras com sucesso.
+    const recentText = await page.locator('#recent-scans-list').innerText();
+
+    expect(recentText).not.toContain('Não Encontrado');
+    for (const [code] of cases) {
+      expect(recentText).not.toContain(code.slice(0, 24));
+    }
+
+    for (const status of [400, 401, 403, 500, 503]) {
       allowDenial(guard, status, '/api/tools/status');
     }
     guard.allow(/ERR_FAILED/, 'falha de rede simulada de propósito em /api/tools/status (T-REDE)');
