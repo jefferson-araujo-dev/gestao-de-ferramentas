@@ -48,7 +48,9 @@ service cloud.firestore {
     }
 
     match /artifacts/gestao-de-ferramentas-3f8f1/public/data/tools/{toolId} {
-      allow read: if hasActiveProfile();
+      // Leitura de ferramentas: mesma condição de colaboradores (decisão B1). O perfil restrito
+      // não lê tools pelo cliente; consulta o status pela API (POST /api/tools/status, Admin SDK).
+      allow read: if canReadCollaborators();
 
       allow create: if isAdmin() && !isBorrowed(request.resource.data);
 

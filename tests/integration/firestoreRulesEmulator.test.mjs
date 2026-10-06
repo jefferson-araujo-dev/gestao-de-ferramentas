@@ -5,6 +5,8 @@
 //
 // Contrato de leitura de colaboradores: ADMIN e PADRÃO (ativos) leem; RESTRITO não lê nem lista
 // nem busca por crachá (a resolução do crachá é feita pelo servidor, com o Admin SDK).
+// Contrato de leitura de ferramentas (decisão B1): o mesmo de colaboradores; RESTRITO não lê
+// tools pelo cliente e consulta o status pela API (POST /api/tools/status, Admin SDK).
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 
@@ -150,6 +152,13 @@ describe('firestore.rules: colaboradores por perfil (Auth + Firestore Emulator)'
 
       assert.equal(byBadge.size, 1);
     });
+
+    test(`${label}: lista e lê por ID em tools`, async () => {
+      const { db } = users[key];
+
+      await assertAllowed(() => getDocs(collection(db, `${BASE}/tools`)), 'tools list');
+      await assertAllowed(() => getDoc(doc(db, `${BASE}/tools/t1`)), 'tools get');
+    });
   }
 
   test('RESTRITO: list de collaborators NEGADO', async () => {
@@ -194,17 +203,17 @@ describe('firestore.rules: colaboradores por perfil (Auth + Firestore Emulator)'
     await assertDenied(() => deleteDoc(doc(db, `${collaboratorsPath}/c1`)), 'delete');
   });
 
-  test('RESTRITO: continua lendo ferramentas e o próprio perfil (Scanner e devolução)', async () => {
+  test('RESTRITO: não lê ferramentas; lê o próprio perfil (status pela API)', async () => {
     const { db } = users.restricted;
-    const tools = await assertAllowed(() => getDocs(collection(db, `${BASE}/tools`)), 'tools');
 
-    assert.equal(tools.size, 1);
+    await assertDenied(() => getDocs(collection(db, `${BASE}/tools`)), 'tools list');
+    await assertDenied(() => getDoc(doc(db, `${BASE}/tools/t1`)), 'tools get');
     await assertAllowed(() => getDoc(doc(db, `${BASE}/users/${users.restricted.uid}`)), 'perfil');
     await assertDenied(() => updateDoc(doc(db, `${BASE}/tools/t1`), { status: 'borrowed' }), 'tools write');
     await assertDenied(() => getDocs(collection(db, `${BASE}/history`)), 'history');
     await assertDenied(() => getDocs(collection(db, `${BASE}/users`)), 'users list');
     await assertDenied(() => getDoc(doc(db, `${BASE}/users/${users.admin.uid}`)), 'perfil alheio');
-    record('RESTRICTED_TOOLS_READ', 'ALLOWED');
+    record('RESTRICTED_TOOLS_READ', 'DENIED');
   });
 
   test('ADMIN: lê e escreve em collaborators (contrato atual preservado)', async () => {
@@ -236,8 +245,12 @@ describe('firestore.rules: colaboradores por perfil (Auth + Firestore Emulator)'
     try {
       await profile.update({ isRestricted: true });
       await assertDenied(() => getDocs(collection(db, collaboratorsPath)), 'flag ligada');
+      await assertDenied(() => getDocs(collection(db, `${BASE}/tools`)), 'flag ligada: tools');
       await profile.update({ isRestricted: false });
       await assertAllowed(() => getDocs(collection(db, collaboratorsPath)), 'flag desligada');
+      await assertAllowed(() => getDocs(collection(db, `${BASE}/tools`)), 'flag desligada: tools');
+      await profile.update({ isRestricted: true });
+      await assertDenied(() => getDocs(collection(db, `${BASE}/tools`)), 'flag religada: tools');
     } finally {
       await profile.update({ isRestricted: false });
     }
