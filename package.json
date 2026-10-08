@@ -18,6 +18,7 @@
     "test:movement:emulator": "firebase emulators:exec --only firestore,auth --project gestao-de-ferramentas-3f8f1 \"node --test tests/integration/movementEmulator.test.mjs\"",
     "test:tools-status:emulator": "firebase emulators:exec --only firestore,auth --project gestao-de-ferramentas-3f8f1 \"node --test tests/integration/toolStatusEmulator.test.mjs\"",
     "test:rules:emulator": "firebase emulators:exec --only firestore,auth --project gestao-de-ferramentas-3f8f1 \"node --test tests/integration/firestoreRulesEmulator.test.mjs\"",
+    "test:authz:emulator": "firebase emulators:exec --only firestore,auth --project gestao-de-ferramentas-3f8f1 \"node --test tests/integration/authzEndpointsEmulator.test.mjs\"",
     "test:e2e:auth": "firebase emulators:exec --only firestore,auth --project gestao-de-ferramentas-3f8f1 \"playwright test --config playwright.auth.config.js\"",
     "test:responsive": "playwright test --reporter=line",
     "test:responsive:list": "playwright test --list --reporter=line",
