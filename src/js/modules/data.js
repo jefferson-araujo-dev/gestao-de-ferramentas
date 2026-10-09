@@ -95,6 +95,7 @@ export const AppData = {
   toolsLoaded: false,
   toolsError: false,
   usersLoaded: false,
+  usersError: false,
   collaboratorsLoaded: false,
   collaboratorsError: false,
   allHistoryLogs: null,
@@ -121,6 +122,7 @@ export const AppData = {
     this.toolsLoaded = false;
     this.toolsError = false;
     this.usersLoaded = false;
+    this.usersError = false;
     this.collaboratorsLoaded = false;
     this.collaboratorsError = false;
   },
@@ -129,6 +131,7 @@ export const AppData = {
     this.toolsLoaded = false;
     this.toolsError = false;
     this.usersLoaded = false;
+    this.usersError = false;
     this.collaboratorsLoaded = false;
     this.collaboratorsError = false;
     window.App.UI.renderAll();
@@ -166,6 +169,7 @@ export const AppData = {
               .map((d) => ({ firebaseId: d.id, ...d.data() }))
               .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
             this.usersLoaded = true;
+            this.usersError = false;
             if (window.App.UI.activeTab === 'users') {
               window.App.CRUDUsers.render();
             }
@@ -174,6 +178,8 @@ export const AppData = {
           (err) => {
             this.users = [];
             this.usersLoaded = true;
+            // Sinal de UI: a tela distingue "falhou ao carregar" de "nenhum usuário cadastrado".
+            this.usersError = true;
             window.Logger.warn('Erro ao carregar usuarios', err);
             if (window.App.UI.activeTab === 'users') {
               window.App.CRUDUsers.render();

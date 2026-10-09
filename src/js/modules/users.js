@@ -1,5 +1,20 @@
 import { auth } from '../app.js';
 import { formatDateTime } from '../utils/dateFormat.js';
+import {
+  Alert,
+  Badge,
+  Button,
+  EmptyState,
+  SkeletonCard,
+  StatusBadge
+} from '../components/index.js';
+
+// Status persistido do usuário -> vocabulário único de status do design system (STATUS_MAP).
+// Valor desconhecido segue como texto em badge neutro (comportamento do StatusBadge).
+const USER_STATUS_KEY = Object.freeze({ Ativo: 'active', Inativo: 'inactive' });
+
+const FILTER_BUTTON_CLASS = 'ui-btn ui-btn--sm';
+const ACTION_BUTTON_CLASS = 'ui-icon-btn ui-icon-btn--ghost';
 
 async function requestUsersApi(endpoint, method, body) {
   const currentUser = auth.currentUser;
@@ -373,17 +388,10 @@ export const AppCRUDUsers = {
   setAccessFilter: function (filter) {
     this.currentAccessFilter = filter;
 
-    document.querySelectorAll('#users-filters .filter-btn').forEach((btn) => {
-      const filterValue = btn.dataset.filter;
-      if (filterValue === filter) {
-        btn.classList.add('active');
-        btn.className =
-          'filter-btn active px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border bg-brand-600 text-white border-brand-600';
-      } else {
-        btn.classList.remove('active');
-        btn.className =
-          'filter-btn px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300';
-      }
+    document.querySelectorAll('#users-filters [data-filter]').forEach((btn) => {
+      const isSelected = btn.dataset.filter === filter;
+      btn.className = `${FILTER_BUTTON_CLASS} ${isSelected ? 'ui-btn--primary' : 'ui-btn--secondary'}`;
+      btn.setAttribute('aria-pressed', String(isSelected));
     });
 
     this.render();
@@ -401,8 +409,28 @@ export const AppCRUDUsers = {
     if (!list) {
       return;
     }
+    const feedback = document.getElementById('users-feedback');
+    if (feedback) {
+      feedback.innerHTML = '';
+    }
     if (!window.App.Data.usersLoaded) {
-      list.innerHTML = Array(6).fill(window.Utils.getSkeletonHTML()).join('');
+      list.setAttribute('aria-busy', 'true');
+      list.innerHTML = Array(6).fill(SkeletonCard()).join('');
+      return;
+    }
+    list.removeAttribute('aria-busy');
+
+    // Falha ao carregar: aviso persistente e distinto de "nenhum usuário cadastrado".
+    if (window.App.Data.usersError) {
+      if (feedback) {
+        feedback.innerHTML = Alert({
+          tone: 'danger',
+          title: 'Não foi possível carregar os usuários',
+          message:
+            'Verifique a conexão e recarregue a página. Se o problema continuar, procure um administrador.'
+        });
+      }
+      list.innerHTML = '';
       return;
     }
 
@@ -417,7 +445,7 @@ export const AppCRUDUsers = {
       return;
     }
     list.innerHTML = paginated.users
-      .map((u, idx) => {
+      .map((u) => {
         const accessLevel = this.getAccessLevel(u);
         const status = this.getStatus(u);
         const safeName = window.Utils.escapeHTML(u.name || 'Sem nome');
@@ -426,36 +454,27 @@ export const AppCRUDUsers = {
         const isProtected = this.isProtectedUser(u);
         const isAdmin = accessLevel === 'Administrador';
         const isActive = status === 'Ativo';
-        const dotColor = isActive ? 'bg-emerald-500' : 'bg-rose-500';
         const disabledAttr = isProtected ? 'disabled' : '';
-        const roleBadge = isAdmin
-          ? 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800'
-          : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
-        const statusBadge = isActive
-          ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800'
-          : 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800';
-        const statusBtnHoverCls = isActive
-          ? 'hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-800'
-          : 'hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-800';
-        const avatarBg = isAdmin
-          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-          : 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400';
+        const statusLabel = isActive ? 'Desativar conta' : 'Ativar conta';
+        const avatarTone = isAdmin
+          ? 'bg-info-subtle text-info'
+          : 'bg-accent-subtle text-accent-text';
 
         const loginDetails = u.lastLogin
           ? `
           <div class="space-y-1 mt-1">
             ${
   u.lastIp
-    ? `<div class="flex items-center gap-1 text-[9px] text-slate-400" title="Endereço IP do dispositivo">
-              <svg class="w-3 h-3 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 18H2"/><path d="M18 18h4"/><path d="M6 14v4"/><path d="M18 14v4"/></svg>
+    ? `<div class="flex items-center justify-end gap-1 text-caption text-text-muted" title="Endereço IP do dispositivo">
+              <svg class="w-3 h-3 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 18H2"/><path d="M18 18h4"/><path d="M6 14v4"/><path d="M18 14v4"/></svg>
               <span class="truncate">${window.Utils.escapeHTML(u.lastIp)}</span>
             </div>`
     : ''
 }
             ${
   u.lastDevice
-    ? `<div class="flex items-center gap-1 text-[9px] text-slate-400" title="Dispositivo utilizado no login">
-              <svg class="w-3 h-3 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></svg>
+    ? `<div class="flex items-center justify-end gap-1 text-caption text-text-muted" title="Dispositivo utilizado no login">
+              <svg class="w-3 h-3 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></svg>
               <span class="truncate">${window.Utils.escapeHTML(u.lastDevice)}</span>
             </div>`
     : ''
@@ -464,48 +483,46 @@ export const AppCRUDUsers = {
         `
           : '';
 
-        return `<div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-4 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group animate-fade-in opacity-0" style="animation-delay: ${Math.min(idx * 30, 500)}ms; animation-fill-mode: forwards;">
-          <div class="absolute top-0 left-0 w-1 h-full ${dotColor} opacity-75" title="Indicador visual de status"></div>
-          <div class="flex items-start gap-4 pl-2">
-            <div class="w-12 h-12 rounded-xl ${avatarBg} flex items-center justify-center shrink-0 font-bold text-sm" title="${safeName}">${initials}</div>
+        return `<article class="ui-card p-4 flex flex-col gap-4 min-w-0">
+          <div class="flex items-start gap-3">
+            <div class="w-12 h-12 rounded-ui-md ${avatarTone} flex items-center justify-center shrink-0 font-bold text-body" title="${safeName}" aria-hidden="true">${initials}</div>
             <div class="flex-1 min-w-0">
-              <h3 class="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="Nome completo">${safeName}</h3>
-              <p class="text-[11px] font-medium text-slate-500 truncate mt-0.5" title="Endereço de email">${safeEmail}</p>
+              <h3 class="text-body font-semibold text-text-primary truncate" title="Nome completo">${safeName}</h3>
+              <p class="text-caption text-text-secondary truncate mt-0.5" title="Endereço de email">${safeEmail}</p>
             </div>
           </div>
-          <div class="border-t border-slate-100 dark:border-slate-800 ml-2"></div>
-          <div class="flex flex-col gap-3 pl-2">
-            <div class="flex justify-between items-center">
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest" title="Nível de acesso do usuário"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-0.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Acesso</span>
-              <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold border uppercase tracking-wider ${roleBadge}" title="Nível de permissão">${window.Utils.escapeHTML(accessLevel)}</span>
+          <dl class="flex flex-col gap-3 pt-4 border-t border-border">
+            <div class="flex justify-between items-center gap-4">
+              <dt class="text-label text-text-secondary" title="Nível de acesso do usuário">Acesso</dt>
+              <dd title="Nível de permissão">${Badge({ label: accessLevel, tone: isAdmin ? 'info' : 'neutral' })}</dd>
             </div>
-            <div class="flex justify-between items-center">
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest" title="Status atual do usuário"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-0.5"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg> Status</span>
-              <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-bold border uppercase tracking-wider ${statusBadge}" title="Status ativo ou inativo">${window.Utils.escapeHTML(status)}</span>
+            <div class="flex justify-between items-center gap-4">
+              <dt class="text-label text-text-secondary" title="Status atual do usuário">Status</dt>
+              <dd title="Status ativo ou inativo">${StatusBadge(USER_STATUS_KEY[status] ?? status)}</dd>
             </div>
-            <div class="flex justify-between items-start gap-4 mt-1">
-              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest" title="Informações detalhadas do último login"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-0.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Último Login</span>
-              <div class="text-right flex flex-col items-end">
-                <div class="text-[10px] font-bold text-slate-600 dark:text-slate-300" title="Data e hora exata do último acesso">${this.formatLastLogin(u.lastLogin)}</div>
+            <div class="flex justify-between items-start gap-4">
+              <dt class="text-label text-text-secondary" title="Informações detalhadas do último login">Último Login</dt>
+              <dd class="text-right min-w-0">
+                <div class="text-caption text-text-primary tabular-nums" title="Data e hora exata do último acesso">${this.formatLastLogin(u.lastLogin)}</div>
                 ${loginDetails}
-              </div>
+              </dd>
             </div>
+          </dl>
+          <div class="grid grid-cols-4 gap-2 justify-items-center">
+            <button type="button" onclick="App.CRUDUsers.openModal('${u.firebaseId}')" class="${ACTION_BUTTON_CLASS}" aria-label="Editar dados do usuário" title="Editar dados do usuário">
+              <svg class="ui-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+            </button>
+            <button type="button" onclick="App.CRUDUsers.toggleRole('${u.firebaseId}')" ${disabledAttr} class="${ACTION_BUTTON_CLASS}" aria-label="Alterar permissão de acesso" title="Alterar permissão de acesso">
+              <svg class="ui-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+            </button>
+            <button type="button" onclick="App.CRUDUsers.toggleStatus('${u.firebaseId}')" ${disabledAttr} class="${ACTION_BUTTON_CLASS}" aria-label="${statusLabel}" title="${statusLabel}">
+              <svg class="ui-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${isActive ? '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/>' : '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>'}</svg>
+            </button>
+            <button type="button" onclick="App.CRUDUsers.deleteUser('${u.firebaseId}')" ${disabledAttr} class="${ACTION_BUTTON_CLASS} ui-icon-btn--danger" aria-label="Excluir permanentemente" title="Excluir permanentemente">
+              <svg class="ui-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
           </div>
-          <div class="flex gap-1.5 mt-2">
-            <button onclick="App.CRUDUsers.openModal('${u.firebaseId}')" class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" title="Editar dados do usuário">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
-            </button>
-            <button onclick="App.CRUDUsers.toggleRole('${u.firebaseId}')" ${disabledAttr} class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-brand-50 dark:hover:bg-brand-900/30 hover:text-brand-600 dark:hover:text-brand-400 hover:border-brand-200 dark:hover:border-brand-800 transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" title="Alterar permissão de acesso">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
-            </button>
-            <button onclick="App.CRUDUsers.toggleStatus('${u.firebaseId}')" ${disabledAttr} class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 ${statusBtnHoverCls} transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" title="${isActive ? 'Desativar conta' : 'Ativar conta'}">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4">${isActive ? '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/>' : '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>'}</svg>
-            </button>
-            <button onclick="App.CRUDUsers.deleteUser('${u.firebaseId}')" ${disabledAttr} class="flex-1 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-800 transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" title="Excluir permanentemente">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
-          </div>
-        </div>`;
+        </article>`;
       })
       .join(' ');
 
@@ -523,26 +540,22 @@ export const AppCRUDUsers = {
       pages.push(i);
     }
 
+    const pageButton = (page) =>
+      `<button type="button" onclick="App.CRUDUsers.setPage(${page})" class="ui-btn ui-btn--sm ${page === currentPage ? 'ui-btn--primary' : 'ui-btn--secondary'}"${page === currentPage ? ' aria-current="page"' : ''}><span class="ui-btn__label">${page}</span></button>`;
+    const ellipsis = '<span class="text-text-muted px-2" aria-hidden="true">...</span>';
+
     return `
-      <div class="col-span-full flex items-center justify-center gap-2 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-        <button onclick="App.CRUDUsers.setPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="px-3 py-2 rounded-xl text-xs font-semibold transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200">
-          ← Anterior
+      <nav class="col-span-full flex flex-wrap items-center justify-center gap-2 mt-6 pt-4 border-t border-border" aria-label="Paginação de usuários">
+        <button type="button" onclick="App.CRUDUsers.setPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="ui-btn ui-btn--secondary ui-btn--sm">
+          <span class="ui-btn__label">← Anterior</span>
         </button>
-        ${startPage > 1 ? `<button onclick="App.CRUDUsers.setPage(1)" class="px-3 py-2 rounded-xl text-xs font-semibold border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300">1</button>${pages[0] > 2 ? '<span class="text-slate-400 px-2">...</span>' : ''}` : ''}
-        ${pages
-    .map(
-      (p) => `
-          <button onclick="App.CRUDUsers.setPage(${p})" class="px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${p === currentPage ? 'bg-brand-600 text-white border-brand-600' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300'}">
-            ${p}
-          </button>
-        `
-    )
-    .join('')}
-        ${endPage < totalPages ? `${pages[pages.length - 1] < totalPages - 1 ? '<span class="text-slate-400 px-2">...</span>' : ''}<button onclick="App.CRUDUsers.setPage(${totalPages})" class="px-3 py-2 rounded-xl text-xs font-semibold border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300">${totalPages}</button>` : ''}
-        <button onclick="App.CRUDUsers.setPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="px-3 py-2 rounded-xl text-xs font-semibold transition-all border bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200">
-          Próximo →
+        ${startPage > 1 ? `${pageButton(1)}${pages[0] > 2 ? ellipsis : ''}` : ''}
+        ${pages.map((p) => pageButton(p)).join('')}
+        ${endPage < totalPages ? `${pages[pages.length - 1] < totalPages - 1 ? ellipsis : ''}${pageButton(totalPages)}` : ''}
+        <button type="button" onclick="App.CRUDUsers.setPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="ui-btn ui-btn--secondary ui-btn--sm">
+          <span class="ui-btn__label">Próximo →</span>
         </button>
-      </div>
+      </nav>
     `;
   },
   openModal: function (id = null) {
@@ -946,44 +959,30 @@ export const AppCRUDUsers = {
       document.getElementById('users-search')?.value ||
       this.currentSort !== 'name';
 
-    return `
-      <div class="col-span-full p-12 flex flex-col items-center justify-center text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 animate-fade-in">
-        <div class="w-24 h-24 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-12 h-12 text-slate-400">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <line x1="17" x2="22" y1="8" y2="13"/>
-            <line x1="22" x2="17" y1="8" y2="13"/>
-          </svg>
-        </div>
-        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">
-          ${hasFilters ? 'Nenhum usuário encontrado' : 'Nenhum usuário cadastrado'}
-        </h3>
-        <p class="text-slate-500 dark:text-slate-400 max-w-md mb-6">
-          ${
-  hasFilters
-    ? 'Tente ajustar os filtros ou termos de busca para encontrar o que procura.'
-    : 'Comece cadastrando o primeiro usuário do sistema.'
-}
-        </p>
-        ${
-  !hasFilters
-    ? `
-          <button onclick="App.CRUDUsers.openModal()" class="px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl shadow-lg shadow-brand-600/30 transition-all active:scale-95 flex items-center gap-2">
-            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M5 12h14"/><path d="M12 5v14"/>
-            </svg>
-            Cadastrar Primeiro Usuário
-          </button>
-        `
-    : `
-          <button onclick="App.CRUDUsers.setAccessFilter('all'); document.getElementById('users-search').value = ''; App.CRUDUsers.applyFilters();" class="px-6 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-all">
-            Limpar Filtros
-          </button>
-        `
-}
-      </div>
-    `;
+    // EmptyState fica dentro da grade da lista: ocupa todas as colunas.
+    return EmptyState({
+      title: hasFilters ? 'Nenhum usuário encontrado' : 'Nenhum usuário cadastrado',
+      description: hasFilters
+        ? 'Tente ajustar os filtros ou termos de busca para encontrar o que procura.'
+        : 'Comece cadastrando o primeiro usuário do sistema.',
+      icon: hasFilters ? 'icon-search' : 'icon-users',
+      className: 'col-span-full',
+      action: hasFilters
+        ? Button({
+          label: 'Limpar Filtros',
+          variant: 'secondary',
+          attributes: {
+            onclick:
+              "App.CRUDUsers.setAccessFilter('all'); document.getElementById('users-search').value = ''; App.CRUDUsers.applyFilters();"
+          }
+        })
+        : Button({
+          label: 'Cadastrar Primeiro Usuário',
+          variant: 'primary',
+          icon: 'icon-plus',
+          attributes: { onclick: 'App.CRUDUsers.openModal()' }
+        })
+    });
   },
   exportExcel: async function () {
     if (!window.XLSX) {

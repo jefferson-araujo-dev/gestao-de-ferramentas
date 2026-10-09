@@ -204,7 +204,6 @@ body,
 
 /* Camada de sobriedade visual para reduzir disputa entre filtros, cards e ações secundárias. */
 #quick-filters .quick-filter-btn,
-#users-filters .filter-btn,
 .sort-btn {
   background-color: var(--color-surface) !important;
   border-color: var(--color-border) !important;
@@ -214,21 +213,18 @@ body,
 }
 
 #quick-filters .quick-filter-btn:hover,
-#users-filters .filter-btn:hover,
 .sort-btn:hover {
   border-color: #cbd5e1 !important;
   background-color: #f8fafc !important;
 }
 
 .dark #quick-filters .quick-filter-btn:hover,
-.dark #users-filters .filter-btn:hover,
 .dark .sort-btn:hover {
   border-color: #475569 !important;
   background-color: #1e293b !important;
 }
 
 #quick-filters .quick-filter-btn.active,
-#users-filters .filter-btn.active,
 .sort-btn.active {
   background-color: #eff6ff !important;
   border-color: #bfdbfe !important;
@@ -237,7 +233,6 @@ body,
 }
 
 .dark #quick-filters .quick-filter-btn.active,
-.dark #users-filters .filter-btn.active,
 .dark .sort-btn.active {
   background-color: rgba(30, 64, 175, 0.22) !important;
   border-color: rgba(147, 197, 253, 0.36) !important;
@@ -734,16 +729,6 @@ body,
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* User counter cards */
-#users-counters > div {
-  transition: all 0.3s ease;
-}
-
-#users-counters > div:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
 /* Avatar initials */
 .w-12.h-12.rounded-xl {
   transition: all 0.2s ease;
@@ -751,16 +736,6 @@ body,
 
 .w-12.h-12.rounded-xl:hover {
   transform: scale(1.05);
-}
-
-/* User card hover improvements */
-#user-management-body > div {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-#user-management-body > div:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
 }
 
 /* Sort buttons */
