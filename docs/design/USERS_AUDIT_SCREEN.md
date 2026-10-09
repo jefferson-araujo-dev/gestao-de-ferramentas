@@ -858,6 +858,7 @@ aprovado:
    da Vercel.
 3. **1-F4.D** — Redesign visual das telas de Usuários (A.3) e Auditoria (B.2), sem mudança de
    comportamento — etapa posterior à conclusão de 1-F4.C.
+   **Status 1-F4.D1 (Usuários, A.3): implementado em commits locais, revisão visual humana pendente; Auditoria (B.2) não iniciada.**
 4. **1-F4.E** — Implementação da gestão do perfil Restrito pelo Administrador (C.4: criação e edição,
    com os testes negativos e de regressão especificados), se aprovada — etapa posterior.
 5. **1-F4.F** — Implementação da trilha de auditoria administrativa (D.2), se aprovada — depende de
