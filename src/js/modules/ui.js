@@ -2,11 +2,15 @@ import { notifications } from '../core/NotificationManager.js';
 import { metrics } from '../core/MetricsManager.js';
 import { Router } from '../core/Router.js';
 import {
+  Alert,
   Button,
   Dropdown,
+  EmptyState,
   Search,
   Select,
+  SkeletonCard,
   StatCard,
+  StatusBadge,
   confirmDialog,
   initModals
 } from '../components/index.js';
@@ -885,9 +889,36 @@ export const AppUI = {
     if (!window.App.Data.history) {
       return;
     }
+    const feedback = document.getElementById('history-feedback');
+    if (feedback) {
+      feedback.innerHTML = '';
+    }
+    // Precedência: ERRO > CARREGANDO > VAZIO > LISTA. Com falha de carga allHistoryLogs continua
+    // null, então o erro precisa ser avaliado antes do carregando.
+    if (window.App.Data.historyError) {
+      list.removeAttribute('aria-busy');
+      if (feedback) {
+        feedback.innerHTML = Alert({
+          tone: 'danger',
+          title: 'Não foi possível carregar a auditoria',
+          message:
+            'Verifique a conexão e recarregue a página. Se o problema continuar, procure um administrador.'
+        });
+      }
+      list.innerHTML = '';
+      return;
+    }
+    if (window.App.Data.allHistoryLogs === null) {
+      list.setAttribute('aria-busy', 'true');
+      list.innerHTML = Array(6).fill(SkeletonCard()).join('');
+      return;
+    }
+    list.removeAttribute('aria-busy');
     const q = window.Utils.removeAccents(
       document.getElementById('history-search')?.value || ''
     ).toLowerCase();
+    const hasFilters =
+      q !== '' || (document.getElementById('history-time-filter')?.value || 'all') !== 'all';
     const filtered = window.App.Data.history.filter(
       (log) =>
         window.Utils.removeAccents(String(log.toolName || ''))
@@ -901,20 +932,34 @@ export const AppUI = {
           .includes(q)
     );
     if (!filtered.length) {
-      list.innerHTML = window.Utils.getEmptyStateHTML('Nenhum log para os critérios.');
+      // "Limpar filtros" só restaura os controles e dispara os mesmos eventos que eles disparam.
+      list.innerHTML = EmptyState({
+        title: 'Nenhum log para os critérios.',
+        icon: hasFilters ? 'icon-search' : 'icon-inbox',
+        className: 'col-span-full',
+        action: hasFilters
+          ? Button({
+            label: 'Limpar filtros',
+            variant: 'secondary',
+            attributes: {
+              onclick:
+                "const s = document.getElementById('history-search'), t = document.getElementById('history-time-filter'); s.value = ''; t.value = 'all'; s.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true }));"
+            }
+          })
+          : ''
+      });
       return;
     }
     list.innerHTML = filtered
-      .map((log, idx) => {
+      .map((log) => {
         const logType = String(log.type || '').toLowerCase();
-        const accentClass =
-          logType === 'in' ? 'bg-emerald-500' : logType === 'out' ? 'bg-sky-500' : 'bg-slate-400';
+        const accentClass = logType === 'in' ? 'bg-success' : logType === 'out' ? 'bg-info' : 'bg-text-muted';
         const iconWrapClass =
           logType === 'in'
-            ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+            ? 'bg-success-subtle text-success'
             : logType === 'out'
-              ? 'border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400'
-              : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400';
+              ? 'bg-info-subtle text-info'
+              : 'bg-surface-muted text-text-secondary';
         const safeToolName = window.Utils.escapeHTML(log.toolName || 'Ferramenta não informada');
         const safeToolCode = window.Utils.escapeHTML(log.toolCode || '-');
         const safeUser = window.Utils.escapeHTML(log.user || 'Sistema');
@@ -924,7 +969,22 @@ export const AppUI = {
             .split(' / ')[0]
             .trim() || 'Dispositivo não informado'
         );
-        return `<div class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-4 hover:shadow-md transition-shadow relative overflow-hidden group animate-fade-in opacity-0" style="animation-delay: ${Math.min(idx * 30, 500)}ms; animation-fill-mode: forwards;"><div class="absolute top-0 left-0 w-1 h-full ${accentClass} opacity-75"></div><div class="flex items-start gap-4 pl-2"><div class="w-12 h-12 rounded-xl border ${iconWrapClass} flex items-center justify-center shrink-0"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></div><div class="flex-1 min-w-0"><h4 class="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base leading-tight truncate" title="${safeToolName}">${safeToolName}</h4><div class="flex items-center gap-1.5 mt-1.5"><span class="w-2 h-2 rounded-full ${accentClass}"></span><p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">Patrimônio: ${safeToolCode}</p></div></div></div><div class="border-t border-slate-100 dark:border-slate-800 ml-2"></div><div class="flex flex-col gap-3 pl-2"><div class="flex justify-between items-center gap-3"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Movimentação</span><div class="text-right">${window.Utils.getBadgeHTML(log.type)}</div></div><div class="flex justify-between items-center gap-4"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Responsável</span><div class="text-right text-sm font-bold text-slate-700 dark:text-slate-300 truncate max-w-[170px]" title="${safeUser}">${safeUser}</div></div><div class="flex justify-between items-start gap-4"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Data</span><div class="text-right text-[10px] font-bold text-slate-600 dark:text-slate-300">${window.Utils.formatDate(log.date)}</div></div><div class="flex justify-between items-start gap-4"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Origem</span><div class="text-right flex flex-col items-end"><span class="text-[9px] text-slate-500 dark:text-slate-400 truncate max-w-[170px]" title="IP: ${safeIp} | Disp: ${safeDevice}">${safeIp}</span><span class="text-[9px] text-slate-400 mt-0.5 truncate max-w-[170px]">${safeDevice}</span></div></div></div></div>`;
+        return `<article class="ui-card relative overflow-hidden p-4 pl-5 flex flex-col gap-4 min-w-0">
+          <div class="absolute top-0 left-0 w-1 h-full ${accentClass}" aria-hidden="true"></div>
+          <div class="flex items-start gap-3">
+            <div class="w-12 h-12 rounded-ui-md ${iconWrapClass} flex items-center justify-center shrink-0" aria-hidden="true"><svg class="ui-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-body font-semibold text-text-primary truncate" title="${safeToolName}">${safeToolName}</h3>
+              <p class="text-caption text-text-secondary truncate mt-0.5">Patrimônio: ${safeToolCode}</p>
+            </div>
+          </div>
+          <dl class="flex flex-col gap-3 pt-4 border-t border-border">
+            <div class="flex justify-between items-center gap-3"><dt class="text-label text-text-secondary">Movimentação</dt><dd>${StatusBadge(log.type)}</dd></div>
+            <div class="flex justify-between items-center gap-4"><dt class="text-label text-text-secondary">Responsável</dt><dd class="text-body font-medium text-text-primary text-right min-w-0 truncate" title="${safeUser}">${safeUser}</dd></div>
+            <div class="flex justify-between items-start gap-4"><dt class="text-label text-text-secondary">Data</dt><dd class="text-caption text-text-primary text-right tabular-nums">${window.Utils.formatDate(log.date)}</dd></div>
+            <div class="flex justify-between items-start gap-4"><dt class="text-label text-text-secondary">Origem</dt><dd class="text-right min-w-0 flex flex-col items-end"><span class="text-caption text-text-secondary truncate max-w-full" title="IP: ${safeIp} | Disp: ${safeDevice}">${safeIp}</span><span class="text-caption text-text-muted truncate max-w-full">${safeDevice}</span></dd></div>
+          </dl>
+        </article>`;
       })
       .join(' ');
   },

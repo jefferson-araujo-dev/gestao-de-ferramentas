@@ -98,6 +98,7 @@ export const AppData = {
   usersError: false,
   collaboratorsLoaded: false,
   collaboratorsError: false,
+  historyError: false,
   allHistoryLogs: null,
   destroyListeners: function () {
     this.listeners.forEach((u) => {
@@ -125,6 +126,7 @@ export const AppData = {
     this.usersError = false;
     this.collaboratorsLoaded = false;
     this.collaboratorsError = false;
+    this.historyError = false;
   },
   init: function (permissions) {
     this.destroyListeners();
@@ -134,6 +136,7 @@ export const AppData = {
     this.usersError = false;
     this.collaboratorsLoaded = false;
     this.collaboratorsError = false;
+    this.historyError = false;
     window.App.UI.renderAll();
 
     if (permissions?.canReadTools === true) {
@@ -242,9 +245,17 @@ export const AppData = {
           firebaseId: d.id,
           ...d.data()
         }));
+        this.historyError = false;
         this.processAndRenderHistory();
       },
-      (err) => window.Logger.error('Erro ao carregar historico.', err)
+      (err) => {
+        // Sinal de UI: a tela distingue "falhou ao carregar" de "nenhum registro".
+        this.historyError = true;
+        window.Logger.error('Erro ao carregar historico.', err);
+        if (window.App.UI.activeTab === 'history') {
+          window.App.UI.renderHistory();
+        }
+      }
     );
     this.listeners.push(this.historyUnsub);
   },
