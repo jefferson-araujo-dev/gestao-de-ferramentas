@@ -81,10 +81,9 @@ describe('tela Usuários: contratos preservados', () => {
     assert.equal((partial.match(/data-filter="/g) || []).length, 5);
   });
 
-  test('filtro "Usuários Padrão": comportamento atual preservado (Gate 1-F4.D1, D3)', () => {
-    // O botão passa o valor sem acento e o filtro compara com acento: hoje ninguém é removido.
-    // A correção pertence a um Gate próprio; este teste falha se ela vier junto com o redesign.
-    assert.match(partial, /setAccessFilter\('Usuario Padrao'\)/);
+  test('filtro "Usuários Padrão": botão e filtro usam o mesmo valor, com acento (1-F4.D1-FIX1)', () => {
+    assert.match(partial, /setAccessFilter\('Usuário Padrão'\)/);
+    assert.match(partial, /data-filter="Usuário Padrão"/);
     assert.match(users, /this\.currentAccessFilter === 'Usuário Padrão'/);
   });
 

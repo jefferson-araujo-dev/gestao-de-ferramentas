@@ -39,7 +39,7 @@ test.describe('Usuários: invariantes de comportamento', () => {
     await expect(page.locator('#count-users')).toHaveText('2');
   });
 
-  test('invariante: filtros de acesso, inclusive "Usuários Padrão" (mostra todos, comportamento atual)', async ({
+  test('invariante: filtros de acesso, inclusive "Usuários Padrão" (só os de nível padrão)', async ({
     page,
   }) => {
     await openUsers(page);
@@ -47,10 +47,8 @@ test.describe('Usuários: invariantes de comportamento', () => {
     await filterButton(page, 'Administrador').click();
     await expectNames(page, [E2E_USERS.admin.name]);
 
-    // O botão passa 'Usuario Padrao' (sem acento) e o filtro compara 'Usuário Padrão': hoje nenhum
-    // usuário é removido. Preservado de propósito (Gate 1-F4.D1, D3); correção em Gate próprio.
-    await filterButton(page, 'Usuario Padrao').click();
-    await expectNames(page, ALL_NAMES);
+    await filterButton(page, 'Usuário Padrão').click();
+    await expectNames(page, [E2E_USERS.standard.name, E2E_USERS.restricted.name]);
 
     await filterButton(page, 'Inativo').click();
     await expect(list(page)).toContainText('Nenhum usuário encontrado');
