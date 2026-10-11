@@ -15,7 +15,7 @@ import {
   executeRestore,
   hashData,
 } from '../../server/backup-operations.js';
-import { buildBackupV4 } from '../../src/js/utils/backupContract.js';
+import { buildBackupV4, normalizeBackup } from '../../src/js/utils/backupContract.js';
 import { BASE_PATH, FakeFirestore } from './helpers/fakeFirestore.mjs';
 
 const SENTINEL = 'Fulano Sentinela';
@@ -259,6 +259,32 @@ describe('backup-operations - restore', () => {
     assert.equal(JSON.stringify(db.dump('users')), usersBefore);
     assert.equal(db.dump('users').some((d) => d.id === 'legacy-user-1'), false);
     assert.equal(db.commits[0].paths.some((p) => p.endsWith('/users')), false);
+  });
+
+  test('restore do legado 3.0 sobre estado ja migrado: 1 commit, so sets, users intacta, sem e-mail legado', async () => {
+    const { backup } = normalizeBackup(makeLegacy());
+    const toDocs = (records) =>
+      records.map((record) => {
+        const data = { ...record };
+        delete data.id;
+        return { id: record.id, data };
+      });
+    const db = new FakeFirestore({
+      tools: toDocs(backup.data.tools),
+      collaborators: toDocs(backup.data.collaborators),
+      history: toDocs(backup.data.history),
+      users: currentState().users,
+    });
+    const usersBefore = JSON.stringify(db.dump('users'));
+    const result = await executeRestore({ db, input: makeLegacy() });
+
+    assert.deepEqual(result.mutations, { sets: 5, deletes: 0, total: 5 });
+    assert.equal(result.legacyAdapted, true);
+    assert.equal(result.statusDefaulted, 2);
+    assert.equal(db.commits.length, 1);
+    assert.equal(db.commits[0].paths.some((p) => p.endsWith('/users')), false);
+    assert.equal(JSON.stringify(db.dump('users')), usersBefore);
+    assert.equal(JSON.stringify(result).includes('legado@example.test'), false);
   });
 
   test('backup invalido: 422 e nenhuma escrita', async () => {
