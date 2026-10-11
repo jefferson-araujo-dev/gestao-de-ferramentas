@@ -28,11 +28,14 @@ Ela NÃO substitui a revisão server-side.
 Firebase Admin SDK ignora Firestore Security Rules.
 
 Quando uma funcionalidade também passar por Vercel Functions/Admin SDK,
-acionar adicionalmente:
+registrar no REPORT que a revisão server-side é necessária e usar, somente se o
+Gate a listar:
 
 `firebase-admin-vercel-api`
 
-Quando houver dados pessoais, tokens, logs ou credenciais, acionar:
+Quando houver dados pessoais, tokens, logs ou credenciais, aplicar a redaction
+de `secret-pii-hygiene` (usar a skill somente se o Gate a listar; sem ela,
+seguir o `AGENTS.md` e o `CLAUDE.md`):
 
 `secret-pii-hygiene`
 
@@ -153,6 +156,14 @@ As Rules atuais possuem contratos diferentes para:
 Por exemplo, o acesso ao próprio documento em `users` deve ser auditado
 separadamente do acesso às coleções operacionais.
 
+CONFIRMADO em a4fa134 (`firestore.rules:13-17` e `:32-37`): o `get` do próprio
+documento em `users` exige apenas `signedIn()` e `userId == request.auth.uid`,
+sem `hasActiveProfile()`. Portanto um usuário Inativo lê o próprio perfil.
+`tools`, `collaborators` e `history` dependem de `hasActiveProfile()` (por
+`canReadCollaborators()` ou `isAdmin()`), e o Inativo é negado neles. Retirar
+essa leitura do próprio perfil exige antes ler o fluxo de login em
+`src/js/modules/auth.js`. Revalidar no arquivo vigente.
+
 ---
 
 ## Anônimo
@@ -242,6 +253,25 @@ Auditar separadamente:
 Não inferir que `hasActiveProfile()` é usado em todos os casos apenas porque
 a função existe.
 
+CONFIRMADO em a4fa134 (`firestore.rules:32-37`): `get` é permitido ao próprio
+uid ou a Admin ativo; `list` somente a Admin ativo; `create`, `update` e
+`delete` são `if false` para TODOS os perfis, inclusive o Administrador. Toda
+escrita em `users` passa pelas APIs (Admin SDK). Para os testes, o resultado
+esperado de qualquer escrita de cliente em `users` é DENY por
+`permission-denied`, em todos os perfis. Um teste que espere ALLOW para Admin
+está errado, ou o contrato mudou e isso precisa de decisão.
+
+`isRestricted`, CONFIRMADO em a4fa134: nenhum endpoint grava `true`
+(`api/users/create.js:112` grava `false`; `api/users/update.js` usa `update()`
+com campos fixos e preserva a flag; `docs/design/USERS_AUDIT_SCREEN.md` registra
+o mesmo). Como um perfil passa a Restrito fora do repositório é NAO_DETERMINADO.
+A Rule usa `get('isRestricted', false) != true`, o servidor usa `=== true`
+(`api/tools/movement.js:80`) e o cliente usa `=== true`
+(`src/js/modules/auth.js:266`): só o booleano `true` restringe, em todas as
+camadas. Um valor de outro tipo (string `"true"`, número) conta como NÃO
+restrito, isto é, falha aberta quanto ao tipo. Ao criar ou corrigir um perfil
+Restrito, a flag precisa ser booleana. Esse caso entra na matriz da seção 19.
+
 ### Escalonamento de privilégio (obrigatório)
 
 A coleção `users` é o ponto mais sensível: quem escreve nela altera a
@@ -299,6 +329,19 @@ O contrato atual diferencia:
 
 Movimentação oficial de empréstimo/devolução passa pela API/Admin SDK.
 
+CONFIRMADO em a4fa134 (`firestore.rules:39-66`): o congelamento com a ferramenta
+`borrowed` cobre exatamente `status` (por `isBorrowed`), `currentCollaboratorId`,
+`currentUser` e `lastAction`. Os demais campos, inclusive `lastMaintenance`,
+`nextMaintenance`, `lastMaintenanceNotes` e `lastMaintenanceBy`, continuam
+editáveis por Admin com a ferramenta emprestada (decisão registrada no comentário
+das Rules). Fora de `borrowed`, as Rules NÃO validam o valor de `status` nem o
+tipo dos campos: o domínio `available`, `borrowed`, `maintenance` é validado no
+cliente (`src/js/core/Validator.js:322`) e não nas Rules. Registrar como achado
+de baixo risco (só Admin escreve), não como defeito a corrigir fora de Gate. Um
+`status` fora do domínio deixa a ferramenta fora das transições de
+`api/tools/movement.js` (empréstimo exige `available`, devolução exige
+`borrowed`).
+
 ---
 
 ## collaborators
@@ -320,6 +363,18 @@ afirmar; atualmente Admin possui permissão.
 Não presumir acesso pelo cliente para qualquer perfil.
 
 Verificar especificamente leitura e escrita de Admin e negação dos demais.
+
+CONFIRMADO em a4fa134 (`firestore.rules:73-75`): `allow read, write: if isAdmin()`.
+`write` inclui `update` e `delete`: um Administrador, pelo cliente, pode alterar
+ou apagar registros de `history`. As Rules não impõem append-only; o invariante
+de histórico imutável de `tool-loan-integrity` vale para os endpoints, não para
+o cliente Admin. O cliente usa essa permissão hoje só para a limpeza de
+registros antigos (`src/js/modules/data.js:415`). `logAction` e `updateTool`
+(`data.js:302-326`), que gravariam histórico pelo cliente, não têm chamadores
+em a4fa134 (busca em `src/` e `tests/`). Restringir a escrita em `history` é
+mudança de Rules com impacto na limpeza de histórico: exige decisão e Gate, e
+testes do fluxo "Excluir registros antigos". Pendência já registrada na skill
+`firebase-security-rules-auditor`.
 
 ---
 
@@ -703,6 +758,19 @@ Testar cada superfície relevante.
 
 Usuário autenticado sem documento em `users`: deve ter deny nas coleções
 operacionais.
+
+### Casos de borda do contrato atual (CONFIRMADO em a4fa134)
+
+- Escrita de cliente em `users` (create, update, delete): DENY para todos os
+  perfis, inclusive Admin ativo.
+- Inativo: `get` do próprio perfil permitido; `tools`, `collaborators` e
+  `history` negados.
+- `isRestricted` com tipo inesperado (string `"true"`, número) em perfil não
+  Administrador: as Rules tratam como NÃO restrito. Testar e registrar o
+  resultado; não corrigir fora do Gate.
+- `tools` fora de `borrowed`: Admin escreve `status` e campos sem validação de
+  domínio ou tipo nas Rules (achado de baixo risco, seção 5).
+- `history`: Admin consegue `update` e `delete` pelo cliente (seção 5).
 
 ---
 
@@ -1189,7 +1257,10 @@ e pedir decisão.
 
 # 41. REPORT obrigatório
 
-Quando esta skill participar de um Gate, registrar quando aplicável:
+Quando esta skill participar de um Gate, registrar quando aplicável. Se o Gate
+listar também `firebase-security-rules-auditor`, o REPORT usa o formato desta
+seção; o auditor fornece os achados e a severidade, e a "Entrega" dele não
+vira um segundo formato:
 
 `RULES_REVIEW=<PASS | FAIL | PARTIAL | NAO_APLICAVEL>`
 

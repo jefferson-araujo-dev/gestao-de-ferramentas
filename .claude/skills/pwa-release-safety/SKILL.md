@@ -28,10 +28,10 @@ CONFIRMADO = lido no código (commit 30a6103). CONFIRMAR NO CÓDIGO = não verif
 - `MIN_APP_VERSION = '3.1.0'`; `classifyClientVersion`; `logOutdatedClientVersion` só observa e registra; nunca rejeita.
 ### Mitigação por desenho já existente
 - `api/tools/status.js` e `api/tools/movement.js` e `api/tools/maintenance.js` aceitam SOMENTE POST (o comentário de status.js cita explicitamente o cache do SW e usa `cache: 'no-store'` no cliente). Isso evita o risco hoje para essas três rotas, mas a PROTEÇÃO ESTÁ NO ENDPOINT, não no SW.
-- CONFIRMAR NO CÓDIGO: método aceito em `api/session/last-login.js`, `api/users/{create,update,status,delete}.js`, `api/backup/{reset,restore}.js`.
+- Verificado em a4fa134: `api/session/last-login.js`, `api/users/{create,status,delete}.js` e `api/backup/{reset,restore}.js` aceitam somente POST, e `api/users/update.js` aceita somente PATCH, todos com `Allow`. Nenhuma rota de `api/` aceita GET hoje. O SW só intercepta GET, então POST e PATCH não passam por ele (`src/sw.js`, `event.request.method !== 'GET'`).
 
 ## 3. Riscos conhecidos (tratar como PENDÊNCIA/HIPÓTESE até comprovar)
-- R1 (alto, depende de verificação): qualquer GET same-origin em `/api/*` (hoje ou no futuro) passa pelo SWR, pode ser servido obsoleto e o CacheStorage é compartilhado entre usuários do mesmo navegador (vazamento entre sessões; dado autenticado em disco local). Defesa em profundidade ausente: o SW não exclui `/api/`.
+- R1 (médio, preventivo: hoje nenhuma rota de `api/` aceita GET, seção 2, então não há resposta autenticada para cachear): qualquer GET same-origin em `/api/*` (rota futura, ou GET acidental que receba 405) passa pelo SWR, pode ser servido obsoleto e o CacheStorage é compartilhado entre usuários do mesmo navegador (vazamento entre sessões; dado autenticado em disco local). Defesa em profundidade ausente: o SW não exclui `/api/`.
 - R2 (médio): respostas não-ok (404/500/redirect/opaque) são gravadas e depois servidas como `cachedResponse`, mantendo erro após correção.
 - R3 (baixo hoje; médio se houver divisão de bundle): `skipWaiting` + `clients.claim` trocam o SW sob aba aberta, e arquivos hasheados antigos removidos do deploy podem gerar 404 de chunk em sessão longa (uso em pátio, app aberto por horas). Não há `import()` dinâmico em `src` (grep em a4fa134), então a quebra por chunk de JS ausente não se aplica hoje; reavaliar ao introduzir `import()` ou divisão de bundle.
 - R4 (baixo): ícones e manifest não divergem hoje (seção 2); o risco restante é a cópia duplicada `src/manifest.json` e os nomes dos ícones não refletirem os tamanhos reais.
@@ -104,10 +104,10 @@ Validar: JSON válido, `start_url`, `scope`, `display`, `theme_color`, `backgrou
 Parar e pedir decisão se: a correção exigir mudar contrato de API; mudar autenticação/sessão; tornar `MIN_APP_VERSION` bloqueante; tocar domínio, produção ou legado; ou se o teste revelar dado autenticado em CacheStorage (tratar como achado de segurança e escalar imediatamente).
 
 ## 14. Chaves do REPORT
-SW_API_EXCLUDED_FROM_CACHE: SIM|NAO|NAO_VERIFICADO
-SW_CACHES_ONLY_OK_RESPONSES: SIM|NAO|NAO_VERIFICADO
-AUTH_DATA_IN_CACHE_STORAGE: NAO|SIM|NAO_VERIFICADO
-API_GET_ENDPOINTS_FOUND: lista de rotas ou NENHUMA|NAO_VERIFICADO
+SW_API_EXCLUDED_FROM_CACHE: SIM|NAO|NAO_DETERMINADO
+SW_CACHES_ONLY_OK_RESPONSES: SIM|NAO|NAO_DETERMINADO
+AUTH_DATA_IN_CACHE_STORAGE: NAO|SIM|NAO_DETERMINADO
+API_GET_ENDPOINTS_FOUND: lista de rotas ou NENHUMA|NAO_DETERMINADO
 UPDATE_FLOW_SCENARIOS_TESTED: lista a-e
 MULTI_USER_SAME_BROWSER_TESTED: SIM|NAO
 OFFLINE_BEHAVIOR_VERIFIED: SIM|NAO

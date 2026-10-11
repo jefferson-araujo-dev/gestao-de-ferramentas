@@ -152,6 +152,8 @@ Inclui:
 - UID vinculado a pessoa;
 - identificador de colaborador;
 - telefone;
+- endereço IP e dispositivo (user agent) associados a uma pessoa: `lastIp` e
+  `lastDevice` em `users`, `ip` e `device` em `history`;
 - qualquer combinação capaz de identificar colaborador real.
 
 ### S3 — segredo ou credencial
@@ -279,6 +281,23 @@ Formato proibido:
 
 `FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."`
 
+### Variáveis conhecidas do projeto (CONFIRMADO em a4fa134)
+
+- `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KEY`: Admin
+  SDK nas funções (`server/firebase-admin.js`). A chave privada é S3 ou S4; o
+  valor do ID segue a regra S1 acima.
+- `FIREBASE_EMAIL` e `FIREBASE_PASSWORD`: credencial de um administrador ativo,
+  lida do `.env` pelo script `npm run backup` (`scripts/backup-database.mjs`).
+  A senha é S3 e o e-mail é S2. O script lê dados do Firestore (projeto de
+  `FIREBASE_CONFIG` em `src/js/config/constants.js`) com essa credencial: não
+  executar sem Gate que o autorize. A saída vai para fora do repositório
+  (`BACKUP_OUTPUT_DIR`, Downloads ou pasta do usuário) e é dado pessoal: não
+  abrir, não anexar, não transcrever.
+- Não secretas: `VITE_USE_FIREBASE_EMULATOR` (`src/js/app.js`),
+  `PLAYWRIGHT_BASE_URL`, `CI`, `UPDATE_AXE_BASELINE` e as variáveis
+  `*_EMULATOR_HOST`. `BACKUP_OUTPUT_DIR` não é segredo, mas o caminho pode conter
+  nome de usuário do sistema (S2): não imprimir.
+
 ### Higiene de cadastro na Vercel
 
 - Cadastrar segredos como variável do tipo sensível/secret.
@@ -341,6 +360,14 @@ suficientes para concluir a verificação.
 
 Confirmar que o `.gitignore` cobre esses padrões sem ler os arquivos:
 `git check-ignore -v <caminho>` (mostra a regra aplicada, não o conteúdo).
+
+Arquivos de dados do projeto, ignorados no `.gitignore` de a4fa134 por conterem
+dados pessoais e operacionais: `backup-*.json`, `backup_*.json`,
+`backup_gestao_ferramentas*.json`, `pre_restore_*.json`, `pre_reset_*.json`,
+`firebase-data-export.json`, `.reels-capturas/`, `visual-1-f4-c3/*.png`,
+`playwright-report/`, `test-results/`, `test-results-e2e/` e `*-debug.log` do
+Emulator. Tratar como S2 até confirmar que contêm só dados fictícios; nunca
+anexar ao REPORT. Confirmar a cobertura com `git check-ignore -v`.
 
 ---
 

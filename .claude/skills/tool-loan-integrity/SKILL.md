@@ -9,7 +9,7 @@ disable-model-invocation: true
 Nível: sênior. Aplicar a qualquer Gate que toque `api/tools/movement.js`, `api/tools/status.js`, `api/tools/maintenance.js`, `server/admin-authorization.js`, `server/app-version.js`, o fluxo de scanner/crachá no cliente, as coleções `tools`, `collaborators`, `history`, `badgeRateLimits`, ou regras do Firestore relacionadas. Complementa (não substitui) os skills `firebase-admin-vercel-api`, `firebase-client-security` e `secret-pii-hygiene`.
 
 ## 1. Princípio de evidência deste skill
-Cada afirmação técnica abaixo é CONFIRMADO (lida no código, commit 30a6103), INFERIDO ou CONFIRMAR NO CÓDIGO. O código atual SEMPRE prevalece sobre este texto: antes de basear decisão em qualquer item, reler o arquivo no HEAD vigente. Nunca citar este skill como prova de que o código faz algo.
+Cada afirmação técnica abaixo é CONFIRMADO (lida no código, commit 30a6103; as referências de linha e a máquina de estados foram reverificadas em a4fa134), INFERIDO ou CONFIRMAR NO CÓDIGO. O código atual SEMPRE prevalece sobre este texto: antes de basear decisão em qualquer item, reler o arquivo no HEAD vigente. Nunca citar este skill como prova de que o código faz algo.
 
 ## 2. Princípio central
 A movimentação (empréstimo, devolução, manutenção) é a operação de maior valor de negócio. O servidor é a única autoridade sobre empréstimo, devolução e registro de manutenção: estado resultante, identidade do colaborador, auditoria e horário. O cliente é apenas interface dessas operações. Fora delas, o Administrador altera ferramentas pelo cliente (cadastro, categoria e status entre `available` e `maintenance`; ex.: `src/js/modules/tools.js:405` e `:523`), limitado pelas Rules: nenhuma escrita do cliente leva uma ferramenta para `borrowed` nem a tira de `borrowed`, e com a ferramenta emprestada os campos de empréstimo ficam congelados (`firestore.rules:55-65`; verificado em a4fa134).
@@ -41,10 +41,10 @@ A movimentação (empréstimo, devolução, manutenção) é a operação de mai
 2. Exact-keys: toolId, performedAt, nextMaintenance, notes, device.
 3. Datas 'AAAA-MM-DD' validadas por calendário; `performedAt` não pode ser futura (fuso America/Sao_Paulo); `nextMaintenance` não pode ser anterior a `performedAt`; notes até 1000; device até 160.
 4. Transação: ferramenta inexistente 404; ferramenta com status 'borrowed' => 409 (não registra manutenção de ferramenta emprestada); atualiza ferramenta para `available`, zera currentUser/currentCollaboratorId e registra `history` type 'maintenance' com operatorUid/operatorEmail, ip e device na mesma transação.
-5. IP vem de `x-forwarded-for` (primeiro valor) ou `x-real-ip`, sem caracteres de controle, máx. 128. É informativo, nunca base de autorização. Dado pessoal em auditoria (S1).
+5. IP vem de `x-forwarded-for` (primeiro valor) ou `x-real-ip`, sem caracteres de controle, máx. 128. É informativo, nunca base de autorização. Dado pessoal em auditoria (S2 em `secret-pii-hygiene`).
 6. `parseRequestBody` aceita string JSON; outros endpoints podem divergir.
 
-Não verificado (CONFIRMAR NO CÓDIGO): `api/session/last-login.js`, `api/users/*`, `api/backup/*` (método HTTP aceito); regras de campos congelados em `firestore.rules`; tratamento de 409/429 no scanner do cliente; testes de emulador existentes.
+Verificado em a4fa134: `api/session/last-login.js`, `api/users/create.js`, `delete.js` e `status.js`, e `api/backup/reset.js` e `restore.js` aceitam somente POST; `api/users/update.js` aceita somente PATCH (todos com `Allow`). Os campos congelados em `firestore.rules` estão em `firebase-client-security` (seções 5 e 12). Continuam não verificados (CONFIRMAR NO CÓDIGO): o tratamento de 409 e 429 no scanner do cliente e a cobertura exata dos testes de emulador (existem `tests/integration/movementEmulator.test.mjs`, `toolStatusEmulator.test.mjs` e `authzEndpointsEmulator.test.mjs`; ler antes de afirmar o que cobrem).
 
 ## 6. Invariantes obrigatórios
 Qualquer alteração deve preservá-los. Se não puder, interromper (seção 25).
@@ -52,7 +52,7 @@ Qualquer alteração deve preservá-los. Se não puder, interromper (seção 25)
 2. Máquina de estados explícita. Estados válidos (`src/js/core/Validator.js:322`): `available`, `borrowed`, `maintenance`. Transições nos endpoints (verificado em a4fa134): loan somente de `available` (`movement.js:376`; `maintenance` e `borrowed` são recusadas com 409); return e return_admin somente de `borrowed` (`movement.js:563` e `:637`); o registro de manutenção (`maintenance.js`) recusa `borrowed` (`:269`) e deixa a ferramenta `available` (`:283`), inclusive quando ela estava em `maintenance`. A passagem entre `available` e `maintenance` é feita pelo Administrador no cliente, sob as Rules. Transição inválida = erro sem nenhuma escrita. Novo estado ou nova transição exige tabela de transições e decisão.
 3. Devolução por crachá: o crachá resolve para o MESMO colaborador que detém a ferramenta; divergência = erro genérico + conta no rate limit.
 4. Idempotência: repetição (clique duplo, retry de rede) não gera dois históricos nem corrompe estado; a defesa é reler o estado atual dentro da transação.
-5. Histórico append-only: nenhum endpoint de movimentação edita ou apaga `history` (criação com `transaction.create`, que falha se já existir).
+5. Histórico append-only: nenhum endpoint de movimentação edita ou apaga `history` (criação com `transaction.create`, que falha se já existir). Limite deste invariante, CONFIRMADO em a4fa134: ele vale para os endpoints. Pelo cliente, as Rules permitem a Admin criar, alterar e apagar `history` (`firestore.rules:73-75`); o cliente usa isso hoje só para a limpeza de registros antigos (`src/js/modules/data.js:415`), e `logAction` e `updateTool` (`data.js:302-326`), que gravariam histórico pelo cliente com data, IP e dispositivo informados pelo navegador, não têm chamadores em a4fa134 (busca em `src/` e `tests/`). Qualquer uso novo dessas funções viola o invariante 9.
 6. Rate limit falha fechado: erro ao consultar o contador nega a operação, nunca libera.
 7. Restrito nunca recebe nome de colaborador, dados de outras ferramentas, existência de crachá ou campos extras.
 8. Autorização encadeada: verifyIdToken, perfil em `users/{uid}`, status 'Ativo', e-mail conferido (ver `firebase-admin-vercel-api`).
@@ -78,7 +78,7 @@ Caminho base hardcoded `artifacts/gestao-de-ferramentas-3f8f1/public/data/{tools
 - Perfis legados sem `isRestricted` tratados como Padrão: preservar.
 
 ## 9. Privacidade e dados
-- Crachá, nome, matrícula, IP e e-mail são dados pessoais (S1). Nunca em REPORT, commit, teste, screenshot, log. Testes usam dados fictícios gerados.
+- Crachá, nome, matrícula, IP e e-mail são dados pessoais (S2 em `secret-pii-hygiene`). Nunca em REPORT, commit, teste, screenshot, log. Testes usam dados fictícios gerados.
 - Logs: apenas ids técnicos de documento e códigos de erro; nunca corpo da requisição, crachá ou nome.
 - O projeto 3f8f1 é ambiente de teste com dados fictícios; produção real não existe ainda; o projeto Firebase legado (nome informado no Gate) intocado.
 
@@ -118,13 +118,13 @@ Para cada alteração relevante, cobrir com assertions sobre o ESTADO no Firesto
 Parar a parte afetada e pedir decisão se: a correção exigir separar transação; mudar contrato de resposta; permitir Restrito ler tools/collaborators por cliente; divergir firestore.rules e API; teste invalidar premissa do modelo; ser necessário tocar produção, legado, regras ou autenticação; aparecer dado pessoal real ou segredo; encontrar GET autenticado em `/api/`.
 
 ## 15. Chaves do REPORT
-TRANSACTION_ATOMICITY: PASS|FAIL|NAO_VERIFICADO
+LOAN_TRANSACTIONALITY: PASS|FAIL|NAO_APLICAVEL|NAO_DETERMINADO (mesma chave de `firebase-admin-vercel-api`)
 STATE_MACHINE_VALIDATED: SIM|NAO
 IDEMPOTENCY_CONCURRENCY_TESTED: SIM|NAO
 EXACT_KEYS_VALIDATION_PRESERVED: SIM|NAO (listar endpoints)
 RESPONSE_CONTRACT_UNCHANGED: SIM|NAO (se NAO, citar decisão)
 RATE_LIMITS_PRESERVED: SIM|NAO
-RESTRICTED_NO_LEAK: PASS|FAIL|NAO_VERIFICADO
+RESTRICTED_NO_LEAK: PASS|FAIL|NAO_DETERMINADO
 HISTORY_APPEND_ONLY: SIM|NAO
 SERVER_AUTHORITATIVE_AUDIT_FIELDS: SIM|NAO
 POST_ONLY_PRESERVED: SIM|NAO

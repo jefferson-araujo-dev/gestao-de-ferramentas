@@ -58,6 +58,7 @@ No mínimo, quando aplicável:
 - `server/firebase-admin.js`
 - `server/admin-authorization.js`
 - `src/js/config/constants.js`
+- `server/backup-operations.js` e `server/app-version.js`, quando o endpoint os usa
 - endpoint em `api/` sob revisão
 - helpers chamados pelo endpoint
 - testes correspondentes
@@ -133,6 +134,34 @@ avaliar explicitamente se o modelo atual é suficiente.
 
 Qualquer mudança para verificação de revogação é alteração comportamental e
 exige Gate apropriado e testes.
+
+CONFIRMADO em a4fa134: não há `checkRevoked` nem `revokeRefreshTokens` em `api/`
+ou `server/`. A desativação (`api/users/status.js`) marca `disabled` no
+Authentication e grava `status` no perfil; a API nega de imediato pelo `status`
+do perfil. INFERIDO do comportamento documentado do Firebase (confirmar): um
+usuário desabilitado não obtém novo ID token depois que o atual vence.
+
+## Superfície atual de endpoints (CONFIRMADO em a4fa134)
+
+Revalidar no código vigente antes de usar como evidência.
+
+| Endpoint | Método | Autorização | Particularidades |
+| --- | --- | --- | --- |
+| `api/tools/movement.js` | POST | `requireActiveUser` | chaves exatas por ação; crachá resolvido no servidor; limite de 5 tentativas por 60 s |
+| `api/tools/status.js` | POST | `requireActiveUser` | consulta por código; resposta fechada; limite de 10 falhas por 60 s |
+| `api/tools/maintenance.js` | POST | `requireActiveAdmin` | chaves exatas; transação; grava `history` |
+| `api/users/create.js` | POST | `requireActiveAdmin` | cria conta no Authentication e perfil com `isRestricted: false` |
+| `api/users/update.js` | PATCH | `requireActiveAdmin` | `update()` com campos fixos; impede rebaixar a si mesmo e trocar o próprio e-mail |
+| `api/users/status.js` | POST | `requireActiveAdmin` | `disabled` no Authentication e `status` no perfil; último Admin ativo protegido em transação |
+| `api/users/delete.js` | POST | `requireActiveAdmin` | exclui perfil e conta; impede excluir a si mesmo e o último Admin ativo |
+| `api/session/last-login.js` | POST | `requireActiveUser` | grava `lastLogin`, `lastIp` e `lastDevice` no perfil do próprio uid (dado pessoal) |
+| `api/backup/reset.js` | POST | `requireActiveAdmin` | exige `confirmation` (`RESET_CONFIRMATION`); DESTRUTIVO |
+| `api/backup/restore.js` | POST | `requireActiveAdmin` | exige `confirmation` (`RESTORE_CONFIRMATION`) e limita o corpo (`MAX_RESTORE_BODY_BYTES`); DESTRUTIVO |
+
+Os endpoints de `api/users/*` não usam chaves exatas: campos extras no corpo
+são ignorados (`UNEXPECTED_FIELDS_REJECTED=NAO` para eles). Os de
+`api/tools/movement.js` e `api/tools/maintenance.js` rejeitam chave extra ou
+ausente.
 
 ---
 
@@ -430,6 +459,16 @@ Respostas autenticadas ou com dados de usuário devem declarar
 `Cache-Control: no-store` (ou equivalente), para que nem CDN, nem navegador,
 nem Service Worker as reutilizem entre usuários ou perfis.
 
+CONFIRMADO em a4fa134: nenhum endpoint de `api/` nem módulo de `server/` define
+`Cache-Control` (busca por `Cache-Control` e `no-store`: só um comentário em
+`api/tools/status.js`). A defesa atual é o método POST ou PATCH (o service
+worker só cacheia GET) e o `cache: 'no-store'` nos `fetch` de `scanner.js`,
+`tools.js`, `auth.js` e `data.js` (ausente em `src/js/modules/users.js`, cujas
+chamadas são POST e PATCH). Em
+endpoint novo, declarar o cabeçalho. Incluí-lo nos existentes muda
+comportamento e exige Gate. Também não há cabeçalhos `Access-Control-*`: as
+chamadas são same-origin e qualquer abertura de CORS é decisão do usuário.
+
 ---
 
 # 11. Contrato de entrada
@@ -490,6 +529,15 @@ Falha de autenticação: 401 sem detalhar o motivo interno (token ausente,
 expirado, de outro projeto). Perfil ausente, inativo ou divergente: negar sem
 revelar qual condição falhou, para não permitir sondagem de contas.
 
+CONFIRMADO em a4fa134 (`server/admin-authorization.js`): `requireActiveUser`
+distingue as falhas. O 401 tem mensagens diferentes para token ausente,
+cabeçalho inválido e token inválido ou expirado; o 403 tem mensagens diferentes
+para perfil inexistente, usuário inativo e e-mail divergente. Como
+`verifyIdToken` roda antes do 403, quem o recebe é um usuário autenticado que só
+aprende o estado da própria conta: o risco de enumeração é baixo, mas a regra
+acima não é cumprida literalmente. Em endpoint novo, seguir a regra. Uniformizar
+os existentes altera mensagens que o cliente pode exibir: exige decisão e Gate.
+
 ---
 
 # 13. Autorização
@@ -528,6 +576,12 @@ cada endpoint administrativo:
 
 Se o contrato não cobrir esses casos, registrar `NAO_DETERMINADO` ou `FAIL`,
 não corrigir fora do Gate.
+
+CONFIRMADO em a4fa134: `api/users/delete.js` e `api/users/status.js` impedem
+excluir ou desativar a própria conta e o último Administrador ativo (a contagem
+é feita dentro de transação); `api/users/update.js` impede o rebaixamento e a
+troca de e-mail da própria conta. Nenhum endpoint grava `isRestricted: true`
+(`create.js` grava `false`; `update.js` preserva a flag).
 
 ---
 
@@ -661,6 +715,16 @@ Revisar:
 - exclusão: destrutiva e irreversível, tratada na seção 19;
 - que somente Admin ativo executa a operação (seção 13).
 
+CONFIRMADO em a4fa134: as quatro operações têm compensação em código.
+`create.js` apaga a conta do Authentication se a gravação do perfil falha;
+`update.js` restaura e-mail e nome no Authentication se o `update` do perfil
+falha; `status.js` restaura `disabled` se a transação falha; `delete.js` recria
+o perfil se a exclusão no Authentication falha (exceto `auth/user-not-found`).
+Não há transação distribuída, e a falha da própria compensação só é registrada
+em log: resta uma janela de inconsistência (conta sem perfil ou perfil sem
+conta). `USER_ADMIN_PARTIAL_FAILURE_HANDLING=PASS` exige teste da falha parcial;
+a leitura do código sozinha dá no máximo PARTIAL.
+
 Registrar:
 
 `USER_ADMIN_PARTIAL_FAILURE_HANDLING=<PASS | FAIL | NAO_DETERMINADO>`
@@ -708,6 +772,11 @@ Revisar:
 - se o bloqueio gera resposta distinguível e útil ao atacante;
 - se a janela e o limite fazem sentido para o uso legítimo (leitor de crachá
   em ritmo normal não pode ser bloqueado).
+
+CONFIRMADO em a4fa134: só `api/tools/movement.js` (crachá) e
+`api/tools/status.js` (consulta por código) têm limite de taxa. Os demais
+endpoints não têm; isso é lacuna a registrar, não ajuste a fazer fora do Gate.
+Detalhes em `tool-loan-integrity`.
 
 Registrar:
 
@@ -773,6 +842,10 @@ O plano Hobby é de uso pessoal e não comercial. Antes de qualquer cliente real
 é necessário rever plano, limites e termos (decisão do usuário).
 
 Registrar limites como `NAO_DETERMINADO` até leitura da configuração real.
+
+CONFIRMADO em a4fa134: não existe `vercel.json` no repositório. Região,
+`maxDuration` e memória das funções seguem a configuração do projeto na Vercel
+e são NAO_DETERMINADO sem leitura do painel.
 
 ---
 

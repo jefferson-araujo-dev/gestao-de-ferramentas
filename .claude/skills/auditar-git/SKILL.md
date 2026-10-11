@@ -2,7 +2,7 @@
 name: "auditar-git"
 description: "Audita o estado real do repositório Git (diretório, remote, branch, HEAD, working tree, upstream, operações em andamento e últimos commits) com evidência de comando, no formato dos REPORTs do projeto. Usar antes de qualquer Gate ou para confirmar o estado sem depender de memória."
 disable-model-invocation: true
-allowed-tools: Bash(git rev-parse *) Bash(git status *) Bash(git rev-list *) Bash(git branch -vv) Bash(git config --get remote.origin.url) Bash(git stash list) Bash(git worktree list) Bash(git submodule status) Bash(git describe --tags --exact-match HEAD) Bash(git diff --stat) Bash(git diff --cached --stat) Bash(git log -1 *) Bash(git log --oneline -10)
+allowed-tools: Bash(git rev-parse *) Bash(git status *) Bash(git rev-list *) Bash(git branch -vv) Bash(git config --get remote.origin.url) Bash(git stash list) Bash(git worktree list) Bash(git submodule status) Bash(git describe --tags --exact-match HEAD) Bash(git diff --stat) Bash(git diff --cached --stat) Bash(git log -1 --format=%H%n%s%n%ad --date=iso-strict) Bash(git log --oneline -10)
 ---
 
 # auditar-git — Auditoria somente leitura do estado Git (Gestão de Ferramentas)
@@ -55,6 +55,7 @@ Notas:
 - `git rev-list --left-right --count '@{u}...HEAD'` imprime "behind ahead" (esquerda = commits só no upstream, direita = commits só locais), a mesma ordem dos Gates do projeto (`origin/<branch>...HEAD`: `0 1` = 0 atrás, 1 à frente). No PowerShell 5.1, `@{u}` sem aspas é lido como hashtable e o comando falha (INFERIDO); por isso as aspas simples, que também valem em sh. Sem upstream o comando falha: registrar "sem upstream configurado" e relação com remoto = NÃO DETERMINADO.
 - `git describe --tags --exact-match` falhar é normal (HEAD sem tag): registrar "sem tag exata".
 - O formato do último commit usa hash, assunto e data; não imprimir e-mail do autor no REPORT.
+- A pré-aprovação de `allowed-tools` para `git log` é o comando exato, sem curinga: `git log -1 --output=<arquivo>` grava arquivo, o que contrariaria o modo somente leitura. Não ampliar essa linha.
 - `git config --get remote.origin.url` pode conter credencial embutida: nunca copiar a saída crua (seção 9).
 - Se a saída estiver truncada ou muito longa (ex.: mais de 50 arquivos sujos), registrar o total e listar apenas os 50 primeiros, dizendo que há truncamento.
 
