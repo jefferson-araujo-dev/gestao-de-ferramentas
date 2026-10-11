@@ -1,25 +1,23 @@
 // Integração REAL contra o Firebase Emulator Suite (Firestore + Auth), sem Firebase remoto.
 //
 // Executar:  npm run test:backup:emulator   (firebase emulators:exec)
-// Requer:    LEGACY_BACKUP_PATH apontando para o backup legado 3.0 local (fora do repositório).
+// Dados:     somente fixtures sintéticas (o backup legado 3.0 é gerado pelo próprio teste).
 //
-// Falha fechado: recusa iniciar sem os hosts do emulator, com host não local, com
-// GOOGLE_APPLICATION_CREDENTIALS definido ou sem o backup legado. Todo tráfego de rede do
+// Falha fechado: recusa iniciar sem os hosts do emulator, com host não local ou com
+// GOOGLE_APPLICATION_CREDENTIALS definido. Todo tráfego de rede do
 // processo é registrado e conexões não locais são bloqueadas. Nenhuma credencial real é usada:
 // a chave RSA do Admin SDK é efêmera (memória) e nunca é gravada ou impressa. Nada de tokens,
 // senhas ou dados do backup é impresso; a saída contém apenas contagens, status e booleanos.
 import assert from 'node:assert/strict';
-import { createHash, generateKeyPairSync } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { generateKeyPairSync } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import net from 'node:net';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, test } from 'node:test';
 
 const PROJECT_ID = 'gestao-de-ferramentas-3f8f1';
 const BASE = `artifacts/${PROJECT_ID}/public/data`;
-const EXPECTED_LEGACY_SHA256 = '1D6C42BD54B6716EA1BAC2D9C0CDC0F7855C8A7794BB28A94889C3945B8E6546';
 const THIS_FILE = fileURLToPath(import.meta.url);
 
 // ---------------------------------------------------------------------------
@@ -54,17 +52,7 @@ function assertSafeEnvironment() {
     );
   }
 
-  const legacyPath = process.env.LEGACY_BACKUP_PATH?.trim();
-
-  if (!legacyPath) {
-    throw new Error('LEGACY_BACKUP_PATH ausente: informe o backup legado 3.0 local.');
-  }
-
-  if (!existsSync(legacyPath)) {
-    throw new Error('LEGACY_BACKUP_PATH nao aponta para um arquivo existente.');
-  }
-
-  return { firestore, auth, legacyPath: path.resolve(legacyPath) };
+  return { firestore, auth };
 }
 
 const environment = assertSafeEnvironment();
@@ -455,6 +443,60 @@ async function signIn(label, email, password) {
   return client;
 }
 
+// Backup legado 3.0 sintetico: deterministico e sem qualquer dado real. Reproduz o que o formato
+// legado tem de relevante para o restore: colaboradores sem status e users de origem (que nunca
+// podem ser restaurados). Os ids nao coincidem com os de initialSeed(), entao o restore tambem
+// exercita as remocoes do estado anterior.
+const LEGACY_COUNTS = { tools: 4, collaborators: 12, history: 6 };
+const LEGACY_STATUS_DEFAULTED = 9;
+const LEGACY_SETS = LEGACY_COUNTS.tools + LEGACY_COUNTS.collaborators + LEGACY_COUNTS.history;
+
+function makeLegacyBackup() {
+  const pad = (value) => String(value).padStart(2, '0');
+
+  return {
+    exportDate: '2026-09-20T12:00:00.000Z',
+    version: '3.0',
+    data: {
+      tools: Array.from({ length: LEGACY_COUNTS.tools }, (_, index) => ({
+        id: `L-${pad(index + 1)}`,
+        code: `L-${pad(index + 1)}`,
+        name: `Ferramenta Sintetica ${index + 1}`,
+        status: index === 1 ? 'borrowed' : 'available',
+        ...(index === 1
+          ? { currentUser: 'Colaborador Sintetico 01', currentCollaboratorId: 'lc-01' }
+          : {}),
+        ...(index === 0 ? { lastMaintenance: { seconds: 1789826558, nanoseconds: 387000000 } } : {}),
+      })),
+      users: [
+        {
+          id: 'legacy-user-1',
+          name: 'Usuario Legado Sintetico',
+          email: 'legado.sintetico@example.test',
+          accessLevel: 'Administrador',
+        },
+      ],
+      collaborators: Array.from({ length: LEGACY_COUNTS.collaborators }, (_, index) => ({
+        id: `lc-${pad(index + 1)}`,
+        name: `Colaborador Sintetico ${pad(index + 1)}`,
+        badge: String(index + 1),
+        role: 'Operador',
+        ...(index < 3 ? { status: index === 2 ? 'inactive' : 'active' } : {}),
+      })),
+      history: Array.from({ length: LEGACY_COUNTS.history }, (_, index) => ({
+        id: `lh-${pad(index + 1)}`,
+        date: `2026-09-0${index + 1}T10:00:00.000Z`,
+        type: index % 2 === 0 ? 'out' : 'in',
+        toolId: 'L-02',
+        toolCode: 'L-02',
+        toolName: 'Ferramenta Sintetica 2',
+        collaboratorId: 'lc-01',
+        user: 'Colaborador Sintetico 01',
+      })),
+    },
+  };
+}
+
 const FIXTURE_PASSWORD = 'Senha-De-Teste-Emulator-1';
 const users = {};
 let legacyBackup;
@@ -500,7 +542,7 @@ describe(
 
       await seedOperational(initialSeed());
 
-      legacyBackup = JSON.parse(readFileSync(environment.legacyPath, 'utf8'));
+      legacyBackup = makeLegacyBackup();
       legacyExpectedHash = hashData(
         normalizeBackup(legacyBackup, { requireNonEmpty: true }).backup.data
       );
@@ -545,7 +587,6 @@ describe(
         'FIRESTORE_EMULATOR_HOST',
         'FIREBASE_AUTH_EMULATOR_HOST',
         'GOOGLE_APPLICATION_CREDENTIALS',
-        'LEGACY_BACKUP_PATH',
       ]) {
         delete base[name];
       }
@@ -571,7 +612,6 @@ describe(
           { ...local, GOOGLE_APPLICATION_CREDENTIALS: 'nao-usado.json' },
           /GOOGLE_APPLICATION_CREDENTIALS/,
         ],
-        ['sem backup legado', local, /LEGACY_BACKUP_PATH/],
       ];
 
       for (const [label, extra, pattern] of cases) {
@@ -775,23 +815,23 @@ describe(
       record('ADMIN_USERS_WRITE_DENIED', true);
     });
 
-    test('08 backup legado real: SHA-256 exato do snapshot aprovado', () => {
-      const digest = createHash('sha256')
-        .update(readFileSync(environment.legacyPath))
-        .digest('hex')
-        .toUpperCase();
-
-      assert.equal(digest, EXPECTED_LEGACY_SHA256);
+    test('08 backup legado sintetico: formato 3.0 valido, com users de origem ficticios', () => {
+      assert.equal(legacyBackup.version, '3.0');
       assert.ok(
         Array.isArray(legacyBackup.data.users) && legacyBackup.data.users.length > 0,
         'a origem possui users'
       );
-      record('LEGACY_REAL_BACKUP_HASH_MATCH', true);
+      assert.ok(
+        legacyBackup.data.users.every((user) => String(user.email).endsWith('@example.test')),
+        'os users de origem sao sinteticos'
+      );
+      assert.equal(normalizeBackup(legacyBackup, { requireNonEmpty: true }).ok, true);
+      record('LEGACY_SYNTHETIC_FIXTURE_VALID', true);
     });
 
     let legacyRestore;
 
-    test('09 restore do backup legado 3.0 real via API (200, legacyAdapted, 301 status defaultados)', async () => {
+    test('09 restore do backup legado 3.0 sintetico via API (200, legacyAdapted, status defaultados)', async () => {
       legacyRestore = await callApi(restoreApi, {
         token: users.admin.token,
         body: { confirmation: RESTORE_CONFIRMATION, backup: legacyBackup },
@@ -800,13 +840,9 @@ describe(
       assert.equal(legacyRestore.status, 200, JSON.stringify(legacyRestore.body?.message));
       assert.equal(legacyRestore.body.success, true);
       assert.equal(legacyRestore.body.data.legacyAdapted, true);
-      assert.equal(legacyRestore.body.data.statusDefaulted, 301);
-      assert.deepEqual(legacyRestore.body.data.counts, {
-        tools: 5,
-        collaborators: 302,
-        history: 14,
-      });
-      assert.equal(legacyRestore.body.data.mutations.sets, 321);
+      assert.equal(legacyRestore.body.data.statusDefaulted, LEGACY_STATUS_DEFAULTED);
+      assert.deepEqual(legacyRestore.body.data.counts, LEGACY_COUNTS);
+      assert.equal(legacyRestore.body.data.mutations.sets, LEGACY_SETS);
       assert.ok(legacyRestore.body.data.mutations.total <= MAX_ATOMIC_MUTATIONS);
       assert.equal(legacyRestore.writes.total, legacyRestore.body.data.mutations.total);
       assert.equal(legacyRestore.writes.commits, 1, 'uma unica WriteBatch');
@@ -826,10 +862,10 @@ describe(
       record('LEGACY_RESTORE_MUTATIONS_TOTAL', legacyRestore.body.data.mutations.total);
     });
 
-    test('10 readback do Firestore: 5/302/14, hash normalizado igual, status validos', async () => {
+    test('10 readback do Firestore: contagens do fixture, hash normalizado igual, status validos', async () => {
       const state = await operationalState();
 
-      assert.deepEqual(state.counts, { tools: 5, collaborators: 302, history: 14 });
+      assert.deepEqual(state.counts, LEGACY_COUNTS);
       assert.equal(state.hash, legacyExpectedHash);
       assert.equal(state.hash, legacyRestore.body.data.dataSha256);
       assert.equal(state.hash, await computeDataSha256(normalizeBackup(legacyBackup).backup.data));
@@ -949,7 +985,7 @@ describe(
     test('13 reset real: 200, operacional zerado, users e Auth intactos', async () => {
       const before = await operationalState();
 
-      assert.equal(before.counts.collaborators, 302);
+      assert.deepEqual(before.counts, LEGACY_COUNTS);
 
       const result = await callApi(resetApi, {
         token: users.admin.token,
@@ -978,7 +1014,7 @@ describe(
       record('RESET_AUTH_UNCHANGED', true);
     });
 
-    test('14 restore do backup legado apos o reset reconstroi 5/302/14', async () => {
+    test('14 restore do backup legado apos o reset reconstroi as contagens do fixture', async () => {
       const result = await callApi(restoreApi, {
         token: users.admin.token,
         body: JSON.stringify({ confirmation: RESTORE_CONFIRMATION, backup: legacyBackup }),
@@ -990,7 +1026,7 @@ describe(
 
       const state = await operationalState();
 
-      assert.deepEqual(state.counts, { tools: 5, collaborators: 302, history: 14 });
+      assert.deepEqual(state.counts, LEGACY_COUNTS);
       assert.equal(state.hash, legacyExpectedHash);
       assert.deepEqual(await dumpUsers(), usersBaseline);
       assert.deepEqual(await dumpAuth(), authBaseline);
