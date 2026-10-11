@@ -1,7 +1,68 @@
 ---
 name: frontend-design
-description: Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.
+description: Orientacao de design de interface para Gates de UI do Gestao de Ferramentas, dentro do design system existente. Uso manual por /frontend-design, somente quando o Gate listar a skill.
+disable-model-invocation: true
 license: Complete terms in LICENSE.txt
+---
+
+<!-- Modificado para o projeto Gestao de Ferramentas (Apache-2.0, secao 4(b)): frontmatter alterado (descricao
+substituida e disable-model-invocation adicionado; a descricao original era: "Guidance for distinctive,
+intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic
+direction, typography, and making choices that don't read as templated defaults.") e inserida a secao
+"Aplicacao neste projeto". O texto original abaixo dessa secao esta preservado sem alteracao.
+Origem do texto original: nao registrada neste arquivo. Licenca: Apache-2.0 (LICENSE.txt). -->
+
+## Aplicacao neste projeto
+
+Esta secao e do projeto e prevalece sobre o texto original que vem depois. Ordem de precedencia:
+Gate ativo, docs/design/ e tokens, esta secao, texto original.
+
+Quando usar: somente em Gate de interface que liste esta skill, com tokens, stack e escopo fixados no
+Gate (regra do CLAUDE.md). Sem escopo de tela no Gate, parar e perguntar. O produto e uma ferramenta
+interna com design system proprio e redesign em andamento: o texto original foi escrito para criar
+identidade visual nova, e aqui isso NAO e o objetivo.
+
+Ler antes de propor ou alterar qualquer coisa:
+- docs/design/DESIGN_FOUNDATION.md (tokens, contraste, tipografia, foco, movimento, legado CSS);
+- docs/design/COMPONENTS.md e o doc da tela em questao (APP_SHELL, TOOLS_SCREEN, COLLABORATORS_SCREEN,
+  DATA_BACKUP_SCREEN, USERS_AUDIT_SCREEN);
+- src/css/tokens.css, src/css/base.css, src/css/components.css e src/js/components/;
+- a galeria src/components.html (so em desenvolvimento) para ver os componentes em cada estado.
+
+Decisoes ja tomadas (nao reabrir sem Gate):
+- Stack: HTML, CSS, JS ESM, Vite e Tailwind v4 lido de @theme em tokens.css; nao existe
+  tailwind.config.js. Sem React, sem biblioteca de design system, sem fonte ou CDN novos.
+- Cor, tipografia, raio, sombra, espaco e movimento vem dos tokens (bg-surface, text-text-primary,
+  text-body, rounded-ui-*, shadow-ui-*). Sem hex novo e sem a variante dark: (o tema escuro redefine os
+  mesmos tokens em .dark). Ha um unico accent; o typeface e o atual, sem segundo.
+- Reutilizar as classes ui-* e as funcoes de src/js/components/. Componente novo so se o Gate pedir e
+  houver uso real.
+- Interface em portugues do Brasil. Manter o vocabulario das telas existentes; nao renomear acoes
+  sem Gate.
+
+O que muda no texto original:
+- "Identidade distinta", "risco estetico", escolher tipografia fora do padrao, paleta de 4 a 6 hex
+  proprios, hero e confirmar o assunto com o cliente: nao se aplicam. O plano em duas passadas continua
+  valido, mas o "sistema de tokens" e o existente: o plano lista quais tokens e componentes serao
+  usados, o que muda e o que fica de fora.
+- Movimento so em resposta a acao do usuario. Sem entrada decorativa, sem estatistica com gradiente,
+  sem estrutura de pagina de marketing.
+- A lista de "tells" de design gerado por IA serve para evitar defaults vazios, nao para trocar o
+  que o design system ja define.
+- Nao ampliar o redesign alem do pedido. Mudanca de shell, de breakpoints ou de tokens e Gate proprio.
+
+Piso de qualidade (verificar, nao afirmar): contraste AA nos dois temas como em DESIGN_FOUNDATION.md,
+foco visivel, alvos de toque e rotulos conforme COMPONENTS.md, movimento reduzido, larguras de
+tests/responsive/viewports.js, e estados de carregando, vazio e erro quando houver dados.
+
+Verificacao, somente se o Gate autorizar a execucao: tests/unit/designTokens.test.mjs
+(npm run test:unit), a11y-baseline, visual-baseline e foundation em tests/e2e (npm run test:e2e:auth)
+e npm run test:responsive. Snapshots visuais nunca sao atualizados sem Gate.
+
+Entrega: o que mudou (arquivo e tokens ou componentes usados), como foi verificado (comando, exit code,
+totais), riscos e limites, e o que ficou NAO DETERMINADO. Revisao visual por IA nao substitui revisao
+visual humana.
+
 ---
 
 # Frontend Design

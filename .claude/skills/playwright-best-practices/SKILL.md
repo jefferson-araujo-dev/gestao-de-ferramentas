@@ -1,10 +1,71 @@
 ---
 name: playwright-best-practices
-description: Use when writing Playwright tests, fixing flaky tests, debugging failures, implementing Page Object Model, configuring CI/CD, optimizing performance, mocking APIs, handling authentication or OAuth, testing accessibility (axe-core), file uploads/downloads, date/time mocking, WebSockets, geolocation, permissions, multi-tab/popup flows, mobile/responsive layouts, touch gestures, GraphQL, error handling, offline mode, multi-user collaboration, third-party services (payments, email verification), console error monitoring, global setup/teardown, test annotations (skip, fixme, slow), test tags (@smoke, @fast, @critical, filtering with --grep), project dependencies, security testing (XSS, CSRF, auth), performance budgets (Web Vitals, Lighthouse), iframes, component testing, canvas/WebGL, service workers/PWA, test coverage, i18n/localization, Electron apps, or browser extension testing. Covers E2E, component, API, visual, accessibility, security, Electron, and extension testing.
+description: Orientacao para escrever, depurar e estabilizar testes Playwright do Gestao de Ferramentas (suite responsiva e E2E autenticado com Firebase Emulator). Uso manual por /playwright-best-practices, somente em Gate que autorize testes.
+disable-model-invocation: true
 license: MIT
 metadata:
   author: currents.dev
   version: "1.2"
+---
+
+<!-- Modificado para o projeto Gestao de Ferramentas (MIT): frontmatter alterado (descricao substituida e
+disable-model-invocation adicionado) e inserida a secao "Aplicacao neste projeto". A descricao original do
+autor (currents.dev, v1.2) era uma lista longa de palavras-chave e pode ser lida na origem. O texto original
+abaixo dessa secao esta preservado sem alteracao. Licenca MIT em LICENSE.md. -->
+
+## Aplicacao neste projeto
+
+Esta secao e do projeto e prevalece sobre o texto original que vem depois. Precedencia: Gate ativo,
+AGENTS.md e CLAUDE.md, esta secao, texto original.
+
+Quando usar: somente em Gate que autorize testes e2e e que liste esta skill. Subguias permitidos:
+core/*, debugging/* e testing-patterns/accessibility.md; os demais so se o Gate os citar. O projeto
+nao usa React, Vue, Angular nem Next, nem Electron, extensao de navegador, GraphQL ou Docker no teste:
+frameworks/*, electron, browser-extensions, graphql-testing e docker nao se aplicam.
+
+Duas suites, dois comandos (nao confundir):
+
+| | Responsiva | E2E autenticado |
+| --- | --- | --- |
+| Config | playwright.config.js | playwright.auth.config.js |
+| Pasta | tests/responsive | tests/e2e |
+| Comando | npm run test:responsive | npm run test:e2e:auth |
+| Servidor e dados | Vite local, sem Emulator | Emulator (Auth e Firestore) + Vite em modo emulator, dados sinteticos |
+| Rede | network-guard fail-closed | allowlist em tests/e2e/support/env.mjs |
+
+Um playwright test sem --config roda a suite responsiva, nao a E2E. Use os scripts do package.json e
+nao use npx se o Gate nao o autorizar. Leia tests/e2e/README.md antes de mexer na E2E.
+
+Regras do projeto:
+1. Ambiente: nunca contra producao nem com dado ou credencial real. A E2E recusa PLAYWRIGHT_BASE_URL e
+   credenciais; a responsiva recusa URL remota e credenciais reais. A unica excecao e a responsiva contra
+   um Vercel Preview com RESPONSIVE_ALLOW_REMOTE_PREVIEW=1, que desliga o guard de rede e so pode ser
+   usada se o Gate pedir expressamente. Nao contornar os guards. Exemplos do texto original com OAuth,
+   pagamentos ou servicos de terceiros reais nao se aplicam.
+2. Base comum: usar tests/e2e/support/fixtures.js (guarda de rede, dialogos e erros de console),
+   axe.js (acessibilidade), seed-data.mjs e admin-db.mjs (conferir persistencia direto no Firestore).
+   Nao criar guarda paralela. Falha tolerada so por guard.allow(regex, motivo) no proprio teste ou por
+   KNOWN_ISSUES com justificativa.
+3. Estabilidade: manter serviceWorkers bloqueados, locale pt-BR e fuso America/Sao_Paulo. Sincronizar por
+   asserts do proprio Playwright. waitForTimeout ja existe na suite (esperas curtas de transicao de
+   CSS): nao adicionar novos para esperar dado ou estado; se a transicao for o motivo, comentar o porque.
+4. Escrita real no Emulator so em *.destructive.spec.js, nos projetos destructive, destructive-tools e
+   destructive-collaborators, que rodam por ultimo, em serie, e re-semeiam o estado. Nao paralelizar nem mover teste que escreve para outro projeto.
+5. Snapshots: visual-baseline e baseline.mobile tem capturas versionadas. --update-snapshots ou -u so com
+   Gate que o autorize, seguido de revisao visual humana. Nesse ponto o texto original
+   (testing-patterns/visual-regression.md) nao se aplica.
+6. Falhas: o "Test Validation Loop" do final do texto original (corrigir e rodar de novo, --repeat-each)
+   so vale se o Gate autorizar a correcao. Sem essa autorizacao, reportar a falha com a evidencia. Nao
+   mascarar com retries, test.skip, test.fixme, timeouts maiores ou expect mais frouxo. Para suspeita de
+   instabilidade, repetir so o numero de vezes que o Gate permitir e classificar como instavel ou estrutural.
+7. Baseline: passou, falhou e pulados esperados sao os que o Gate declarar. Adicionar, remover ou pular
+   teste muda a baseline e deve estar no Gate.
+8. Shell: Windows PowerShell 5.1 (AGENTS.md). Decidir sucesso pelo exit code, nao por saida em stderr.
+
+Entrega: comando, exit code, totais, projetos executados, o que NAO foi executado, testes instaveis
+(com repeticoes) e onde estao trace e screenshots (sem dado pessoal). Resultado de teste e evidencia de
+AUTOMATED_TESTS; nao substitui revisao visual humana.
+
 ---
 
 # Playwright Best Practices
