@@ -16,6 +16,16 @@ Skills do repositório (`.claude/skills/`):
   `core/*`, `debugging/*` e `testing-patterns/accessibility.md`; os demais só se o Gate os citar.
   Não seguir exemplos contra produção, Prisma/Docker nem o "Validation Loop" fora de Gate de
   testes. Exemplos em TypeScript são referência de padrão, não de stack.
+- `auditar-git`: auditoria somente leitura do estado Git; o diretório esperado vem do AMBIENTE_ALVO do Gate.
+- `validar-baseline`: suíte Playwright completa; a baseline esperada é a que o Gate declarar; nunca corrige falhas.
+- `secret-pii-hygiene`: prevenção, detecção e reporte de segredos e dados pessoais.
+- `firebase-admin-vercel-api`: Vercel Functions com Firebase Admin (autenticação, autorização, transações, isolamento Preview/Production).
+- `firebase-client-security`: Firestore Rules, Client SDK e perfis Admin/Padrão/Restrito.
+  Complementa `firebase-security-rules-auditor` (somente leitura); se o Gate listar as duas, a de auditoria cobre a leitura e esta cobre os critérios de segurança.
+- `pwa-release-safety`: service worker, cache, manifest e atualização de clientes.
+- `tool-loan-integrity`: empréstimo, devolução, status, manutenção, crachá e histórico de ferramentas.
+
+As sete skills acima, de `auditar-git` a `tool-loan-integrity`, têm `disable-model-invocation: true`: só entram em uso quando o Gate as listar (o usuário digita `/nome` ou o Gate manda ler o `SKILL.md`).
 
 Plugins: nenhum instalado. Se um Gate exigir plugin, a instalação é ação manual do usuário,
 informada no próprio Gate. Se o item exigido não estiver disponível, parar e relatar.
