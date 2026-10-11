@@ -1,6 +1,6 @@
 # Firebase Emulator Suite (ambiente local de teste)
 
-Este projeto tem um único projeto Firebase configurado (`gestao-de-ferramentas-3f8f1`), e ele é o de **produção** (ver `README.md`, seção "Produção", e `docs/audits/` para o histórico de homologação). Não existe projeto de staging separado. `npm run dev` sozinho conecta o cliente diretamente a esse projeto de produção — sempre foi assim, e continua sendo o padrão.
+Este projeto tem um único projeto Firebase configurado (`gestao-de-ferramentas-3f8f1`, ver `.firebaserc`), e ele é um **ambiente de testes com dados fictícios**: não é produção e não será promovido a produção. A produção real será um projeto Firebase separado, criado antes de qualquer dado real (ver `README.md`, seção "Ambientes"). O histórico de homologação em `docs/audits/` é registro histórico e não define o ambiente atual. `npm run dev` sozinho conecta o cliente diretamente ao projeto Firebase configurado — sempre foi assim, e continua sendo o padrão.
 
 Este documento descreve como rodar a aplicação inteira (cliente + APIs) contra um **Firebase Emulator Suite local** (Firestore + Auth), como alternativa opt-in, sem tocar em dados reais. Isso é pré-requisito para retomar o Gate 17 — Fase 1 (validação de fluxos de negócio reais).
 
@@ -46,7 +46,7 @@ Crie `src/.env.emulator` manualmente (não é distribuído no repositório) com 
 VITE_USE_FIREBASE_EMULATOR=true
 ```
 
-**Sem essa flag, `npm run dev` continua apontando para produção exatamente como antes** — comportamento padrão inalterado, confirmado por build estático (ver REPORT do Gate 18): o código de conexão ao emulador é eliminado do bundle quando a flag não está ativa, não apenas "não executado".
+**Sem essa flag, `npm run dev` continua apontando para o projeto Firebase configurado, e não para o emulador, exatamente como antes** — comportamento padrão inalterado, confirmado por build estático (ver REPORT do Gate 18): o código de conexão ao emulador é eliminado do bundle quando a flag não está ativa, não apenas "não executado".
 
 ## Rodando as APIs (`/api/*`) contra o emulador
 

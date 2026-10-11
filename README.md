@@ -4,9 +4,13 @@ Sistema web para controle de ferramentas, colaboradores, empréstimos, devoluç�
 
 **Versão atual:** `v3.1.0`
 
-## Produção
+## Ambientes
 
 A aplicação é publicada na Vercel e utiliza Firebase Authentication, Cloud Firestore e APIs serverless protegidas.
+
+O projeto Firebase configurado neste repositório (`gestao-de-ferramentas-3f8f1`, ver `.firebaserc`) é um **ambiente de testes com dados fictícios**. Ele não é produção e não será promovido a produção. A produção real será um projeto Firebase separado, criado antes de qualquer dado real. O Firebase Emulator Suite é local, mesmo quando usa o identificador desse projeto (ver `docs/dev/emulator.md`).
+
+As seções "Homologação" e "Release" mais abaixo são registros históricos de versões anteriores. O uso do termo "produção" nelas não define o ambiente atual.
 
 ## Funcionalidades
 
