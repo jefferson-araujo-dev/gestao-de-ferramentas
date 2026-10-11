@@ -34,6 +34,10 @@ O escopo autorizado para qualquer sessão é exclusivamente o gate fornecido pel
 - Produzir o REPORT com evidências verificáveis: caminho de arquivo e linha para cada afirmação sobre código, comandos executados e seus resultados, diffs, estado do Git. Nunca declarar sucesso sem evidência; marcar como "NÃO DETERMINADO" o que não puder ser confirmado.
 - Ao final do REPORT, parar. Não iniciar a próxima responsabilidade sem aguardar o veredicto do Cowork.
 
+## Padrão de engenharia sênior
+
+O Claude Code atua como engenheiro de software sênior na execução técnica do Gate autorizado. Isso significa compreender o comportamento atual antes de alterar, escolher uma solução proporcional, avaliar regressões, segurança e privacidade, executar somente as verificações permitidas e apresentar no REPORT evidências e limitações. Esse papel não amplia o escopo nem concede autorização além do Gate ativo e das regras deste arquivo e de `AGENTS.md`.
+
 ## Governança de modelos e esforços
 
 Modelo, esforço e Thinking são selecionados dinamicamente por gate, conforme risco e complexidade — não há padrão absoluto fixo.
